@@ -1,0 +1,56 @@
+# Environment & Secret Credentials
+.env
+.env.*
+!.env.example
+cookies.txt
+cookies*.txt
+*.cookies
+*.session
+*.session-journal
+config.json
+*.pem
+*.key
+secrets/
+
+# Python & Dependencies
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+
+# Generated media and local data
+/output/
+/media-vault/
+/AI-Clipper/output/
+/docs/
+*.sqlite
+*.sqlite3
+*.db
+*.log
+*.tmp
+
+# IDE, Editor & Agent Workspace Files
+.superpowers/
+.gemini/
+/AGENTS.md
+.idea/
+.vscode/
+*.sublime-*
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+npm-debug.log*
+node_modules/
+
+# OS Artifacts
+.DS_Store
+Thumbs.db
+desktop.ini
