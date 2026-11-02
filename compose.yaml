@@ -1,0 +1,17 @@
+services:
+  luna:
+    image: ${LUNA_IMAGE:-luna:local}
+    build: .
+    init: true
+    restart: unless-stopped
+    user: "${LUNA_UID:-1000}:${LUNA_GID:-1000}"
+    environment:
+      MEDIA_STORAGE_DIR: /app/media-vault
+    ports:
+      # Luna has no authentication, so it stays on the host's loopback.
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./.env:/app/.env
+      - ./cookies.txt:/app/cookies.txt
+      - ./output:/app/output
+      - ./media-vault:/app/media-vault

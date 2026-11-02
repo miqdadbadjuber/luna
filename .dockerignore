@@ -1,0 +1,13 @@
+.git
+.github
+.venv
+venv
+.env
+.env.*
+cookies*.txt
+output
+media-vault
+AI-Clipper/output
+docs
+tests
+**/__pycache__

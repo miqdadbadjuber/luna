@@ -66,9 +66,39 @@ Install FFmpeg and FFprobe for your operating system and confirm both commands w
 python app.py
 ```
 
-Open [http://localhost:8000](http://localhost:8000). After completing the setup above, you can also start Luna with `npm run dev` or `npm start`; both scripts only run `python app.py`. They do not create a virtual environment, install Python packages, install FFmpeg, or create `.env`.
+Open [http://localhost:8000](http://localhost:8000). After completing the setup above, you can also use `npm run dev` (same as `python app.py`, with auto-reload) or `npm start` (no reload). Neither creates a virtual environment or installs anything.
 
 Luna is intended for local use. Do not expose its port to a public network without adding authentication and deployment security controls.
+
+## Development
+
+Python code reloads on save with `python app.py`. `templates/*.html` are read on every request, so refresh the browser. Set `MEDIA_STORAGE_DIR=media-vault` in `.env` to keep test downloads apart from your real library. `.python-version` pins the version CI uses (3.12).
+
+## Docker
+
+Docker replaces the local Python and FFmpeg install. It needs these host files first, because Compose would otherwise create the missing mounts itself, as root-owned directories:
+
+```bash
+cp .env.example .env
+touch cookies.txt
+mkdir -p output media-vault
+```
+
+On Linux, also run `export LUNA_UID=$(id -u) LUNA_GID=$(id -g)` so the container can write to them.
+
+```bash
+docker compose up -d --build                                      # production mode
+docker compose -f compose.yaml -f compose.dev.yaml up --build     # development, reloads on save
+```
+
+Inside a container, the Settings folder picker and the Open Folder button cannot reach your desktop. Open `media-vault/` on the host instead. Media Vault stays at that path, and changing the storage folder in Settings does not survive a restart.
+
+## Production
+
+Luna has no authentication, and its API can read settings, overwrite API keys and move files. Keep it on `127.0.0.1`, or put an authenticating proxy in front of it before exposing it. Run a single process, because job state is held in memory.
+
+- Without Docker: `npm start`.
+- With Docker: pushing a `v*` tag publishes `ghcr.io/fajarhide/luna`. Run it with `LUNA_IMAGE=ghcr.io/fajarhide/luna:<tag> docker compose up -d --no-build`, after creating the host files above. The image is built for amd64 only.
 
 ## Storage
 

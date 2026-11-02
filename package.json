@@ -4,7 +4,7 @@
   "description": "Luna: Multi-Platform Media & AI Shorts Web Studio",
   "scripts": {
     "dev": "python app.py",
-    "start": "python app.py",
+    "start": "python -m uvicorn app:app --host 127.0.0.1 --port 8000",
     "server": "python -m uvicorn app:app --host localhost --port 8000 --reload"
   },
   "keywords": [
