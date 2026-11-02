@@ -3407,7 +3407,7 @@
               <label class="font-medium text-zinc-200 text-xs" for="inputOpenaiBase">OpenAI-compatible Base URL</label>
               <div class="t-input-wrap">
                 <div class="t-input">
-                  <input type="text" id="inputOpenaiBase" value="" placeholder="https://api.openai.com/v1"
+                  <input type="text" id="inputOpenaiBase" onchange="loadOpenaiModels()" value="" placeholder="https://api.openai.com/v1"
                     class="w-full h-full bg-transparent px-3 text-xs font-mono text-white placeholder-zinc-500 outline-none" />
                 </div>
               </div>
@@ -3423,7 +3423,7 @@
               </div>
               <div class="t-input-wrap" id="wrapOpenai">
                 <div class="t-input">
-                  <input type="password" id="inputOpenai" value=""
+                  <input type="password" id="inputOpenai" onchange="loadOpenaiModels()" value=""
                     placeholder="Enter your API key..."
                     class="w-full h-full bg-transparent px-3 text-xs font-mono text-white placeholder-zinc-500 outline-none" />
                   <button type="button" onclick="toggleSecret('inputOpenai', 'iconOpenaiEye')"
@@ -3437,10 +3437,20 @@
               <div class="text-right text-[11px] pt-0.5"><span id="statusOpenai" class="font-mono transition-all"></span></div>
             </div>
             <div class="space-y-1">
-              <label class="font-medium text-zinc-200 text-xs" for="inputOpenaiModel">Clip analysis model</label>
+              <div class="flex items-center justify-between text-xs">
+                <label class="font-medium text-zinc-200" for="selectOpenaiModel">OpenAI-compatible Model</label>
+                <span id="statusOpenaiModels" class="text-[11px] text-zinc-500 font-mono"></span>
+              </div>
               <div class="t-input-wrap">
                 <div class="t-input">
-                  <input type="text" id="inputOpenaiModel" value="" placeholder="gpt-4o-mini"
+                  <select id="selectOpenaiModel" onchange="onOpenaiModelSelect()"
+                    class="w-full h-full bg-transparent px-3 text-xs font-mono text-white outline-none cursor-pointer"></select>
+                </div>
+              </div>
+              <div class="t-input-wrap hidden pt-1" id="wrapOpenaiModelCustom">
+                <div class="t-input">
+                  <input type="text" id="inputOpenaiModel" value="" placeholder="Model name"
+                    aria-label="Custom model name"
                     class="w-full h-full bg-transparent px-3 text-xs font-mono text-white placeholder-zinc-500 outline-none" />
                 </div>
               </div>
@@ -7748,6 +7758,7 @@
           const el = document.getElementById(id);
           if (el && value !== undefined) el.value = value;
         }
+        loadOpenaiModels();
 
         const inputGemini = document.getElementById('inputGemini');
         const labelGeminiModel = document.getElementById('labelGeminiModel');
@@ -7917,6 +7928,65 @@
       }
     }
 
+    const CUSTOM_MODEL = '__custom__';
+
+    window.onOpenaiModelSelect = function () {
+      const select = document.getElementById('selectOpenaiModel');
+      const input = document.getElementById('inputOpenaiModel');
+      const isCustom = select.value === CUSTOM_MODEL;
+      document.getElementById('wrapOpenaiModelCustom').classList.toggle('hidden', !isCustom);
+      if (isCustom) input.focus();
+      else input.value = select.value;
+    };
+
+    // Model IDs come from a third party, so options are built with textContent, not HTML.
+    window.loadOpenaiModels = async function () {
+      const select = document.getElementById('selectOpenaiModel');
+      const input = document.getElementById('inputOpenaiModel');
+      const status = document.getElementById('statusOpenaiModels');
+      if (!select || !input) return;
+      const apiKey = document.getElementById('inputOpenai')?.value.trim();
+      const current = input.value.trim();
+      let models = [];
+      if (apiKey) {
+        status.innerText = 'Loading models...';
+        try {
+          const res = await fetch('/api/settings/openai-models', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              api_key: apiKey,
+              base_url: document.getElementById('inputOpenaiBase')?.value.trim()
+            })
+          });
+          if (!res.ok) throw new Error(String(res.status));
+          models = (await res.json()).models || [];
+          status.innerText = `${models.length} models`;
+        } catch (err) {
+          status.innerText = 'Could not load models';
+        }
+      } else {
+        status.innerText = 'Add an API key to list models';
+      }
+
+      const names = current && !models.includes(current) ? [current, ...models] : models;
+      select.replaceChildren();
+      for (const name of names) {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        option.className = 'bg-[#202020]';
+        select.appendChild(option);
+      }
+      const custom = document.createElement('option');
+      custom.value = CUSTOM_MODEL;
+      custom.textContent = 'Custom...';
+      custom.className = 'bg-[#202020]';
+      select.appendChild(custom);
+      select.value = current || CUSTOM_MODEL;
+      document.getElementById('wrapOpenaiModelCustom').classList.toggle('hidden', select.value !== CUSTOM_MODEL);
+    };
+
     async function testApiKey(provider, wrapId, inputId, statusElId, btn) {
       const inputEl = document.getElementById(inputId);
       const statusEl = document.getElementById(statusElId);
@@ -7946,6 +8016,7 @@
 
         if (res.ok && data.valid) {
           if (statusEl) statusEl.innerHTML = '<span class="text-emerald-400">✓ Valid & Saved ke .env</span>';
+          if (provider === 'openai') loadOpenaiModels();
           showToast(`${provider.toUpperCase()} API connection validated and saved to .env`);
         } else {
           const errMsg = data.message || 'Invalid key';

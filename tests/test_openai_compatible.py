@@ -28,7 +28,9 @@ class _Provider(BaseHTTPRequestHandler):
     def do_GET(self):
         ok = self.headers.get("Authorization") == "Bearer good-key"
         self.server.requests.append(self.path)
-        self._send(200 if ok else 401, {"data": []})
+        self._send(200 if ok else 401, {"data": [
+            {"id": "z-chat"}, {"id": "a-chat"}, {"id": "text-embedding-3"}, {"id": "whisper-1"},
+        ]})
 
     def do_POST(self):
         raw = self.rfile.read(int(self.headers["Content-Length"]))
@@ -180,6 +182,20 @@ class TestOpenAICompatible(unittest.TestCase):
             result = transcriber.transcribe_local(os.path.join(tmp, "v.mp4"), video_url="https://example.test/v")
         run.assert_called_once()
         self.assertEqual(result["provider"], "Faster-Whisper Local")
+
+    def test_model_list_keeps_chat_models_sorted(self):
+        res = TestClient(app).post("/api/settings/openai-models", json={"api_key": "good-key", "base_url": self.base_url})
+        self.assertEqual(res.json(), {"models": ["a-chat", "z-chat"]})
+
+    def test_model_list_reports_a_rejected_key_without_echoing_it(self):
+        res = TestClient(app).post("/api/settings/openai-models", json={"api_key": "bad-key", "base_url": self.base_url})
+        self.assertEqual(res.status_code, 502)
+        self.assertNotIn("bad-key", res.text)
+
+    def test_model_list_never_falls_back_to_the_saved_key(self):
+        res = TestClient(app).post("/api/settings/openai-models", json={"api_key": " ", "base_url": self.base_url})
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(self.server.requests, [])
 
 
 if __name__ == "__main__":

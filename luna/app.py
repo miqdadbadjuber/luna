@@ -1830,6 +1830,11 @@ class SettingsUpdateRequest(BaseModel):
     migrate_files: Optional[bool] = False
 
 
+class OpenAIModelsRequest(BaseModel):
+    api_key: str
+    base_url: Optional[str] = None
+
+
 class TestKeyRequest(BaseModel):
     provider: str
     api_key: str
@@ -1965,6 +1970,25 @@ def _update_env_file(updates: dict):
 
     with open(env_path, "w", encoding="utf-8") as f:
         f.writelines(new_lines)
+
+
+@app.post("/api/settings/openai-models")
+async def api_openai_models(req: OpenAIModelsRequest):
+    # The key must come with the request, so a saved key is never sent to a URL given here.
+    key = req.api_key.strip()
+    base_url = (req.base_url or "").strip().rstrip("/") or DEFAULT_OPENAI_BASE_URL
+    if not key or not base_url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="API key and an http(s) base URL are required")
+    try:
+        resp = await asyncio.to_thread(
+            requests.get, f"{base_url}/models", headers={"Authorization": f"Bearer {key}"}, timeout=8
+        )
+        resp.raise_for_status()
+        ids = [m["id"] for m in resp.json()["data"]]
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Could not list models: {type(e).__name__}")
+    # Clip analysis needs a chat model, and these name patterns can never be one.
+    return {"models": sorted(i for i in ids if not re.search(r"embedding|whisper|tts|transcribe", i, re.I))}
 
 
 @app.post("/api/settings/test-key")
