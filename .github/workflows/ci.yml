@@ -16,6 +16,32 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: python -m unittest discover -v
 
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      LUNA_NO_START: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install on macOS or Linux
+        if: runner.os != 'Windows'
+        run: ./install.sh
+      - name: Install on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\install.ps1
+      - name: Start and check the server
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then PY=.venv/Scripts/python.exe; else PY=.venv/bin/python; fi
+          "$PY" -m uvicorn app:app --host 127.0.0.1 --port 8000 &
+          for i in $(seq 1 60); do curl -fsS -o /dev/null http://127.0.0.1:8000/ && break; sleep 2; done
+          curl -fsS -X POST http://127.0.0.1:8000/api/settings/check-system | tee status.json
+          grep -q '"ffmpeg":true' status.json
+
   docker:
     runs-on: ubuntu-latest
     env:
