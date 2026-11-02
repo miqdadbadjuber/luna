@@ -1,27 +1,23 @@
 import os
+import tempfile
 import unittest
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
-from app import app, BASE_DIR
+from app import app
 
 class TestApiSettingsAutoSave(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app)
-        self.env_path = os.path.join(BASE_DIR, ".env")
-        self.original_env = None
-        self.original_groq_env = os.environ.get("GROQ_API_KEY")
-        if os.path.exists(self.env_path):
-            with open(self.env_path, "r", encoding="utf-8") as f:
-                self.original_env = f.read()
-
-    def tearDown(self):
-        if self.original_env is not None:
-            with open(self.env_path, "w", encoding="utf-8") as f:
-                f.write(self.original_env)
-        if self.original_groq_env is None:
-            os.environ.pop("GROQ_API_KEY", None)
-        else:
-            os.environ["GROQ_API_KEY"] = self.original_groq_env
+        # The settings endpoints rewrite .env, so point them away from the developer's real file.
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.env_path = os.path.join(tmp.name, ".env")
+        base_dir = patch("app.BASE_DIR", tmp.name)
+        base_dir.start()
+        self.addCleanup(base_dir.stop)
+        environ = patch.dict(os.environ)
+        environ.start()
+        self.addCleanup(environ.stop)
 
     @patch("requests.get")
     def test_groq_key_test_auto_saves_to_env(self, mock_get):
@@ -71,7 +67,6 @@ class TestApiSettingsAutoSave(unittest.TestCase):
             self.assertTrue(data.get("path").endswith("SelectedFolder"))
 
     def test_storage_migration(self):
-        import tempfile
         import shutil
         old_dir = tempfile.mkdtemp()
         new_dir = tempfile.mkdtemp()

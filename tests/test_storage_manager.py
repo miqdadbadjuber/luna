@@ -19,7 +19,8 @@ class TestStorageManager(unittest.TestCase):
 
     def test_constants(self):
         """Verify required constants and category mapping."""
-        self.assertEqual(storage_manager.DEFAULT_D_PATH, r"D:\Luna-Media")
+        expected_default = r"D:\Luna-Media" if os.name == "nt" else storage_manager.FALLBACK_PATH
+        self.assertEqual(storage_manager.DEFAULT_D_PATH, expected_default)
         self.assertEqual(
             storage_manager.FALLBACK_PATH,
             os.path.join(storage_manager.BASE_DIR, "output"),

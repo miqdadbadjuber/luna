@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+      - run: pip install -r requirements-dev.txt
+      - run: python -m unittest discover -v
+
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      LUNA_NO_START: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install on macOS or Linux
+        if: runner.os != 'Windows'
+        run: ./install.sh
+      - name: Install on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\install.ps1
+      - name: Start and check the server
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then PY=.venv/Scripts/python.exe; else PY=.venv/bin/python; fi
+          "$PY" -m uvicorn app:app --host 127.0.0.1 --port 8000 &
+          for i in $(seq 1 60); do curl -fsS -o /dev/null http://127.0.0.1:8000/ && break; sleep 2; done
+          curl -fsS -X POST http://127.0.0.1:8000/api/settings/check-system | tee status.json
+          grep -q '"ffmpeg":true' status.json
+
+  docker:
+    runs-on: ubuntu-latest
+    env:
+      DEV: -f compose.yaml -f compose.dev.yaml
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare host files
+        run: |
+          cp .env.example .env
+          touch cookies.txt
+          mkdir -p output media-vault
+          echo "LUNA_UID=$(id -u)" >> "$GITHUB_ENV"
+          echo "LUNA_GID=$(id -g)" >> "$GITHUB_ENV"
+      - name: Start the production stack
+        run: docker compose up -d --build --wait
+      - name: Check the image and its mounted files
+        run: |
+          curl -fsS -o /dev/null http://127.0.0.1:8000/
+          docker compose exec -T luna ffmpeg -version
+          docker compose exec -T luna ffprobe -version
+          docker compose exec -T luna python -c "import cv2"
+          curl -fsS -X POST http://127.0.0.1:8000/api/settings \
+            -H 'Content-Type: application/json' -d '{"gemini_api_key":"ci-check"}'
+          grep -q '^GEMINI_API_KEY=ci-check$' .env
+          curl -fsS -X POST http://127.0.0.1:8000/api/settings/upload-cookies \
+            -H 'Content-Type: application/json' -d '{"content":"# ci-check"}'
+          test -s cookies.txt
+      - name: Start the dev stack
+        run: |
+          docker compose down
+          docker compose $DEV up -d --wait
+          curl -fsS -o /dev/null http://127.0.0.1:8000/
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs

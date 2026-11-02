@@ -38,6 +38,10 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 # Ensure ffmpeg in PATH
 os.environ["PATH"] += os.pathsep + r"C:\ffmpeg\bin"
 
+from ffmpeg_setup import ensure_ffmpeg
+
+ensure_ffmpeg()
+
 from shorts_generator import generate_shorts
 from shorts_generator.highlights import clean_caption
 from storage_manager import (
