@@ -145,6 +145,42 @@ class TestOpenAICompatible(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Unknown LLM_PROVIDER"):
                 call_llm("hi")
 
+    def test_provider_settings_are_saved_and_apply_to_the_next_job(self):
+        from luna.clipper import config
+
+        client = TestClient(app)
+        with tempfile.TemporaryDirectory() as tmp, patch("luna.app.BASE_DIR", tmp), patch.dict(os.environ):
+            res = client.post("/api/settings", json={"llm_provider": "gemini", "transcribe_provider": "whisper"})
+            self.assertEqual(res.status_code, 200)
+            self.assertEqual(config.llm_provider(), "gemini")
+            self.assertEqual(config.transcribe_provider(), "whisper")
+            self.assertEqual(config.transcribe_provider_label(), "Faster-Whisper Local")
+            data = client.get("/api/settings").json()
+            self.assertEqual((data["llm_provider"], data["transcribe_provider"]), ("gemini", "whisper"))
+
+            client.post("/api/settings", json={"llm_provider": ""})
+            self.assertEqual(client.get("/api/settings").json()["llm_provider"], "")
+            with open(os.path.join(tmp, ".env"), encoding="utf-8") as f:
+                self.assertIn("LOCAL_TRANSCRIBE_PROVIDER=whisper", f.read())
+
+    def test_unknown_provider_settings_are_rejected(self):
+        client = TestClient(app)
+        with patch("luna.app._update_env_file") as save:
+            self.assertEqual(client.post("/api/settings", json={"llm_provider": "nope"}).status_code, 400)
+            self.assertEqual(client.post("/api/settings", json={"transcribe_provider": ""}).status_code, 400)
+        save.assert_not_called()
+
+    def test_transcription_dispatch_follows_the_setting(self):
+        with patch.dict(os.environ, {"LOCAL_TRANSCRIBE_PROVIDER": "whisper"}), \
+                patch.object(transcriber, "_transcribe_local_whisper", return_value={"segments": [], "duration": 0}) as run, \
+                patch.object(transcriber, "_try_fetch_native_youtube_subtitles", return_value=None), \
+                patch.object(transcriber, "_write_srt_cache", return_value="x.srt"), \
+                patch.object(transcriber, "_load_srt_cache", return_value=None), \
+                tempfile.TemporaryDirectory() as tmp:
+            result = transcriber.transcribe_local(os.path.join(tmp, "v.mp4"), video_url="https://example.test/v")
+        run.assert_called_once()
+        self.assertEqual(result["provider"], "Faster-Whisper Local")
+
 
 if __name__ == "__main__":
     unittest.main()

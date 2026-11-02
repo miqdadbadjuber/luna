@@ -14,10 +14,10 @@ from typing import Callable, Dict, Optional
 from .config import (
     GEMINI_MODEL,
     LOCAL_OUTPUT_DIR,
-    LOCAL_TRANSCRIBE_PROVIDER,
     LOCAL_WHISPER_DEVICE,
     LOCAL_WHISPER_MODEL,
     require_gemini_key,
+    transcribe_provider,
 )
 
 
@@ -314,7 +314,7 @@ def transcribe_local(
     if on_status:
         on_status("transcribing_groq")
 
-    provider = (LOCAL_TRANSCRIBE_PROVIDER or "groq").strip().lower()
+    provider = transcribe_provider()
     if provider == "groq":
         transcript = _transcribe_local_groq(media_path, language=language, on_status=on_status)
         transcript["provider"] = "Groq Cloud Whisper"

@@ -18,7 +18,7 @@ A local web app for downloading video and audio from YouTube, Instagram, and Tik
 | Transcribe with local Whisper | None for transcription | Install `pip install -r requirements-whisper.txt`, then set `LOCAL_TRANSCRIBE_PROVIDER=whisper`. Whisper downloads its model on first use. |
 | Cookies for restricted videos | None | Optional. Add your own cookies in Settings. Treat `cookies.txt` as a secret. |
 
-`.env.example` uses an OpenAI-compatible provider for clip ranking and Groq Whisper for transcription. Gemini is an alternative for both: set `LLM_PROVIDER=gemini` and `LOCAL_TRANSCRIBE_PROVIDER=gemini`. Luna sends the audio or transcript needed for these tasks to the selected provider. Avoid using private content if you do not want it processed by a third party.
+`.env.example` uses an OpenAI-compatible provider for clip ranking and Groq Whisper for transcription. Gemini is an alternative for both. Choose providers in Settings, or with `LLM_PROVIDER` and `LOCAL_TRANSCRIBE_PROVIDER` in `.env`. Luna sends the audio or transcript needed for these tasks to the selected provider. Avoid using private content if you do not want it processed by a third party.
 
 ## Install
 

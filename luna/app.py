@@ -43,6 +43,7 @@ from .clipper.config import (
     DEFAULT_OPENAI_BASE_URL,
     openai_base_url,
     openai_model,
+    transcribe_provider,
     transcribe_provider_label,
 )
 from .clipper.highlights import clean_caption
@@ -1818,6 +1819,8 @@ async def api_check_system():
 
 # Settings routes
 class SettingsUpdateRequest(BaseModel):
+    llm_provider: Optional[str] = None
+    transcribe_provider: Optional[str] = None
     openai_api_key: Optional[str] = None
     openai_base_url: Optional[str] = None
     openai_model: Optional[str] = None
@@ -1850,6 +1853,8 @@ async def api_get_settings():
     curr_storage = get_storage_root()
 
     return {
+        "llm_provider": os.getenv("LLM_PROVIDER", "").strip().lower(),
+        "transcribe_provider": transcribe_provider(),
         "openai_api_key": os.getenv("OPENAI_API_KEY", ""),
         "openai_base_url": openai_base_url(),
         "openai_model": openai_model(),
@@ -1875,6 +1880,17 @@ async def api_get_settings():
 @app.post("/api/settings")
 async def api_save_settings(req: SettingsUpdateRequest):
     updates = {}
+    # Blank means automatic, see llm_provider() in the clipper config.
+    if req.llm_provider is not None:
+        value = req.llm_provider.strip().lower()
+        if value not in ("", "openai", "gemini"):
+            raise HTTPException(status_code=400, detail="Unknown clip analysis provider")
+        updates["LLM_PROVIDER"] = value
+    if req.transcribe_provider is not None:
+        value = req.transcribe_provider.strip().lower()
+        if value not in ("groq", "gemini", "whisper"):
+            raise HTTPException(status_code=400, detail="Unknown transcription provider")
+        updates["LOCAL_TRANSCRIBE_PROVIDER"] = value
     if req.openai_base_url is not None and req.openai_base_url.strip():
         if not req.openai_base_url.strip().startswith(("http://", "https://")):
             raise HTTPException(status_code=400, detail="Base URL must start with http:// or https://")

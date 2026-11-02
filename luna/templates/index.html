@@ -3292,6 +3292,35 @@
         </div>
 
                 <div class="w-full md:w-2/3 space-y-5">
+          <!-- Provider selection -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="space-y-1">
+              <label class="font-medium text-zinc-200 text-xs" for="selectLlmProvider">Clip analysis provider</label>
+              <div class="t-input-wrap">
+                <div class="t-input">
+                  <select id="selectLlmProvider" class="w-full h-full bg-transparent px-3 text-xs font-mono text-white outline-none cursor-pointer">
+                  <option value="" class="bg-[#202020]">Auto</option>
+                  <option value="openai" class="bg-[#202020]">OpenAI-compatible</option>
+                  <option value="gemini" class="bg-[#202020]">Gemini</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="space-y-1">
+              <label class="font-medium text-zinc-200 text-xs" for="selectTranscribeProvider">Transcription provider</label>
+              <div class="t-input-wrap">
+                <div class="t-input">
+                  <select id="selectTranscribeProvider" class="w-full h-full bg-transparent px-3 text-xs font-mono text-white outline-none cursor-pointer">
+                  <option value="groq" class="bg-[#202020]">Groq Whisper</option>
+                  <option value="gemini" class="bg-[#202020]">Gemini</option>
+                  <option value="whisper" class="bg-[#202020]">Local Whisper</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="text-[11px] text-zinc-500 -mt-3">Auto uses OpenAI-compatible when its key is set, otherwise Gemini. Local Whisper needs <code class="font-mono text-zinc-400">requirements-whisper.txt</code> installed.</p>
+
           <!-- Google Gemini Row -->
           <div class="space-y-1">
             <div class="flex items-center justify-between text-xs">
@@ -7709,6 +7738,8 @@
         const data = await res.json();
 
         const openaiFields = {
+          selectLlmProvider: data.llm_provider,
+          selectTranscribeProvider: data.transcribe_provider,
           inputOpenai: data.openai_api_key,
           inputOpenaiBase: data.openai_base_url,
           inputOpenaiModel: data.openai_model
@@ -7813,6 +7844,8 @@
       const payload = {
         storage_dir: storageInput.value.trim(),
         migrate_files: isPathChanged,
+        llm_provider: document.getElementById('selectLlmProvider')?.value,
+        transcribe_provider: document.getElementById('selectTranscribeProvider')?.value,
         openai_api_key: document.getElementById('inputOpenai')?.value.trim(),
         openai_base_url: document.getElementById('inputOpenaiBase')?.value.trim(),
         openai_model: document.getElementById('inputOpenaiModel')?.value.trim(),

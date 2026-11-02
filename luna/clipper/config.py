@@ -19,9 +19,6 @@ if "=" in _raw_out or not _raw_out:
     _raw_out = "output"
 LOCAL_OUTPUT_DIR = _raw_out
 
-# "groq" uploads audio to Groq's hosted Whisper, "gemini" uses the Gemini audio API,
-# "whisper" runs faster-whisper on this machine.
-LOCAL_TRANSCRIBE_PROVIDER = os.getenv("LOCAL_TRANSCRIBE_PROVIDER", "groq").strip().lower()
 
 # VAD (Voice Activity Detection) settings for faster-whisper.
 # Disabled by default because VAD is too aggressive on mixed speech/music content.
@@ -47,8 +44,14 @@ TRANSCRIBE_PROVIDER_LABELS = {
 }
 
 
+def transcribe_provider() -> str:
+    """"groq" uses hosted Whisper, "gemini" the Gemini audio API, "whisper" faster-whisper on this machine."""
+    return os.getenv("LOCAL_TRANSCRIBE_PROVIDER", "").strip().lower() or "groq"
+
+
 def transcribe_provider_label() -> str:
-    return TRANSCRIBE_PROVIDER_LABELS.get(LOCAL_TRANSCRIBE_PROVIDER, LOCAL_TRANSCRIBE_PROVIDER)
+    provider = transcribe_provider()
+    return TRANSCRIBE_PROVIDER_LABELS.get(provider, provider)
 
 
 # These read the environment on each call so a Settings save applies to the next job.
