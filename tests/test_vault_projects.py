@@ -7,9 +7,9 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-import storage_manager
-import vault_service
-from app import app, jobs
+from luna import storage_manager
+from luna import vault_service
+from luna.app import app, jobs
 
 
 class TestVaultProjects(unittest.TestCase):
@@ -208,7 +208,7 @@ class TestVaultProjects(unittest.TestCase):
             "workspace_name": "Workspace Keren",
             "quality": "1080",
         }
-        with patch("app._worker_process"):
+        with patch("luna.app._worker_process"):
             resp = self.client.post("/api/process", json=payload)
             self.assertEqual(resp.status_code, 200)
             data = resp.json()
@@ -218,7 +218,7 @@ class TestVaultProjects(unittest.TestCase):
 
     def test_merge_into_existing_workspace(self):
         """_save_project_to_vault merges files into an existing workspace without creating duplicates."""
-        from app import _save_project_to_vault
+        from luna.app import _save_project_to_vault
 
         # Setup initial workspace with 1 file
         src_file1 = os.path.join(self.test_dir, "test1.mp4")

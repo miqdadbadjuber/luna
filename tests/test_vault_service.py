@@ -6,8 +6,8 @@ import time
 import unittest
 from unittest.mock import patch
 
-import storage_manager
-import vault_service
+from luna import storage_manager
+from luna import vault_service
 
 
 class TestVaultService(unittest.TestCase):

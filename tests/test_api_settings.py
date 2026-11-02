@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
-from app import app
+from luna.app import app
 
 class TestApiSettingsAutoSave(unittest.TestCase):
     def setUp(self):
@@ -12,7 +12,7 @@ class TestApiSettingsAutoSave(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.env_path = os.path.join(tmp.name, ".env")
-        base_dir = patch("app.BASE_DIR", tmp.name)
+        base_dir = patch("luna.app.BASE_DIR", tmp.name)
         base_dir.start()
         self.addCleanup(base_dir.stop)
         environ = patch.dict(os.environ)
@@ -37,7 +37,7 @@ class TestApiSettingsAutoSave(unittest.TestCase):
 
         # Verify in memory os.environ
         self.assertEqual(os.environ.get("GROQ_API_KEY"), new_test_key)
-        from shorts_generator.config import require_groq_key
+        from luna.clipper.config import require_groq_key
         self.assertEqual(require_groq_key(), new_test_key)
 
         # Verify in .env file

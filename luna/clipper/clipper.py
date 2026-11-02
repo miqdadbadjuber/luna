@@ -12,9 +12,11 @@ Optimizations:
 import concurrent.futures
 import os
 import subprocess
+import tempfile
 from typing import Callable, Dict, List, Optional, Tuple
 
-from ..config import LOCAL_OUTPUT_DIR
+from .config import LOCAL_OUTPUT_DIR
+from .subtitles import overlay_args, render_cues, segments_for_clip
 
 # Sample face position once per second (approx 30 frames) for tracking
 FACE_DETECT_SAMPLE_EVERY = 30
@@ -170,6 +172,32 @@ def _get_encoder_flags() -> List[str]:
     return _DETECTED_ENCODER_FLAGS
 
 
+def _encode(
+    source_path: str,
+    start_time: float,
+    end_time: float,
+    vf: str,
+    enc_flags: List[str],
+    out_path: str,
+    cues: Optional[List[Dict]],
+    frame_w: int,
+    frame_h: int,
+) -> None:
+    cmd = [
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-ss", f"{start_time:.3f}",
+        "-to", f"{end_time:.3f}",
+        "-i", source_path,
+    ]
+    tail = [*enc_flags, "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", out_path]
+    if not cues:
+        subprocess.run([*cmd, *(["-vf", vf] if vf else []), *tail], check=True)
+        return
+    with tempfile.TemporaryDirectory() as tmp:
+        rendered = render_cues(cues, frame_w, frame_h, tmp)
+        subprocess.run([*cmd, *overlay_args(rendered, vf), *tail], check=True)
+
+
 def crop_clip_local(
     source_path: str,
     start_time: float,
@@ -178,6 +206,7 @@ def crop_clip_local(
     out_path: str,
     use_face_detect: bool = False,
     src_dims: Optional[Tuple[int, int, float]] = None,
+    cues: Optional[List[Dict]] = None,
 ) -> str:
     """Cut + reframe one highlight in a single fast ffmpeg pass with hardware acceleration."""
     if src_dims is None:
@@ -191,16 +220,7 @@ def crop_clip_local(
 
     if aspect_ratio == "16:9":
         # Native aspect ratio: subclip directly
-        cmd = [
-            "ffmpeg", "-y", "-loglevel", "error",
-            "-ss", f"{start_time:.3f}",
-            "-to", f"{padded_end:.3f}",
-            "-i", source_path,
-            *enc_flags,
-            "-c:a", "aac", "-b:a", "128k",
-            out_path,
-        ]
-        subprocess.run(cmd, check=True)
+        _encode(source_path, start_time, padded_end, "", enc_flags, out_path, cues, src_w, src_h)
         return out_path
 
     if use_face_detect:
@@ -213,18 +233,8 @@ def crop_clip_local(
 
         crop_filter = f"crop@c={crop_w}:{crop_h}:{centers[0][0]}:{centers[0][1]}"
         vf = f"{crop_filter},sendcmd=f={sendcmd_path}"
-        cmd = [
-            "ffmpeg", "-y", "-loglevel", "error",
-            "-ss", f"{start_time:.3f}",
-            "-to", f"{padded_end:.3f}",
-            "-i", source_path,
-            "-vf", vf,
-            *enc_flags,
-            "-c:a", "aac", "-b:a", "128k",
-            out_path,
-        ]
         try:
-            subprocess.run(cmd, check=True)
+            _encode(source_path, start_time, padded_end, vf, enc_flags, out_path, cues, crop_w, crop_h)
         finally:
             if os.path.exists(sendcmd_path):
                 os.remove(sendcmd_path)
@@ -233,19 +243,7 @@ def crop_clip_local(
     # Static center crop (9:16, 1:1, 3:4, etc.) in a single fast pass
     x0 = max(0, (src_w - crop_w) // 2)
     y0 = max(0, (src_h - crop_h) // 2)
-    crop_filter = f"crop={crop_w}:{crop_h}:{x0}:{y0}"
-    cmd = [
-        "ffmpeg", "-y", "-loglevel", "error",
-        "-ss", f"{start_time:.3f}",
-        "-to", f"{padded_end:.3f}",
-        "-i", source_path,
-        "-vf", crop_filter,
-        *enc_flags,
-        "-c:a", "aac", "-b:a", "128k",
-        "-movflags", "+faststart",
-        out_path,
-    ]
-    subprocess.run(cmd, check=True)
+    _encode(source_path, start_time, padded_end, f"crop={crop_w}:{crop_h}:{x0}:{y0}", enc_flags, out_path, cues, crop_w, crop_h)
     return out_path
 
 
@@ -256,6 +254,7 @@ def crop_highlights_local(
     out_dir: Optional[str] = None,
     use_face_detect: bool = False,
     on_progress: Optional[Callable[[int, int], None]] = None,
+    transcript_segments: Optional[List[Dict]] = None,
 ) -> List[Dict]:
     out_dir = out_dir or LOCAL_OUTPUT_DIR
     if "=" in str(out_dir) or not str(out_dir).strip():
@@ -287,6 +286,9 @@ def crop_highlights_local(
                 out_path,
                 use_face_detect=use_face_detect,
                 src_dims=src_dims,
+                cues=segments_for_clip(
+                    transcript_segments or [], float(h["start_time"]), float(h["end_time"]) + 0.25
+                ),
             )
             print(f"[clip/local] finished clip {idx}/{len(highlights)} -> {out_path}", flush=True)
             return {**h, "clip_url": out_path}

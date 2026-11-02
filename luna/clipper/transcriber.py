@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path
 from typing import Callable, Dict, Optional
 
-from ..config import (
+from .config import (
     GEMINI_MODEL,
     LOCAL_OUTPUT_DIR,
     LOCAL_TRANSCRIBE_PROVIDER,
@@ -368,16 +368,9 @@ def _transcribe_local_groq(
     ("extracting_audio", "uploading") so the caller (e.g. the web app)
     can show progress without this module knowing anything about the caller UI.
     """
-    try:
-        from openai import OpenAI  # type: ignore
-    except ImportError as e:
-        raise RuntimeError(
-            "openai is required for LOCAL_TRANSCRIBE_PROVIDER=groq (used as the client "
-            "for Groq's OpenAI-compatible API). Install it with:\n"
-            "    pip install -r requirements-local.txt"
-        ) from e
+    from openai import OpenAI
 
-    from ..config import GROQ_BASE_URL, GROQ_WHISPER_MODEL, require_groq_key
+    from .config import GROQ_BASE_URL, GROQ_WHISPER_MODEL, require_groq_key
 
     if on_status:
         on_status("extracting_audio")
@@ -437,14 +430,14 @@ def _transcribe_local_whisper(media_path: str, language: Optional[str] = None) -
     except ImportError as e:
         raise RuntimeError(
             "faster-whisper is required for --mode local. Install it with:\n"
-            "    pip install -r requirements-local.txt"
+            "    pip install -r requirements-whisper.txt"
         ) from e
 
     device = _resolve_device()
     compute_type = "float16" if device == "cuda" else "int8"
     print(f"[transcribe/local] faster-whisper model={LOCAL_WHISPER_MODEL} device={device}", flush=True)
 
-    from ..config import LOCAL_WHISPER_VAD_FILTER, LOCAL_WHISPER_VAD_PARAMETERS
+    from .config import LOCAL_WHISPER_VAD_FILTER, LOCAL_WHISPER_VAD_PARAMETERS
 
     model = WhisperModel(LOCAL_WHISPER_MODEL, device=device, compute_type=compute_type)
 

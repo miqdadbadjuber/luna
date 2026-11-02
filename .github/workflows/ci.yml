@@ -38,8 +38,8 @@ jobs:
           docker compose exec -T luna ffprobe -version
           docker compose exec -T luna python -c "import cv2"
           curl -fsS -X POST http://127.0.0.1:8000/api/settings \
-            -H 'Content-Type: application/json' -d '{"gemini_api_key":"ci-check"}'
-          grep -q '^GEMINI_API_KEY=ci-check$' .env
+            -H 'Content-Type: application/json' -d '{"openai_api_key":"ci-check"}'
+          grep -q '^OPENAI_API_KEY=ci-check$' .env
           curl -fsS -X POST http://127.0.0.1:8000/api/settings/upload-cookies \
             -H 'Content-Type: application/json' -d '{"content":"# ci-check"}'
           test -s cookies.txt

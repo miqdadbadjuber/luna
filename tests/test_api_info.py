@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
-from app import app
+from luna.app import app
 
 class TestApiInfo(unittest.TestCase):
     def setUp(self):
@@ -52,7 +52,7 @@ class TestApiInfo(unittest.TestCase):
             self.assertEqual(res.status_code, 400, f"Expected 400 for SSRF attempt: {bad_url}")
 
     def test_jobs_pruning(self):
-        from app import jobs, _prune_old_jobs
+        from luna.app import jobs, _prune_old_jobs
         jobs.clear()
         for i in range(60):
             jobs[f"job_{i}"] = {"id": f"job_{i}", "status": "completed"}

@@ -26,7 +26,6 @@ ENV/
 # Generated media and local data
 /output/
 /media-vault/
-/AI-Clipper/output/
 /docs/
 *.sqlite
 *.sqlite3

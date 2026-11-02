@@ -2,8 +2,8 @@ import os
 import unittest
 from fastapi.testclient import TestClient
 
-from app import app, _save_project_to_vault, create_progress_hook, jobs
-from shorts_generator.highlights import clean_caption
+from luna.app import app, _save_project_to_vault, create_progress_hook, jobs
+from luna.clipper.highlights import clean_caption
 
 
 class TestTranscriptAndFactualPipeline(unittest.TestCase):
@@ -55,9 +55,9 @@ class TestTranscriptAndFactualPipeline(unittest.TestCase):
             target_ws_dir = os.path.join(tmpdir, "vault_target")
             os.makedirs(target_ws_dir, exist_ok=True)
 
-            with patch("app.get_workspace_folder", return_value=target_ws_dir), \
-                 patch("app.get_storage_root", return_value=tmpdir), \
-                 patch("app.list_vault_projects", return_value=[]):
+            with patch("luna.app.get_workspace_folder", return_value=target_ws_dir), \
+                 patch("luna.app.get_storage_root", return_value=tmpdir), \
+                 patch("luna.app.list_vault_projects", return_value=[]):
                 proj = _save_project_to_vault(
                     workspace_name="Factual Workspace",
                     action="type_yt_ai_clip",

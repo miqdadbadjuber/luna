@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import json
+import logging
 import os
 import re
 import shutil
@@ -28,9 +29,8 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-AI_CLIPPER_DIR = os.path.join(BASE_DIR, "AI-Clipper")
-sys.path.append(AI_CLIPPER_DIR)
+PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(PACKAGE_DIR)
 
 # Load environment variables
 load_dotenv(os.path.join(BASE_DIR, ".env"))
@@ -38,9 +38,15 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 # Ensure ffmpeg in PATH
 os.environ["PATH"] += os.pathsep + r"C:\ffmpeg\bin"
 
-from shorts_generator import generate_shorts
-from shorts_generator.highlights import clean_caption
-from storage_manager import (
+from .clipper import generate_shorts
+from .clipper.config import (
+    DEFAULT_OPENAI_BASE_URL,
+    openai_base_url,
+    openai_model,
+    transcribe_provider_label,
+)
+from .clipper.highlights import clean_caption
+from .storage_manager import (
     CATEGORY_MAP,
     get_storage_root,
     get_category_folder,
@@ -49,7 +55,7 @@ from storage_manager import (
     format_clip_folder,
     is_writable,
 )
-from vault_service import (
+from .vault_service import (
     save_media_metadata,
     save_project_metadata,
     list_vault_items,
@@ -63,13 +69,15 @@ from vault_service import (
 
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
-TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
-ASSETS_DIR = os.path.join(BASE_DIR, "assets")
+TEMPLATES_DIR = os.path.join(PACKAGE_DIR, "templates")
+ASSETS_DIR = os.path.join(PACKAGE_DIR, "assets")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(STATIC_DIR, exist_ok=True)
 os.makedirs(TEMPLATES_DIR, exist_ok=True)
 os.makedirs(ASSETS_DIR, exist_ok=True)
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Luna: Multi-Platform Media & AI Shorts Web Studio")
 
@@ -810,10 +818,10 @@ async def api_check_transcript(url: str = Query(...)):
     if not url or not is_safe_external_url(url):
         raise HTTPException(status_code=400, detail="URL is invalid or not allowed")
     try:
-        from shorts_generator.local.downloader import _extract_youtube_video_id
+        from .clipper.downloader import _extract_youtube_video_id
         vid = _extract_youtube_video_id(url)
         if not vid:
-            return {"has_transcript": True, "provider": "Groq Cloud Whisper"}
+            return {"has_transcript": True, "provider": transcribe_provider_label()}
 
         def _check_api():
             try:
@@ -827,11 +835,11 @@ async def api_check_transcript(url: str = Query(...)):
         has_t = await asyncio.to_thread(_check_api)
         return {
             "has_transcript": has_t,
-            "provider": "YouTube Subtitle Scraper" if has_t else "Groq Cloud Whisper",
+            "provider": "YouTube Subtitle Scraper" if has_t else transcribe_provider_label(),
             "note": "Official YouTube transcript is available" if has_t else "No official transcript is available; using AI speech-to-text"
         }
     except Exception as e:
-        return {"has_transcript": True, "provider": "Groq Cloud Whisper"}
+        return {"has_transcript": True, "provider": transcribe_provider_label()}
 
 
 def _save_single_media_to_vault(
@@ -1054,7 +1062,7 @@ def _worker_process(job_id: str, req: ProcessRequest):
                     jobs[job_id]["progress"] = 40.0
                     jobs[job_id]["download_speed"] = ""
                     jobs[job_id]["download_eta"] = ""
-                    jobs[job_id]["stage_detail"] = "Transcribing audio with Groq Cloud Whisper..."
+                    jobs[job_id]["stage_detail"] = f"Transcribing audio with {transcribe_provider_label()}..."
                 elif stage == "transcribing_local":
                     jobs[job_id]["progress"] = 40.0
                     jobs[job_id]["download_speed"] = ""
@@ -1099,7 +1107,6 @@ def _worker_process(job_id: str, req: ProcessRequest):
                 aspect_ratio=req.aspect_ratio,
                 download_format="1080",
                 language=None,
-                mode="local",
                 use_face_detect=req.use_face_detect,
                 on_status=on_status,
                 out_dir=job_output_dir,
@@ -1811,6 +1818,9 @@ async def api_check_system():
 
 # Settings routes
 class SettingsUpdateRequest(BaseModel):
+    openai_api_key: Optional[str] = None
+    openai_base_url: Optional[str] = None
+    openai_model: Optional[str] = None
     gemini_api_key: Optional[str] = None
     groq_api_key: Optional[str] = None
     storage_dir: Optional[str] = None
@@ -1820,6 +1830,7 @@ class SettingsUpdateRequest(BaseModel):
 class TestKeyRequest(BaseModel):
     provider: str
     api_key: str
+    base_url: Optional[str] = None
 
 
 @app.get("/api/settings")
@@ -1839,8 +1850,11 @@ async def api_get_settings():
     curr_storage = get_storage_root()
 
     return {
+        "openai_api_key": os.getenv("OPENAI_API_KEY", ""),
+        "openai_base_url": openai_base_url(),
+        "openai_model": openai_model(),
         "gemini_api_key": os.getenv("GEMINI_API_KEY", ""),
-        "gemini_model": os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+        "gemini_model": os.getenv("GEMINI_MODEL", "gemini-3.5-flash"),
         "groq_api_key": os.getenv("GROQ_API_KEY", ""),
         "groq_model": os.getenv("GROQ_WHISPER_MODEL", "whisper-large-v3-turbo"),
         "storage_dir": curr_storage,
@@ -1861,6 +1875,16 @@ async def api_get_settings():
 @app.post("/api/settings")
 async def api_save_settings(req: SettingsUpdateRequest):
     updates = {}
+    if req.openai_base_url is not None and req.openai_base_url.strip():
+        if not req.openai_base_url.strip().startswith(("http://", "https://")):
+            raise HTTPException(status_code=400, detail="Base URL must start with http:// or https://")
+    for env_key, value in (
+        ("OPENAI_API_KEY", req.openai_api_key),
+        ("OPENAI_BASE_URL", req.openai_base_url),
+        ("OPENAI_MODEL", req.openai_model),
+    ):
+        if value is not None:
+            updates[env_key] = value.strip()
     if req.gemini_api_key is not None:
         updates["GEMINI_API_KEY"] = req.gemini_api_key.strip()
     if req.groq_api_key is not None:
@@ -1874,7 +1898,7 @@ async def api_save_settings(req: SettingsUpdateRequest):
 
         old_dir = get_storage_root()
         if req.migrate_files or os.path.abspath(old_dir) != os.path.abspath(norm_dir):
-            import storage_manager
+            from . import storage_manager
             try:
                 migrated_info = storage_manager.migrate_storage(old_dir, norm_dir)
             except Exception as e:
@@ -1934,6 +1958,23 @@ async def api_test_key(req: TestKeyRequest):
     if not key:
         raise HTTPException(status_code=400, detail="API key cannot be empty")
 
+    if provider == "openai":
+        base_url = (req.base_url or "").strip().rstrip("/") or DEFAULT_OPENAI_BASE_URL
+        if not base_url.startswith(("http://", "https://")):
+            return {"valid": False, "message": "Base URL must start with http(s)://"}
+        try:
+            resp = requests.get(
+                f"{base_url}/models",
+                headers={"Authorization": f"Bearer {key}"},
+                timeout=8,
+            )
+            if resp.status_code == 200:
+                _update_env_file({"OPENAI_API_KEY": key, "OPENAI_BASE_URL": base_url})
+                return {"valid": True, "message": "200 OK", "saved": True}
+            return {"valid": False, "message": f"{resp.status_code} Error"}
+        except Exception as e:
+            return {"valid": False, "message": str(e)[:40]}
+
     if provider == "gemini":
         try:
             resp = requests.get(
@@ -1979,7 +2020,3 @@ async def api_upload_cookies(req: CookieUploadRequest):
     size_kb = f"{len(req.content.encode('utf-8')) / 1024:.1f} KB"
     return {"status": "uploaded", "filename": req.filename or "cookies.txt", "size": size_kb}
 
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("app:app", host="localhost", port=8000, reload=True)

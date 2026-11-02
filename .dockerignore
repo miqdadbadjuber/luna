@@ -7,7 +7,6 @@ venv
 cookies*.txt
 output
 media-vault
-AI-Clipper/output
 docs
 tests
 **/__pycache__

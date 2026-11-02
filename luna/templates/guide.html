@@ -631,7 +631,7 @@
               </span>
             </span>
             <span class="min-w-0 flex-1 truncate text-[13px] font-medium text-white">
-              Analisis Virality &amp; Hook Scoring (Gemini AI)
+              Analisis Virality &amp; Hook Scoring (AI)
             </span>
             <span class="text-[12.5px] text-zinc-400 tabular-nums">Skor 0-100</span>
             <span aria-hidden="true" class="ml-1.5 flex size-7 shrink-0 items-center justify-center rounded-full text-zinc-400">
@@ -695,7 +695,7 @@
                   </div>
                   <div class="flex items-center justify-between">
                     <span class="text-[12px] text-zinc-400">Animated subtitles</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Karaoke Word Highlight</span>
+                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Per segment</span>
                   </div>
                   <div class="flex items-center justify-between">
                     <span class="text-[12px] text-zinc-400">Format Output Render</span>
@@ -891,16 +891,16 @@
         </p>
       </div>
 
-      <!-- Command Box 2: Gemini API Key -->
+      <!-- Command Box 2: OpenAI-compatible API key -->
       <div class="space-y-1.5">
         <div class="flex items-center justify-between text-xs">
-          <span class="font-semibold text-white">2. Google Gemini API Key (for viral hook analysis)</span>
+          <span class="font-semibold text-white">2. OpenAI-compatible API key (for viral hook analysis)</span>
           <span class="text-zinc-500 font-mono text-[11px]">.env file</span>
         </div>
-        <div class="subpage-cmd-box" onclick="copySnippet('GEMINI_API_KEY=AIzaSyD-YourApiKeyHere', this)">
+        <div class="subpage-cmd-box" onclick="copySnippet('OPENAI_API_KEY=your-api-key', this)">
           <div class="subpage-cmd-left">
             <span class="subpage-cmd-prompt">$</span>
-            <code class="subpage-cmd-code">GEMINI_API_KEY=AIzaSyD-YourApiKeyHere</code>
+            <code class="subpage-cmd-code">OPENAI_API_KEY=your-api-key</code>
           </div>
           <button type="button" class="spell-copy-btn" aria-label="Copy">
             <span class="spell-icon-copy">
@@ -917,7 +917,7 @@
           </button>
         </div>
         <p class="text-xs text-zinc-400 leading-relaxed">
-          Get a free API key from Google AI Studio (<a href="https://aistudio.google.com" target="_blank" class="text-zinc-300 underline hover:text-white">aistudio.google.com</a>) and save it in the project folder's <code class="text-white font-mono">.env</code> file.
+          Use a key from any provider with an OpenAI-compatible API, such as OpenAI.<code class="text-white font-mono">.env</code> file.
         </p>
       </div>
 
@@ -1062,13 +1062,13 @@
 
         <div class="py-3.5 cursor-pointer select-none" onclick="toggleFaq(this)">
           <div class="flex items-center justify-between">
-            <span class="text-xs sm:text-sm font-medium text-white">How do I get a Google Gemini API key?</span>
+            <span class="text-xs sm:text-sm font-medium text-white">How do I get an OpenAI-compatible API key?</span>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="faq-chevron transition-transform duration-200 text-zinc-400 shrink-0 ml-2">
               <path d="M6 9l6 6 6-6" />
             </svg>
           </div>
           <p class="text-xs text-zinc-400 mt-2 hidden leading-relaxed">
-            Visit <a href="https://aistudio.google.com" target="_blank" class="text-blue-400 underline hover:text-blue-300">Google AI Studio</a>, sign in to your Google account, click "Create API Key", then copy the key into <code class="text-blue-300 font-mono bg-white/[0.08] px-1 rounded">GEMINI_API_KEY</code> in the file <code class="text-white font-mono bg-white/[0.08] px-1 rounded">.env</code>.
+            Create a key in your provider's dashboard, then enter the key, base URL and model in Settings.</code> in the file <code class="text-white font-mono bg-white/[0.08] px-1 rounded">.env</code>.
           </p>
         </div>
 

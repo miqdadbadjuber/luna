@@ -3327,7 +3327,7 @@
 
             <!-- Compact model details below the input -->
             <div class="flex items-center justify-between text-[11px] text-zinc-500 pt-0.5">
-              <span>Model: <code class="font-mono text-zinc-400" id="labelGeminiModel">gemini-2.5-flash</code></span>
+              <span>Model: <code class="font-mono text-zinc-400" id="labelGeminiModel">gemini-3.5-flash</code></span>
               <span id="statusGemini" class="font-mono transition-all"></span>
             </div>
           </div>
@@ -3371,6 +3371,52 @@
               <span id="statusGroq" class="font-mono transition-all"></span>
             </div>
           </div>
+
+          <!-- OpenAI-compatible Row -->
+          <div class="space-y-3">
+            <div class="space-y-1">
+              <label class="font-medium text-zinc-200 text-xs" for="inputOpenaiBase">OpenAI-compatible Base URL</label>
+              <div class="t-input-wrap">
+                <div class="t-input">
+                  <input type="text" id="inputOpenaiBase" value="" placeholder="https://api.openai.com/v1"
+                    class="w-full h-full bg-transparent px-3 text-xs font-mono text-white placeholder-zinc-500 outline-none" />
+                </div>
+              </div>
+            </div>
+            <div class="space-y-1">
+              <div class="flex items-center justify-between text-xs">
+                <label class="font-medium text-zinc-200" for="inputOpenai">OpenAI-compatible API Key</label>
+                <button type="button" onclick="testApiKey('openai', 'wrapOpenai', 'inputOpenai', 'statusOpenai', this)"
+                  class="text-[11px] text-zinc-400 hover:text-white transition flex items-center gap-1 font-sans cursor-pointer group">
+                  <i data-lucide="activity" class="w-3 h-3 text-zinc-500 group-hover:text-emerald-400 transition-colors"></i>
+                  <span>Uji Connection</span>
+                </button>
+              </div>
+              <div class="t-input-wrap" id="wrapOpenai">
+                <div class="t-input">
+                  <input type="password" id="inputOpenai" value=""
+                    placeholder="Enter your API key..."
+                    class="w-full h-full bg-transparent px-3 text-xs font-mono text-white placeholder-zinc-500 outline-none" />
+                  <button type="button" onclick="toggleSecret('inputOpenai', 'iconOpenaiEye')"
+                    class="p-2 text-zinc-400 hover:text-white transition cursor-pointer shrink-0"
+                    title="Show / Hide">
+                    <i id="iconOpenaiEye" data-lucide="eye" class="w-3.5 h-3.5"></i>
+                  </button>
+                </div>
+                <p class="t-error-msg" id="errOpenai">This API key is invalid or has not been entered.</p>
+              </div>
+              <div class="text-right text-[11px] pt-0.5"><span id="statusOpenai" class="font-mono transition-all"></span></div>
+            </div>
+            <div class="space-y-1">
+              <label class="font-medium text-zinc-200 text-xs" for="inputOpenaiModel">Clip analysis model</label>
+              <div class="t-input-wrap">
+                <div class="t-input">
+                  <input type="text" id="inputOpenaiModel" value="" placeholder="gpt-4o-mini"
+                    class="w-full h-full bg-transparent px-3 text-xs font-mono text-white placeholder-zinc-500 outline-none" />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -3411,7 +3457,7 @@
             <p class="t-error-msg" id="errStorage">Directory not found or inaccessible.</p>
           </div>
 
-          <!-- Storage summary below the input (matches Gemini and Groq sections) -->
+          <!-- Storage summary below the input (matches the provider sections) -->
           <div class="flex items-center justify-between text-[11px] text-zinc-500 pt-0.5">
             <span>File Count: <code class="font-mono text-zinc-400" id="settingsTotalFiles">0 files</code></span>
             <span>Total Storage: <code class="font-mono text-zinc-400" id="settingsTotalSize">0 MB</code></span>
@@ -3761,7 +3807,7 @@
               </span>
             </span>
             <span class="min-w-0 flex-1 truncate text-[13px] font-medium text-white">
-              Analisis Virality &amp; Hook Scoring (Gemini AI)
+              Analisis Virality &amp; Hook Scoring (AI)
             </span>
             <span class="text-[12.5px] text-zinc-400 tabular-nums">Skor 0-100</span>
             <span aria-hidden="true" class="ml-1.5 flex size-7 shrink-0 items-center justify-center rounded-full text-zinc-400">
@@ -3805,7 +3851,7 @@
               </span>
             </span>
             <span class="min-w-0 flex-1 truncate text-[13px] font-medium text-white">
-              Auto Reframe 9:16 &amp; Dynamic Subtitle Burning
+              Auto Reframe 9:16 &amp; Subtitle Burning
             </span>
             <span class="text-[12.5px] text-zinc-400 tabular-nums">Vertikal HD</span>
             <span aria-hidden="true" class="ml-1.5 flex size-7 shrink-0 items-center justify-center rounded-full text-zinc-400">
@@ -3824,8 +3870,8 @@
                     <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">MediaPipe Face Tracking</span>
                   </div>
                   <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Animasi Subtitle</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Karaoke Word Highlight</span>
+                    <span class="text-[12px] text-zinc-400">Subtitle</span>
+                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Per segment</span>
                   </div>
                   <div class="flex items-center justify-between">
                     <span class="text-[12px] text-zinc-400">Format Output Render</span>
@@ -4017,16 +4063,16 @@
         </p>
       </div>
 
-      <!-- Command Box 2: Gemini API Key -->
+      <!-- Command Box 2: OpenAI-compatible API key -->
       <div class="space-y-1.5">
         <div class="flex items-center justify-between text-xs">
-          <span class="font-semibold text-white">2. Google Gemini API Key (for viral hook analysis)</span>
+          <span class="font-semibold text-white">2. OpenAI-compatible API key (for viral hook analysis)</span>
           <span class="text-zinc-500 font-mono text-[11px]">.env file</span>
         </div>
-        <div class="subpage-cmd-box" onclick="copySnippet('GEMINI_API_KEY=AIzaSyD-YourApiKeyHere', this)">
+        <div class="subpage-cmd-box" onclick="copySnippet('OPENAI_API_KEY=your-api-key', this)">
           <div class="subpage-cmd-left">
             <span class="subpage-cmd-prompt">$</span>
-            <code class="subpage-cmd-code">GEMINI_API_KEY=AIzaSyD-YourApiKeyHere</code>
+            <code class="subpage-cmd-code">OPENAI_API_KEY=your-api-key</code>
           </div>
           <button type="button" class="spell-copy-btn" aria-label="Copy">
             <span class="spell-icon-copy">
@@ -4043,7 +4089,7 @@
           </button>
         </div>
         <p class="text-xs text-zinc-400 leading-relaxed">
-          Get a free API key from Google AI Studio (<a href="https://aistudio.google.com" target="_blank" class="text-zinc-300 underline hover:text-white">aistudio.google.com</a>) and save it in the project folder's <code class="text-white font-mono">.env</code> file.
+          Use a key from any provider with an OpenAI-compatible API, such as OpenAI.<code class="text-white font-mono">.env</code> file.
         </p>
       </div>
 
@@ -4184,13 +4230,13 @@
 
         <div class="py-3.5 cursor-pointer select-none" onclick="toggleFaq(this)">
           <div class="flex items-center justify-between">
-            <span class="text-xs sm:text-sm font-medium text-white">How do I get a Google Gemini API key?</span>
+            <span class="text-xs sm:text-sm font-medium text-white">How do I get an OpenAI-compatible API key?</span>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="faq-chevron transition-transform duration-200 text-zinc-400 shrink-0 ml-2">
               <path d="M6 9l6 6 6-6" />
             </svg>
           </div>
           <p class="text-xs text-zinc-400 mt-2 hidden leading-relaxed">
-            Visit <a href="https://aistudio.google.com" target="_blank" class="text-blue-400 underline hover:text-blue-300">Google AI Studio</a>, sign in to your Google account, click "Create API Key", then copy the key into <code class="text-blue-300 font-mono bg-white/[0.08] px-1 rounded">GEMINI_API_KEY</code> in the file <code class="text-white font-mono bg-white/[0.08] px-1 rounded">.env</code>.
+            Create a key in your provider's dashboard, then enter the key, base URL and model in Settings.</code> in the file <code class="text-white font-mono bg-white/[0.08] px-1 rounded">.env</code>.
           </p>
         </div>
 
@@ -4252,7 +4298,7 @@
           <div class="relative">
             <i data-lucide="folder-plus"
               class="w-4 h-4 text-white absolute left-3.5 top-1/2 -translate-y-1/2"></i>
-            <input type="text" id="wsModalInput" value="Workspace 01" placeholder="Example: Workspace 01"
+            <input type="text" id="wsModalInput" value="Workspace 01" placeholder="Video title or any name"
               class="w-full h-10 pl-10 pr-4 rounded-xl bg-[#202020] border border-white/[0.08] focus:border-white/20 text-white placeholder-zinc-500 text-xs font-sans focus:outline-none transition"
               oninput="checkDuplicateWorkspaceName(this.value)"
               onkeydown="if(event.key === 'Enter') confirmAndStartProcess(); if(event.key === 'Escape') closeWorkspaceModal();" />
@@ -4263,7 +4309,7 @@
             <i data-lucide="info" class="w-3.5 h-3.5 shrink-0 text-amber-400"></i>
             <span>This name already exists in Media Vault. New files will be added to that workspace.</span>
           </div>
-          <p class="font-sans text-[11px] text-zinc-500">A new folder will be created for this download
+          <p class="font-sans text-[11px] text-zinc-500">Defaults to the video title, and you can type any name. A new folder will be created for this download
             in Media Vault.</p>
         </div>
 
@@ -5111,6 +5157,7 @@
           if (res.ok) {
             const data = await res.json();
             if (data.title && data.title !== 'Media Item') {
+              latestVideoTitle = { url, title: data.title };
               previewTitle.innerText = data.title;
               const durText = formatDuration(data.duration);
               if (durText) {
@@ -5751,9 +5798,9 @@
         {
           key: 'whisper',
           label: 'Audio transcription',
-          amount: 'Groq Cloud',
+          amount: 'Cloud API',
           details: [
-            { label: 'Whisper Large-v3-Turbo fallback', meta: 'LPU Cloud' },
+            { label: 'Speech-to-text fallback', meta: 'Cloud API' },
             { label: 'High accuracy without local CPU usage', meta: 'Multi-lingual' }
           ]
         },
@@ -6130,7 +6177,7 @@
             if (currentStage === 'transcript_found') {
               amountEl.innerText = 'Available';
             } else if (newStatus === 'running') {
-              amountEl.innerText = 'Groq Cloud...';
+              amountEl.innerText = 'Transcribing...';
             } else if (newStatus === 'done') {
               amountEl.innerText = 'Complete';
             }
@@ -6392,6 +6439,7 @@
       }
     };
 
+    let latestVideoTitle = { url: '', title: '' };
     let currentWorkspaceMode = 'new';
     let currentJobProjectId = null;
     let currentJobWorkspaceName = null;
@@ -6585,7 +6633,10 @@
 
         const nextNumStr = String(nextNum).padStart(2, '0');
         if (wsInput) {
-          wsInput.value = `Workspace ${nextNumStr}`;
+          const currentUrl = mainUrlInput.value.trim();
+          // shortcut: falls back to the numbered name if the preview has not loaded yet
+          wsInput.value = latestVideoTitle.url === currentUrl ? latestVideoTitle.title : `Workspace ${nextNumStr}`;
+          checkDuplicateWorkspaceName(wsInput.value);
         }
       } catch (err) {
         console.warn('Error setting up workspace inputs:', err);
@@ -6665,7 +6716,7 @@
               if (chkData.has_transcript === false) {
                 const proceed = await showConfirmModal(
                   'No built-in transcript available',
-                  'This YouTube video has no official transcript. AI audio transcription with Groq Whisper will take longer. Continue?'
+                  'This YouTube video has no official transcript. AI audio transcription will take longer. Continue?'
                 );
                 if (!proceed) {
                   mainActionBtn.disabled = false;
@@ -6802,6 +6853,26 @@
       pollInterval = setInterval(async () => {
         try {
           const res = await fetch(`/api/status/${jobId}`);
+          // Jobs live in server memory, so a restart loses them and they will never report again.
+          if (res.status === 404) {
+            try {
+              localStorage.removeItem('luna_active_job_id');
+              localStorage.removeItem('luna_active_ws');
+              localStorage.removeItem('luna_active_action');
+            } catch (e) {}
+            clearInterval(pollInterval);
+            pollInterval = null;
+            if (taskElapsedTimer) {
+              clearInterval(taskElapsedTimer);
+              taskElapsedTimer = null;
+            }
+            activeJobId = null;
+            progressStateCard.classList.add('hidden');
+            mainActionBtn.disabled = false;
+            mainActionBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            showToast('This job was lost because the server restarted. Please start it again.', true);
+            return;
+          }
           if (!res.ok) return;
           const data = await res.json();
 
@@ -6920,7 +6991,7 @@
           setTaskStatuses(['done', 'done', 'done', 'pending', 'pending'], pData, 0);
         } else if (stage === 'transcribing' || stage === 'transcribing_groq' || stage === 'transcribing_local' || stage === 'extracting_audio' || stage === 'uploading') {
           stageMainTitle.innerText = 'Audio transcription';
-          stageSubTitle.innerText = 'Processing audio with Groq Cloud Whisper';
+          stageSubTitle.innerText = 'Processing audio with AI speech-to-text';
           setTaskStatuses(['done', 'done', 'running', 'pending', 'pending'], pData, 0);
         } else if (stage === 'detecting_highlights' || stage === 'ranking_highlights') {
           stageMainTitle.innerText = 'Viral Potential & Hook Analysis';
@@ -7637,12 +7708,21 @@
         if (!res.ok) throw new Error('Could not load settings');
         const data = await res.json();
 
+        const openaiFields = {
+          inputOpenai: data.openai_api_key,
+          inputOpenaiBase: data.openai_base_url,
+          inputOpenaiModel: data.openai_model
+        };
+        for (const [id, value] of Object.entries(openaiFields)) {
+          const el = document.getElementById(id);
+          if (el && value !== undefined) el.value = value;
+        }
+
         const inputGemini = document.getElementById('inputGemini');
         const labelGeminiModel = document.getElementById('labelGeminiModel');
         const inputGroq = document.getElementById('inputGroq');
         const labelGroqModel = document.getElementById('labelGroqModel');
         const inputStorage = document.getElementById('inputStorage');
-
         if (inputGemini && data.gemini_api_key !== undefined) inputGemini.value = data.gemini_api_key;
         if (labelGeminiModel && data.gemini_model) labelGeminiModel.innerText = data.gemini_model;
         if (inputGroq && data.groq_api_key !== undefined) inputGroq.value = data.groq_api_key;
@@ -7733,6 +7813,9 @@
       const payload = {
         storage_dir: storageInput.value.trim(),
         migrate_files: isPathChanged,
+        openai_api_key: document.getElementById('inputOpenai')?.value.trim(),
+        openai_base_url: document.getElementById('inputOpenaiBase')?.value.trim(),
+        openai_model: document.getElementById('inputOpenaiModel')?.value.trim(),
         gemini_api_key: geminiInput ? geminiInput.value.trim() : undefined,
         groq_api_key: groqInput ? groqInput.value.trim() : undefined
       };
@@ -7807,7 +7890,7 @@
       const icon = btn ? btn.querySelector('i') : null;
 
       if (!inputEl || !inputEl.value.trim()) {
-        triggerInputError(wrapId, wrapId === 'wrapGemini' ? 'errGemini' : 'errGroq', `Key ${provider} cannot be empty.`);
+        triggerInputError(wrapId, wrapId.replace('wrap', 'err'), `Key ${provider} cannot be empty.`);
         if (statusEl) statusEl.innerHTML = '';
         return;
       }
@@ -7821,7 +7904,8 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             provider: provider.toLowerCase(),
-            api_key: inputEl.value.trim()
+            api_key: inputEl.value.trim(),
+            base_url: provider === 'openai' ? document.getElementById('inputOpenaiBase')?.value.trim() : undefined
           })
         });
         const data = await res.json();
@@ -7833,7 +7917,7 @@
         } else {
           const errMsg = data.message || 'Invalid key';
           if (statusEl) statusEl.innerHTML = `<span class="text-red-400">✗ ${errMsg}</span>`;
-          triggerInputError(wrapId, wrapId === 'wrapGemini' ? 'errGemini' : 'errGroq', `Key ${provider} is invalid: ${errMsg}`);
+          triggerInputError(wrapId, wrapId.replace('wrap', 'err'), `Key ${provider} is invalid: ${errMsg}`);
           showToast(`Key ${provider.toUpperCase()} is invalid`, true);
         }
       } catch (err) {
