@@ -14,12 +14,11 @@ A local web app for downloading video and audio from YouTube, Instagram, and Tik
 | Feature | API keys | Other requirements |
 |---|---|---|
 | Download video/audio from YouTube, TikTok, or Instagram | None | Internet. FFmpeg/FFprobe are needed for merged formats and audio. Some sources may require cookies or restrict downloads. |
-| AI Clip with the default configuration | Gemini and Groq | FFmpeg/FFprobe and internet. Groq transcribes audio; Gemini selects and ranks clips. |
-| Rank clips with OpenAI | OpenAI | Set `OPENAI_API_KEY` and `LLM_PROVIDER=openai` in `.env`. |
-| Transcribe with local Whisper | None for transcription | Install `pip install -r AI-Clipper/requirements-local.txt`, then set `LOCAL_TRANSCRIBE_PROVIDER=whisper`. Whisper downloads its model on first use. Clip ranking still needs an LLM API key. |
+| AI Clip | OpenAI-compatible or Gemini key, plus Groq or Gemini for videos without subtitles | FFmpeg/FFprobe and internet. The OpenAI-compatible provider ranks clips. YouTube subtitles are used first, then Groq Whisper transcribes the audio. |
+| Transcribe with local Whisper | None for transcription | Install `pip install -r requirements-whisper.txt`, then set `LOCAL_TRANSCRIBE_PROVIDER=whisper`. Whisper downloads its model on first use. |
 | Cookies for restricted videos | None | Optional. Add your own cookies in Settings. Treat `cookies.txt` as a secret. |
 
-The default `.env.example` uses Groq for transcription and Gemini for clip ranking. Luna sends the audio or transcript needed for these tasks to the selected provider. Avoid using private content if you do not want it processed by a third party.
+`.env.example` uses an OpenAI-compatible provider for clip ranking and Groq Whisper for transcription. Gemini is an alternative for both. Choose providers in Settings, or with `LLM_PROVIDER` and `LOCAL_TRANSCRIBE_PROVIDER` in `.env`. Luna sends the audio or transcript needed for these tasks to the selected provider. Avoid using private content if you do not want it processed by a third party.
 
 ## Install
 
@@ -37,13 +36,21 @@ git clone https://github.com/miqdadbadjuber/luna; cd luna; powershell -Execution
 
 The installer sets up [uv](https://docs.astral.sh/uv/), Python 3.12, the dependencies, FFmpeg if it is missing, and a default `.env`, then opens Luna at [http://localhost:8000](http://localhost:8000). Nothing is installed system-wide except uv. Add your API keys in Settings, with no file to edit. Downloads need no keys. Start Luna again later with `./start.sh` or `start.bat`.
 
-To install by hand, create a Python 3.10+ virtual environment, run `pip install -r requirements.txt`, then `python app.py`.
+To install by hand, create a Python 3.10+ virtual environment, run `pip install -r requirements.txt`, copy `.env.example` to `.env`, install FFmpeg and FFprobe, then run `python -m luna`. `npm run dev` does the same with auto-reload and `npm start` runs without it. Neither installs anything.
+
+Media downloads need no API keys. AI Clip needs `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL` and `GROQ_API_KEY`. Settings saves them to `.env` and applies them to the next job. Never commit `.env` or `cookies.txt`.
 
 Luna is intended for local use. Do not expose its port to a public network without adding authentication and deployment security controls.
 
 ## Development
 
-Python code reloads on save with `python app.py`. `templates/*.html` are read on every request, so refresh the browser. Set `MEDIA_STORAGE_DIR=media-vault` in `.env` to keep test downloads apart from your real library. `.python-version` pins the version CI uses (3.12).
+```
+luna/            web app: API, storage, Media Vault, templates, assets
+luna/clipper/    clip pipeline, under its own MIT license
+tests/           unittest suite
+```
+
+Python code reloads on save with `python -m luna`. `luna/templates/*.html` are read on every request, so refresh the browser. Set `MEDIA_STORAGE_DIR=media-vault` in `.env` to keep test downloads apart from your real library. `.python-version` pins the version CI uses (3.12).
 
 ## Docker
 
@@ -82,9 +89,9 @@ Temporary downloads go to `output/`. Media Vault uses `MEDIA_STORAGE_DIR` when s
 
 ## License
 
-Luna's original code outside `AI-Clipper/` is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). It permits noncommercial use and modifications under its terms; commercial use is not permitted. This makes Luna source-available, not Open Source under the Open Source Definition.
+Luna's original code outside `luna/clipper/` is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). It permits noncommercial use and modifications under its terms; commercial use is not permitted. This makes Luna source-available, not Open Source under the Open Source Definition.
 
-The `AI-Clipper/` component is based on [AI-Youtube-Shorts-Generator](https://github.com/Anil-matcha/AI-Youtube-Shorts-Generator) and remains under its upstream MIT License, included at `AI-Clipper/LICENSE`. The MIT license permits commercial use of that component and cannot be withdrawn by Luna's license. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for scope and attribution details.
+The `luna/clipper/` component is based on [AI-Youtube-Shorts-Generator](https://github.com/Anil-matcha/AI-Youtube-Shorts-Generator) and remains under its upstream MIT License, included at `luna/clipper/LICENSE`. The MIT license permits commercial use of that component and cannot be withdrawn by Luna's license. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for scope and attribution details.
 
 ## Tests
 

@@ -6,9 +6,9 @@ import unittest
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 
-from app import app
-from storage_manager import get_storage_root, get_category_folder
-from vault_service import save_media_metadata, list_vault_items, delete_vault_item, get_storage_stats
+from luna.app import app
+from luna.storage_manager import get_storage_root, get_category_folder
+from luna.vault_service import save_media_metadata, list_vault_items, delete_vault_item, get_storage_stats
 
 
 class TestEndToEndVault(unittest.TestCase):

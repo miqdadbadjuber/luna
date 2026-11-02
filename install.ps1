@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 
 $repoUrl = if ($env:LUNA_REPO_URL) { $env:LUNA_REPO_URL } else { "https://github.com/miqdadbadjuber/luna" }
 
-if ($PSScriptRoot -and (Test-Path (Join-Path $PSScriptRoot "app.py"))) {
+if ($PSScriptRoot -and (Test-Path (Join-Path $PSScriptRoot "luna/app.py"))) {
     $lunaDir = $PSScriptRoot
 } else {
     # Run through `irm | iex`, so there is no checkout yet.
@@ -36,7 +36,7 @@ if ($LASTEXITCODE -ne 0) { throw "Could not install dependencies." }
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 
 Write-Host "Checking FFmpeg..."
-.venv\Scripts\python.exe -c "from ffmpeg_setup import ensure_ffmpeg; ensure_ffmpeg()"
+.venv\Scripts\python.exe -c "from luna.ffmpeg_setup import ensure_ffmpeg; ensure_ffmpeg()"
 if ($LASTEXITCODE -ne 0) { throw "Could not set up FFmpeg." }
 
 Write-Host "Luna is installed in $lunaDir. Start it again later with start.bat"

@@ -9,7 +9,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 from typing import Callable, Dict, List, Optional
 
-from ..config import LOCAL_OUTPUT_DIR
+from .config import LOCAL_OUTPUT_DIR
 
 
 def _import_ytdlp():

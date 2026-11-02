@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import patch, MagicMock
-from app import ProcessRequest, format_video_target, extract_clip_segment, parse_timestamp
+from luna.app import ProcessRequest, format_video_target, extract_clip_segment, parse_timestamp
 
 
 class TestVideoFormatOptions(unittest.TestCase):

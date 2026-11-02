@@ -1,0 +1,95 @@
+"""Burn transcript segments into clips as rendered images.
+
+Common FFmpeg builds, including Homebrew's, ship without the subtitles, ass and drawtext
+filters. The overlay filter is always there, so the text is drawn with Pillow instead.
+"""
+import math
+import os
+from typing import Dict, List, Tuple
+
+from PIL import Image, ImageDraw, ImageFont
+
+MAX_LINES_PER_CUE = 2
+
+
+def segments_for_clip(segments: List[Dict], clip_start: float, clip_end: float) -> List[Dict]:
+    """Return segments overlapping the clip, as cues timed from the start of the clip."""
+    cues = []
+    for seg in sorted(segments, key=lambda s: float(s["start"])):
+        text = " ".join(str(seg.get("text", "")).split())
+        start = max(float(seg["start"]), clip_start) - clip_start
+        end = min(float(seg["end"]), clip_end) - clip_start
+        if text and end > start:
+            cues.append({"start": start, "end": end, "text": text})
+    # Auto-captions overlap, and two cues on screen at once would be drawn on top of each other.
+    for current, following in zip(cues, cues[1:]):
+        current["end"] = min(current["end"], following["start"])
+    return [c for c in cues if c["end"] > c["start"]]
+
+
+def _wrap(text: str, font: ImageFont.ImageFont, max_width: int) -> List[str]:
+    lines: List[str] = []
+    current = ""
+    for word in text.split():
+        candidate = f"{current} {word}".strip()
+        if current and font.getlength(candidate) > max_width:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    return lines + [current] if current else lines
+
+
+def split_cue(cue: Dict, lines: List[str]) -> List[Tuple[float, float, List[str]]]:
+    """Split a long cue into two-line screens, timed in proportion to their length."""
+    screens = [lines[i:i + MAX_LINES_PER_CUE] for i in range(0, len(lines), MAX_LINES_PER_CUE)]
+    total_chars = sum(len(line) for line in lines) or 1
+    duration = cue["end"] - cue["start"]
+    result = []
+    start = cue["start"]
+    for screen in screens:
+        end = start + duration * sum(len(line) for line in screen) / total_chars
+        result.append((start, end, screen))
+        start = end
+    return result
+
+
+def _draw_screen(lines: List[str], font: ImageFont.ImageFont, stroke: int) -> Image.Image:
+    text = "\n".join(lines)
+    probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    left, top, right, bottom = probe.multiline_textbbox((0, 0), text, font=font, align="center", stroke_width=stroke)
+    image = Image.new("RGBA", (math.ceil(right - left) + 2, math.ceil(bottom - top) + 2), (0, 0, 0, 0))
+    ImageDraw.Draw(image).multiline_text(
+        (1 - left, 1 - top), text, font=font, fill="white", align="center",
+        stroke_width=stroke, stroke_fill="black",
+    )
+    return image
+
+
+def render_cues(cues: List[Dict], frame_w: int, frame_h: int, out_dir: str) -> List[Tuple[float, float, str]]:
+    """Render cues to PNG files and return (start, end, path) for each screen."""
+    size = max(12, int(min(frame_w, frame_h) * 0.055))
+    # shortcut: Pillow's bundled font covers Latin text only, add a font file for CJK or Arabic videos
+    font = ImageFont.load_default(size=size)
+    stroke = max(1, size // 10)
+    rendered = []
+    for cue in cues:
+        lines = _wrap(cue["text"], font, int(frame_w * 0.9))
+        for start, end, screen in split_cue(cue, lines):
+            path = os.path.join(out_dir, f"cue_{len(rendered):04d}.png")
+            _draw_screen(screen, font, stroke).save(path)
+            rendered.append((start, end, path))
+    return rendered
+
+
+def overlay_args(rendered: List[Tuple[float, float, str]], base_filter: str) -> List[str]:
+    """Build the FFmpeg inputs and filter graph, with the video source already as input 0."""
+    inputs: List[str] = []
+    graph = [f"[0:v]{base_filter or 'null'}[v0]"]
+    for i, (start, end, path) in enumerate(rendered, 1):
+        inputs += ["-i", path]
+        graph.append(
+            f"[v{i - 1}][{i}:v]overlay=x=(W-w)/2:y=H*0.86-h:"
+            f"enable='between(t,{start:.3f},{end:.3f})'[v{i}]"
+        )
+    return [*inputs, "-filter_complex", ";".join(graph), "-map", f"[v{len(rendered)}]", "-map", "0:a?"]

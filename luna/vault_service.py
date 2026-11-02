@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 import re
 import uuid
 
-import storage_manager
+from . import storage_manager
 
 INDEX_FILE_NAME = "meta.json"
 

@@ -6,15 +6,14 @@ Logic ported from ViralVadoo's transcript_analysis/highlight_generator.py:
   - virality-criteria prompt
   - score-based dedupe with overlap suppression
 
-The LLM call is pluggable via the `llm_fn` argument so the same prompts can
-drive either MuAPI (default, --mode api) or a direct local LLM client
-(--mode local).
+The LLM call is pluggable via the `llm_fn` argument.
 """
 import json
 import re
+import time
 from typing import Callable, Dict, List, Optional
 
-from . import muapi
+from .llm import call_llm
 
 
 LLMFn = Callable[[str], str]
@@ -68,10 +67,9 @@ Respond ONLY with valid JSON (no markdown, no explanation):
 
 
 CHUNK_OVERLAP_SECONDS = 60
-GPT_CALL_TIMEOUT_SECONDS = 300  # cap LLM polls at 5 min — a wedged call should fail fast
 MAX_HIGHLIGHT_API_ATTEMPTS = 3
 
-# Chunking budget: Modern LLMs (Gemini, OpenAI) have 128k-1M+ token context windows.
+# Chunking budget: Modern LLMs have 128k-1M+ token context windows.
 # We set a generous default so normal videos are processed in one shot with full context.
 CHARS_PER_TOKEN_ESTIMATE = 4
 MAX_TRANSCRIPT_TOKENS_PER_CALL = 60000
@@ -97,33 +95,6 @@ SYSTEM_PROMPT_TOKEN_BUDGET = _estimate_tokens(
         num_clips_instruction="Generate at least 8 highlights",
     )
 ) + 200
-
-
-def call_muapi_llm(prompt: str) -> str:
-    """Default LLM backend: MuAPI gpt-5-mini."""
-    result = muapi.run(
-        "gpt-5-mini",
-        {"prompt": prompt},
-        label="gpt-5-mini",
-        timeout=GPT_CALL_TIMEOUT_SECONDS,
-    )
-
-    outputs = result.get("outputs")
-    if isinstance(outputs, list) and outputs and isinstance(outputs[0], str) and outputs[0].strip():
-        return outputs[0]
-
-    for key in ("output", "text", "response", "result", "content"):
-        v = result.get(key)
-        if isinstance(v, str) and v.strip():
-            return v
-        if isinstance(v, dict):
-            inner = v.get("text") or v.get("content")
-            if isinstance(inner, str) and inner.strip():
-                return inner
-        if isinstance(v, list) and v and isinstance(v[0], str):
-            return v[0]
-
-    raise RuntimeError(f"Could not extract gpt-5-mini text from response: {result}")
 
 
 def _parse_json_loose(raw: str) -> Dict:
@@ -234,7 +205,7 @@ def _sanitize_highlights(raw_highlights: object, max_duration: float = float("in
     return cleaned
 
 
-def detect_content_type(transcript: Dict, llm_fn: LLMFn = call_muapi_llm) -> Dict[str, str]:
+def detect_content_type(transcript: Dict, llm_fn: LLMFn = call_llm) -> Dict[str, str]:
     segments = transcript.get("segments", [])
     sample = " ".join(s["text"] for s in segments[:25])[:3000]
     prompt = f"{CONTENT_TYPE_PROMPT}\n\nTranscript sample:\n{sample}"
@@ -301,7 +272,7 @@ def call_highlight_api(
     duration: float,
     num_clips: int,
     is_chunk: bool = False,
-    llm_fn: LLMFn = call_muapi_llm,
+    llm_fn: LLMFn = call_llm,
     total_duration: Optional[float] = None,
 ) -> Dict:
     # Ask for ~2× the user's target so dedupe has headroom
@@ -419,10 +390,9 @@ def get_highlights(
 ) -> Dict:
     """Main entry point — returns {highlights: [...]} sorted by score.
 
-    `llm_fn` swaps the underlying LLM. Defaults to MuAPI gpt-5-mini; local
-    mode passes in a local LLM-backed callable.
+    `llm_fn` swaps the underlying LLM.
     """
-    llm_fn = llm_fn or call_muapi_llm
+    llm_fn = llm_fn or call_llm
     duration = float(transcript.get("duration", 0) or 0)
     segments = transcript.get("segments", [])
     content_info = detect_content_type(transcript, llm_fn=llm_fn)
@@ -431,10 +401,8 @@ def get_highlights(
     full_text = build_transcript_text(transcript)
     estimated_tokens = _estimate_tokens(full_text) + SYSTEM_PROMPT_TOKEN_BUDGET
 
-    from .config import LLM_PROVIDER
-    provider = (LLM_PROVIDER or "gemini").strip().lower()
-    # Large context LLMs (Gemini, OpenAI) easily handle 100k+ tokens in one shot
-    token_limit = 6000 if provider == "groq" else 100000
+    # shortcut: assumes a large-context model, lower this for models under 100k tokens
+    token_limit = 100000
 
     if estimated_tokens > token_limit:
         chunks = chunk_transcript(transcript)

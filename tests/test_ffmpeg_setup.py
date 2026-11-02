@@ -3,7 +3,7 @@ import types
 import unittest
 from unittest.mock import patch
 
-import ffmpeg_setup
+from luna import ffmpeg_setup
 
 
 class TestEnsureFfmpeg(unittest.TestCase):

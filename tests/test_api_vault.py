@@ -8,9 +8,9 @@ from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
-import storage_manager
-import vault_service
-from app import OUTPUT_DIR, app, _save_single_media_to_vault
+from luna import storage_manager
+from luna import vault_service
+from luna.app import OUTPUT_DIR, app, _save_single_media_to_vault
 
 
 class TestApiVault(unittest.TestCase):

@@ -7,4 +7,5 @@ google-genai>=1.0.0
 openai>=1.0.0
 yt-dlp>=2025.02.19
 opencv-python-headless>=4.8.0
+pillow>=10.1.0
 static-ffmpeg>=2.5

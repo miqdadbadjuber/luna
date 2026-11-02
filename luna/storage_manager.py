@@ -3,7 +3,7 @@ import os
 import re
 from typing import Optional, Union
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_D_PATH = r"D:\Luna-Media" if os.name == "nt" else os.path.join(BASE_DIR, "output")
 FALLBACK_PATH = os.path.join(BASE_DIR, "output")
 

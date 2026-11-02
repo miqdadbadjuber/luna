@@ -1,5 +1,5 @@
 import unittest
-from app import create_progress_hook, jobs
+from luna.app import create_progress_hook, jobs
 
 
 class TestProgressTracking(unittest.TestCase):

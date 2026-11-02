@@ -1,13 +1,6 @@
 import unittest
-import sys
-import os
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-AI_CLIPPER_DIR = os.path.join(BASE_DIR, "AI-Clipper")
-if AI_CLIPPER_DIR not in sys.path:
-    sys.path.append(AI_CLIPPER_DIR)
-
-from shorts_generator.highlights import clean_caption
+from luna.clipper.highlights import clean_caption
 
 
 class TestCaptionSanitizer(unittest.TestCase):

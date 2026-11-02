@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-import storage_manager
+from luna import storage_manager
 
 
 class TestStorageManager(unittest.TestCase):

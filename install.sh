@@ -5,7 +5,7 @@ set -eu
 REPO_URL="${LUNA_REPO_URL:-https://github.com/miqdadbadjuber/luna}"
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd || pwd)
-if [ -f "$SCRIPT_DIR/app.py" ] && [ -f "$SCRIPT_DIR/requirements.txt" ]; then
+if [ -f "$SCRIPT_DIR/luna/app.py" ] && [ -f "$SCRIPT_DIR/requirements.txt" ]; then
     LUNA_DIR="$SCRIPT_DIR"
 else
     # Run through `curl | sh`, so there is no checkout yet.
@@ -39,7 +39,7 @@ if [ ! -f .env ]; then
 fi
 
 echo "Checking FFmpeg..."
-.venv/bin/python -c "from ffmpeg_setup import ensure_ffmpeg; ensure_ffmpeg()"
+.venv/bin/python -c "from luna.ffmpeg_setup import ensure_ffmpeg; ensure_ffmpeg()"
 chmod +x start.sh
 
 echo "Luna is installed in $LUNA_DIR. Start it again later with ./start.sh"
