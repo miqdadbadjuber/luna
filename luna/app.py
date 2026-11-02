@@ -38,6 +38,10 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 # Ensure ffmpeg in PATH
 os.environ["PATH"] += os.pathsep + r"C:\ffmpeg\bin"
 
+from .ffmpeg_setup import ensure_ffmpeg
+
+ensure_ffmpeg()
+
 from .clipper import generate_shorts
 from .clipper.config import (
     DEFAULT_OPENAI_BASE_URL,
