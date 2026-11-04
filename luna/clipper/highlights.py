@@ -13,6 +13,7 @@ Logic ported from ViralVadoo's transcript_analysis/highlight_generator.py:
 The LLM call is pluggable via the `llm_fn` argument.
 """
 import json
+import os
 import re
 import time
 from typing import Callable, Dict, List, Optional, Tuple
@@ -312,7 +313,9 @@ def call_highlight_api(
     for attempt in range(1, MAX_HIGHLIGHT_API_ATTEMPTS + 1):
         try:
             raw = llm_fn(prompt)
-            print(f"[highlights] raw model response (attempt {attempt}): {raw[:2000]}", flush=True)
+            # The raw response can quote a private transcript, so it is only logged on request.
+            if os.getenv("LUNA_DEBUG", "").strip().lower() in ("1", "true", "yes"):
+                print(f"[highlights] raw model response (attempt {attempt}): {raw[:2000]}", flush=True)
             parsed = _parse_json_loose(raw)
             raw_list = parsed.get("highlights")
             print(

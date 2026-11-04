@@ -192,10 +192,17 @@ class TestOpenAICompatible(unittest.TestCase):
         self.assertEqual(res.status_code, 502)
         self.assertNotIn("bad-key", res.text)
 
-    def test_model_list_never_falls_back_to_the_saved_key(self):
-        res = TestClient(app).post("/api/settings/openai-models", json={"api_key": " ", "base_url": self.base_url})
+    def test_model_list_never_sends_the_saved_key_to_another_url(self):
+        env = {"OPENAI_API_KEY": "good-key", "OPENAI_BASE_URL": "https://api.example.test/v1"}
+        with patch.dict(os.environ, env):
+            res = TestClient(app).post("/api/settings/openai-models", json={"api_key": " ", "base_url": self.base_url})
         self.assertEqual(res.status_code, 400)
         self.assertEqual(self.server.requests, [])
+
+    def test_model_list_uses_the_saved_key_for_the_saved_url(self):
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "good-key", "OPENAI_BASE_URL": self.base_url}):
+            res = TestClient(app).post("/api/settings/openai-models", json={"base_url": self.base_url + "/"})
+        self.assertEqual(res.json(), {"models": ["a-chat", "z-chat"]})
 
 
 if __name__ == "__main__":
