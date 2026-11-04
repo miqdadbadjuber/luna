@@ -60,6 +60,8 @@ class BrowserSmokeTest(unittest.TestCase):
 
     def setUp(self):
         self.page = self.browser.new_page()
+        # The page head loads Tailwind and lucide from CDNs, which are sometimes slow.
+        self.page.set_default_navigation_timeout(90000)
         self.errors = []
         self.page.on("pageerror", lambda e: self.errors.append(str(e)))
         self.addCleanup(self.page.close)
@@ -90,6 +92,8 @@ class BrowserSmokeTest(unittest.TestCase):
     def _start_job(self):
         self._open()
         self.page.fill("#mainUrlInput", URL)
+        # The page looks the URL up first; clicking before that lands does nothing.
+        self.page.get_by_text("Smoke test video").first.wait_for()
         self.page.click("#mainActionBtn")
         self.page.click("#workspaceConfirmModal button:has-text('Start')")
         proceed = self.page.locator("#confirmModalProceedBtn")
@@ -101,7 +105,10 @@ class BrowserSmokeTest(unittest.TestCase):
 
     def test_settings_save_writes_env(self):
         self._open()
-        self.page.click("#btnNavSettings")
+        # Opening the tab reloads settings and clears the key fields, so fill after it lands.
+        with self.page.expect_response(lambda r: r.url.endswith("/api/settings") and r.request.method == "GET"):
+            self.page.click("#btnNavSettings")
+        self.page.wait_for_timeout(300)
         self.page.fill("#inputGroq", "gsk-smoke")
         self.page.click("#btnSaveHeader")
         expect(self.page.locator("#toastMessage")).to_contain_text("Settings saved")
