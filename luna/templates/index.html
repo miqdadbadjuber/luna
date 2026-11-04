@@ -5857,9 +5857,9 @@
         {
           key: 'ingest',
           label: 'Ingest Video',
-          amount: '1080p Stream',
+          amount: 'Source Video',
           details: [
-            { label: 'YouTube manifest resolution', meta: '1080p 60fps' },
+            { label: 'Video and audio streams', meta: 'Chosen quality' },
             { label: 'Demux audio and video streams', meta: 'Direct Stream' }
           ]
         },
@@ -5869,7 +5869,7 @@
           amount: 'YouTube API',
           details: [
             { label: 'Searching for auto-captions and official subtitles', meta: 'Auto API' },
-            { label: 'Extracting word timestamps', meta: '0.5 seconds' }
+            { label: 'Reading subtitle timestamps', meta: 'Per segment' }
           ]
         },
         {
@@ -5877,8 +5877,8 @@
           label: 'Audio transcription',
           amount: 'Cloud API',
           details: [
-            { label: 'Speech-to-text fallback', meta: 'Cloud API' },
-            { label: 'High accuracy without local CPU usage', meta: 'Many languages' }
+            { label: 'Speech-to-text fallback', meta: 'When no subtitles' },
+            { label: 'Groq, Gemini or local Faster-Whisper', meta: 'Many languages' }
           ]
         },
         {
@@ -5893,9 +5893,9 @@
         {
           key: 'render',
           label: 'Render Vertical Clips',
-          amount: 'AMD AMF',
+          amount: 'H.264',
           details: [
-            { label: 'AMD GPU encoder acceleration', meta: 'AMD AMF' },
+            { label: 'Hardware encoder when available', meta: 'AMF, MF or x264' },
             { label: 'Multi-clip MP4 encoding', meta: 'H.264 MP4' }
           ]
         }
@@ -7116,7 +7116,7 @@
           setTaskStatuses(['done', 'done', 'done', 'running', 'pending'], pData, 0);
         } else if (stage === 'clipping' || stage === 'rendering') {
           stageMainTitle.innerText = 'Render Vertical Clips';
-          stageSubTitle.innerText = 'Using AMD AMF GPU acceleration for 9:16 clips';
+          stageSubTitle.innerText = 'Encoding 9:16 clips';
           setTaskStatuses(['done', 'done', 'done', 'done', 'running'], pData, 0);
         } else if (stage === 'saving') {
           stageMainTitle.innerText = 'Saving to Media Vault';
