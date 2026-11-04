@@ -6411,7 +6411,7 @@
       }, 150);
     }
 
-    function showConfirmModal(heading, desc) {
+    function showConfirmModal(heading, desc, proceedLabel) {
       return new Promise((resolve) => {
         const modal = document.getElementById('confirmModal');
         const box = document.getElementById('confirmModalBox');
@@ -6425,6 +6425,7 @@
         }
         if (h) h.innerText = heading || 'Confirmation';
         if (p) p.innerText = desc || '';
+        if (proceedBtn) proceedBtn.innerText = proceedLabel || 'Continue';
         modal.classList.remove('hidden');
         requestAnimationFrame(() => {
           box.classList.remove('scale-95', 'opacity-0');
@@ -7071,7 +7072,11 @@
             if (/getaddrinfo|name resolution|name or service|timed out|timeout|urlopen|unable to download|connection (was )?(reset|aborted|refused)|network is unreachable|errno 2\]/i.test(errMsg)) {
               errMsg = 'The download was interrupted. Check your internet connection and try again.';
             }
-            showNoticeModal('Processing failed', errMsg);
+            if (data.retryable) {
+              offerRetry(data.id, errMsg);
+            } else {
+              showNoticeModal('Processing failed', errMsg);
+            }
           }
         } catch (e) {
           console.log(e);
@@ -10965,6 +10970,19 @@
         }
       }
     });
+    // A failed job runs again in its own folder, so a finished or partial download is reused.
+    async function offerRetry(jobId, errMsg) {
+      if (!await showConfirmModal('Processing failed', errMsg, 'Retry')) return;
+      try {
+        const res = await fetch(`/api/retry/${jobId}`, { method: 'POST' });
+        if (!res.ok) throw new Error((await res.json()).detail || 'Could not retry the job');
+        try { localStorage.setItem('luna_active_job_id', jobId); } catch (e) {}
+        await checkAndResumeSavedJob(jobId);
+      } catch (err) {
+        showNoticeModal('Could not retry', err.message);
+      }
+    }
+
     async function checkAndResumeSavedJob(savedJobId) {
       try {
         const res = await fetch(`/api/status/${savedJobId}`);
@@ -10995,6 +11013,8 @@
           localStorage.removeItem('luna_active_job_id');
           localStorage.removeItem('luna_active_ws');
           localStorage.removeItem('luna_active_action');
+          // The server restarted while this job ran; it now reports failed and can be retried.
+          if (data.status === 'failed' && data.retryable) offerRetry(savedJobId, data.error);
         }
       } catch (e) {
         console.warn('Failed to resume saved job:', e);

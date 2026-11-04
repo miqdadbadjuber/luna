@@ -129,7 +129,13 @@ async def _lifespan(_app: FastAPI):
     # the same stream and ordering. In tests (no uvicorn logging config) INFO is
     # dropped by the root logger, so the suite stays quiet.
     logging.getLogger("uvicorn.error").info(_startup_banner())
+    restored = _restore_jobs()
+    if restored:
+        logger.info(f"Restored {restored} job(s) from {OUTPUT_DIR}")
+    stop = threading.Event()
+    threading.Thread(target=_persist_jobs_loop, args=(stop,), daemon=True, name="luna-job-saver").start()
     yield
+    stop.set()
 
 
 app = FastAPI(
@@ -163,6 +169,79 @@ jobs: Dict[str, Dict] = {}
 # or deep-copied, and /api/status copies the dict while the worker mutates it.
 job_cancel_events: Dict[str, threading.Event] = {}
 job_finished: set = set()
+# The request each job was started with, so a failed job can be retried after a restart.
+job_requests: Dict[str, Dict] = {}
+
+JOB_FILE = "job.json"
+INTERRUPTED_ERROR = "Interrupted by a server restart. Retry to continue from what was already downloaded."
+
+
+def _save_job(job_id: str) -> None:
+    """Write output/<job>/job.json. Write-then-rename, so a crash never leaves half a file."""
+    job = jobs.get(job_id)
+    if job is None:
+        return
+    folder = os.path.join(OUTPUT_DIR, job_id)
+    try:
+        data = json.dumps({"job": copy.deepcopy(job), "request": job_requests.get(job_id)})
+    except RuntimeError:
+        return  # the worker changed the dict mid-copy; the next save picks it up
+    os.makedirs(folder, exist_ok=True)
+    tmp = os.path.join(folder, JOB_FILE + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(data)
+    os.replace(tmp, os.path.join(folder, JOB_FILE))
+
+
+def _persist_jobs_loop(stop: threading.Event, interval: float = 2.0) -> None:
+    """Save running jobs every few seconds; the worker saves the final state itself."""
+    while not stop.wait(interval):
+        for job_id in list(jobs):
+            job = jobs.get(job_id) or {}
+            if job_id in job_finished or job.get("cancelled"):
+                continue
+            try:
+                _save_job(job_id)
+            except OSError as e:
+                logger.warning(f"Could not save job {job_id}: {e}")
+
+
+def _restore_jobs() -> int:
+    """Load saved jobs. Anything still queued or running died with the old process."""
+    restored = 0
+    saved = []
+    try:
+        for name in os.listdir(OUTPUT_DIR):
+            path = os.path.join(OUTPUT_DIR, name, JOB_FILE)
+            if re.fullmatch(r"[0-9a-f]{8}", name) and name not in jobs and os.path.isfile(path):
+                saved.append((os.path.getmtime(path), name, path))
+    except OSError:
+        return 0
+    # Oldest first, so _prune_old_jobs evicts in age order as it does for live jobs.
+    for _, name, path in sorted(saved):
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, ValueError):
+            continue
+        job = data.get("job") if isinstance(data, dict) else None
+        if not isinstance(job, dict) or job.get("id") != name:
+            continue
+        interrupted = job.get("status") in ("queued", "processing")
+        if interrupted:
+            job.update(status="failed", error=INTERRUPTED_ERROR, download_speed="", download_eta="")
+            job.setdefault("logs", []).append(f"Error: {INTERRUPTED_ERROR}")
+        jobs[name] = job
+        if isinstance(data.get("request"), dict):
+            job_requests[name] = data["request"]
+        job_finished.add(name)
+        if interrupted:
+            try:
+                _save_job(name)
+            except OSError:
+                pass
+        restored += 1
+    return restored
 
 
 def _cleanup_job_output(job_id: str) -> None:
@@ -189,6 +268,7 @@ def _prune_old_jobs(max_keep: int = 50):
             break
         jobs.pop(k, None)
         job_cancel_events.pop(k, None)
+        job_requests.pop(k, None)
         job_finished.discard(k)
         _cleanup_job_output(k)
 
@@ -1772,6 +1852,11 @@ def _worker_process(job_id: str, req: ProcessRequest):
         job_finished.add(job_id)
         if _cancelled():
             _cleanup_job_output(job_id)
+        else:
+            try:
+                _save_job(job_id)
+            except OSError as e:
+                logger.warning(f"Could not save job {job_id}: {e}")
 
 
 @app.post("/api/process")
@@ -1815,7 +1900,39 @@ async def api_process(req: ProcessRequest, background_tasks: BackgroundTasks):
     }
     job_cancel_events[job_id] = threading.Event()
     job_finished.discard(job_id)
+    job_requests[job_id] = req.model_dump()
 
+    background_tasks.add_task(_worker_process, job_id, req)
+    return {"job_id": job_id, "status": "queued"}
+
+
+def _retryable(job_id: str) -> bool:
+    job = jobs.get(job_id) or {}
+    return job.get("status") == "failed" and job_id in job_finished and job_id in job_requests
+
+
+@app.post("/api/retry/{job_id}")
+async def api_retry(job_id: str, background_tasks: BackgroundTasks):
+    """Run a failed job again in its own folder, so finished or partial downloads are reused."""
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if not _retryable(job_id):
+        raise HTTPException(status_code=409, detail="Only a failed job can be retried")
+    try:
+        req = ProcessRequest(**job_requests[job_id])
+    except Exception:
+        raise HTTPException(status_code=409, detail="This job's saved settings are no longer valid")
+    problem = external_url_problem(req.url)
+    if problem:
+        raise HTTPException(status_code=400, detail=problem)
+
+    jobs[job_id].update(
+        status="queued", stage="queued", stage_detail="", progress=0.0,
+        cancelled=False, results=[], error=None, error_detail=None,
+    )
+    jobs[job_id]["logs"].append("Retrying...")
+    job_cancel_events[job_id] = threading.Event()
+    job_finished.discard(job_id)
     background_tasks.add_task(_worker_process, job_id, req)
     return {"job_id": job_id, "status": "queued"}
 
@@ -1826,7 +1943,7 @@ async def api_status(job_id: str):
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     # The worker thread mutates this dict continuously; copy before serializing.
-    return copy.deepcopy(job)
+    return {**copy.deepcopy(job), "retryable": _retryable(job_id)}
 
 
 @app.get("/api/download-file/{job_id}/{filename}")
