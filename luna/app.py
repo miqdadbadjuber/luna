@@ -2240,31 +2240,39 @@ def _update_env_file_locked(updates: dict):
     _write_text_compat(env_path, "".join(new_lines))
 
 
-def _write_text_compat(path: str, text: str) -> None:
-    """Write text with an atomic replace when the target allows it.
-
-    Docker bind-mounts a single file (./.env, ./cookies.txt) into the container.
-    os.replace() onto such a target fails with EBUSY, which used to turn a Settings
-    save into a 500. Try the atomic path first, then truncate the file in place.
-    """
+def _try_atomic_write(path: str, text: str) -> bool:
+    """Stage the text next to the target and rename it. False when the filesystem says no."""
     tmp_path = f"{path}.tmp"
     try:
         with open(tmp_path, "w", encoding="utf-8", newline="") as f:
             f.write(text)
             f.flush()
             os.fsync(f.fileno())
-        try:
-            os.replace(tmp_path, path)
-            return
-        except OSError:
-            # Bind-mounted target: rename is not allowed, write through instead.
-            pass
+        os.replace(tmp_path, path)
+        return True
+    except OSError:
+        return False
     finally:
         if os.path.exists(tmp_path):
             try:
                 os.remove(tmp_path)
             except OSError:
                 pass
+
+
+def _write_text_compat(path: str, text: str) -> None:
+    """Write text, atomically when possible and through the file when not.
+
+    Two Docker cases break the tidy "temp file + rename" pattern:
+      * .env / cookies.txt are single-file bind mounts, where rename fails with EBUSY;
+      * the mounted app directory may be owned by a different uid than the container
+        user (compose overrides user with LUNA_UID), so creating a temp file there is
+        denied even though the file itself is writable.
+    Fall back to truncating the file in place, which only needs write access to it.
+    """
+    directory = os.path.dirname(os.path.abspath(path)) or "."
+    if os.access(directory, os.W_OK) and _try_atomic_write(path, text):
+        return
 
     with open(path, "w", encoding="utf-8", newline="") as f:
         f.write(text)

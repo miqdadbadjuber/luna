@@ -61,6 +61,23 @@ class TestApiSettingsAutoSave(unittest.TestCase):
             content = f.read()
         self.assertIn("OPENAI_MODEL=gpt-4.1", content)
 
+    def test_env_write_falls_back_when_app_dir_is_not_writable(self):
+        """Compose runs the container as LUNA_UID, which may not own the mounted /app.
+
+        Staging .env.tmp then fails with EACCES even though .env itself is writable,
+        so the save must write through the file instead of returning 500.
+        """
+        with open(self.env_path, "w", encoding="utf-8") as f:
+            f.write("OPENAI_MODEL=gpt-4o-mini\n")
+
+        with patch("luna.app.os.access", return_value=False):
+            res = self.client.post("/api/settings", json={"openai_model": "gpt-4.1"})
+
+        self.assertEqual(res.status_code, 200)
+        with open(self.env_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        self.assertIn("OPENAI_MODEL=gpt-4.1", content)
+
     @patch("subprocess.Popen")
     def test_open_folder_calls_explorer_on_windows(self, mock_popen):
         res = self.client.post("/api/vault/open-folder")
