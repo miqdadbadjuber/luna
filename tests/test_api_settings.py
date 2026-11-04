@@ -45,6 +45,22 @@ class TestApiSettingsAutoSave(unittest.TestCase):
             content = f.read()
         self.assertIn(f"GROQ_API_KEY={new_test_key}", content)
 
+    def test_env_write_survives_a_bind_mounted_file(self):
+        """.env is bind-mounted in Docker, where os.replace fails with EBUSY.
+
+        The save must fall back to writing through the file instead of raising 500.
+        """
+        with open(self.env_path, "w", encoding="utf-8") as f:
+            f.write("OPENAI_MODEL=gpt-4o-mini\n")
+
+        with patch("luna.app.os.replace", side_effect=OSError(16, "Device or resource busy")):
+            res = self.client.post("/api/settings", json={"openai_model": "gpt-4.1"})
+
+        self.assertEqual(res.status_code, 200)
+        with open(self.env_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        self.assertIn("OPENAI_MODEL=gpt-4.1", content)
+
     @patch("subprocess.Popen")
     def test_open_folder_calls_explorer_on_windows(self, mock_popen):
         res = self.client.post("/api/vault/open-folder")

@@ -2179,7 +2179,11 @@ async def api_save_settings(req: SettingsUpdateRequest):
         os.environ["MEDIA_STORAGE_DIR"] = norm_dir
         invalidate_storage_root_cache()
 
-    _update_env_file(updates)
+    try:
+        _update_env_file(updates)
+    except OSError as e:
+        # Read-only mount or wrong ownership: report it instead of a bare traceback.
+        raise HTTPException(status_code=500, detail=f"Could not write .env: {e}")
     return {
         "status": "saved",
         "storage_dir": get_storage_root(),
@@ -2233,10 +2237,37 @@ def _update_env_file_locked(updates: dict):
             new_lines.append(f"{k}={v}\n")
             os.environ[k] = str(v)
 
-    tmp_path = f"{env_path}.tmp"
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        f.writelines(new_lines)
-    os.replace(tmp_path, env_path)
+    _write_text_compat(env_path, "".join(new_lines))
+
+
+def _write_text_compat(path: str, text: str) -> None:
+    """Write text with an atomic replace when the target allows it.
+
+    Docker bind-mounts a single file (./.env, ./cookies.txt) into the container.
+    os.replace() onto such a target fails with EBUSY, which used to turn a Settings
+    save into a 500. Try the atomic path first, then truncate the file in place.
+    """
+    tmp_path = f"{path}.tmp"
+    try:
+        with open(tmp_path, "w", encoding="utf-8", newline="") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        try:
+            os.replace(tmp_path, path)
+            return
+        except OSError:
+            # Bind-mounted target: rename is not allowed, write through instead.
+            pass
+    finally:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        f.write(text)
 
 
 @app.post("/api/settings/openai-models")
@@ -2336,10 +2367,10 @@ class CookieUploadRequest(BaseModel):
 @app.post("/api/settings/upload-cookies")
 async def api_upload_cookies(req: CookieUploadRequest):
     cookie_path = os.path.join(BASE_DIR, "cookies.txt")
-    tmp_path = f"{cookie_path}.tmp"
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        f.write(req.content)
-    os.replace(tmp_path, cookie_path)
+    try:
+        _write_text_compat(cookie_path, req.content)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Could not write cookies.txt: {e}")
     size_kb = f"{len(req.content.encode('utf-8')) / 1024:.1f} KB"
     return {"status": "uploaded", "filename": req.filename or "cookies.txt", "size": size_kb}
 
