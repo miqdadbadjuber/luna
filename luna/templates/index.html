@@ -8109,6 +8109,7 @@
           inputOpenai.value = '';
           inputOpenai.placeholder = data.has_openai_api_key ? `Saved: ${data.openai_api_key}` : 'sk-...';
         }
+        window.hasSavedOpenaiKey = !!data.has_openai_api_key;
         loadOpenaiModels();
 
         const inputGemini = document.getElementById('inputGemini');
@@ -8299,7 +8300,8 @@
       // provider request is in flight (or when no key is present yet).
       renderOpenaiModelItems(current ? [current] : []);
 
-      if (apiKey) {
+      // With no typed key the server uses the saved one, for the saved base URL only.
+      if (apiKey || window.hasSavedOpenaiKey) {
         status.innerText = 'Loading models...';
         try {
           const res = await fetch('/api/settings/openai-models', {
