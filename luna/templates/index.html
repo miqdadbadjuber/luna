@@ -3630,7 +3630,7 @@
                     </span>
                   </div>
                 </div>
-                <span class="font-mono text-[11px] text-zinc-400" id="cookieStatusBadge">Memeriksa</span>
+                <span class="font-mono text-[11px] text-zinc-400" id="cookieStatusBadge">Checking</span>
               </div>
             </div>
           </div>
@@ -6105,7 +6105,7 @@
                   <span id="task-progress-stage-${row.key}" class="text-zinc-300 text-[11px] font-sans truncate ${row.key === 'download' || row.key === 'ingest' ? 'hidden' : ''}">Preparing...</span>
                 </div>
                 <div class="flex items-center gap-2.5 text-zinc-400 tabular-nums text-[11px] shrink-0">
-                  <span id="task-progress-meta-${row.key}">Menghubungkan stream...</span>
+                  <span id="task-progress-meta-${row.key}">Connecting to stream...</span>
                   <span id="task-stopwatch-${row.key}" class="inline-flex items-center gap-1 text-zinc-300 font-mono text-[11px] pl-1.5 border-l border-white/10">
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="text-emerald-400 shrink-0">
                       <circle cx="12" cy="12" r="10"></circle>
@@ -6278,7 +6278,7 @@
 
               const speed = (progressData && progressData.download_speed) || '';
               const eta = (progressData && progressData.download_eta) ? `ETA ${progressData.download_eta}` : '';
-              const metaStr = [speed, eta].filter(Boolean).join(' • ') || 'Menghubungkan stream...';
+              const metaStr = [speed, eta].filter(Boolean).join(' • ') || 'Connecting to stream...';
               if (progressMetaEl) {
                 progressMetaEl.innerText = metaStr;
                 progressMetaEl.classList.remove('hidden');
@@ -8392,10 +8392,10 @@
       const statusStorageAccess = document.getElementById('statusStorageAccess');
 
       // Show a live validation indicator on each item row
-      if (statusFfmpeg) statusFfmpeg.innerHTML = '<span class="text-amber-400 animate-pulse font-mono text-[11px]">Memeriksa...</span>';
-      if (statusYtdlp) statusYtdlp.innerHTML = '<span class="text-amber-400 animate-pulse font-mono text-[11px]">Memeriksa...</span>';
-      if (statusOpencv) statusOpencv.innerHTML = '<span class="text-amber-400 animate-pulse font-mono text-[11px]">Memeriksa...</span>';
-      if (statusStorageAccess) statusStorageAccess.innerHTML = '<span class="text-amber-400 animate-pulse font-mono text-[11px]">Memeriksa...</span>';
+      if (statusFfmpeg) statusFfmpeg.innerHTML = '<span class="text-amber-400 animate-pulse font-mono text-[11px]">Checking...</span>';
+      if (statusYtdlp) statusYtdlp.innerHTML = '<span class="text-amber-400 animate-pulse font-mono text-[11px]">Checking...</span>';
+      if (statusOpencv) statusOpencv.innerHTML = '<span class="text-amber-400 animate-pulse font-mono text-[11px]">Checking...</span>';
+      if (statusStorageAccess) statusStorageAccess.innerHTML = '<span class="text-amber-400 animate-pulse font-mono text-[11px]">Checking...</span>';
 
       [chkFfmpeg, chkYtdlp, chkOpencv, chkStorage].forEach(el => {
         if (el) {
