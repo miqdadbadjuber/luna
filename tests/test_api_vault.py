@@ -2,13 +2,11 @@ import os
 import shutil
 import sys
 import tempfile
-import time
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from luna import storage_manager
 from luna import vault_service
 from luna.app import OUTPUT_DIR, app, _save_single_media_to_vault
 
@@ -186,7 +184,7 @@ class TestApiVault(unittest.TestCase):
 
     def test_open_folder_success(self):
         """POST /api/vault/open-folder should return 200."""
-        with patch("subprocess.Popen") as mock_popen:
+        with patch("subprocess.Popen"):
             response = self.client.post("/api/vault/open-folder")
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json()["status"], "success")

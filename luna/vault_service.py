@@ -132,7 +132,6 @@ def list_vault_projects() -> List[Dict[str, Any]]:
     every loose file in that category).
     """
     root = storage_manager.get_storage_root()
-    root_abs = os.path.abspath(root)
     category_roots = {os.path.abspath(p) for p in storage_manager.category_root_paths().values()}
     projects: List[Dict[str, Any]] = []
 

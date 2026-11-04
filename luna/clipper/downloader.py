@@ -11,7 +11,7 @@ import os
 import re
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple
 
 from .config import ROOT_DIR, local_output_dir
 
