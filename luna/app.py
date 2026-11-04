@@ -223,43 +223,91 @@ def cleanup_expired_jobs(max_age_days: int = 30) -> int:
     return removed
 
 
-def is_safe_external_url(url: str) -> bool:
-    """Reject URLs whose host resolves to a non-public address (SSRF prevention).
+def external_url_problem(url: str) -> Optional[str]:
+    """Return a user-facing reason a URL is not allowed, or None when it is fine.
 
-    Every resolved address must be globally routable. Checking only the literal host
-    string let decimal/octal IPs and DNS names pointing at 127.0.0.1 through.
+    Rejects hosts that resolve to a non-public address (SSRF prevention) and tells
+    the difference between "that address is blocked" and "the network is down",
+    which used to collapse into the misleading "URL is invalid".
     """
-    if not url or not isinstance(url, str):
-        return False
+    if not url or not isinstance(url, str) or not url.strip():
+        return "Enter a video link first."
     url = url.strip()
     try:
         parsed = urllib.parse.urlparse(url)
-        if parsed.scheme not in ("http", "https"):
-            return False
-        hostname = parsed.hostname
-        if not hostname:
-            return False
-        hostname_lower = hostname.lower().strip("[]")
-        if hostname_lower in ("localhost", "0.0.0.0"):
-            return False
-        port = parsed.port or (443 if parsed.scheme == "https" else 80)
-        try:
-            infos = socket.getaddrinfo(hostname_lower, port, proto=socket.IPPROTO_TCP)
-        except socket.gaierror:
-            return False
-        if not infos:
-            return False
-        for info in infos:
-            address = str(info[4][0]).split("%")[0]
-            try:
-                ip = ipaddress.ip_address(address)
-            except ValueError:
-                return False
-            if not ip.is_global:
-                return False
-        return True
     except Exception:
-        return False
+        return "That link is not a valid URL."
+    if parsed.scheme not in ("http", "https"):
+        return "The link must start with http:// or https://."
+    hostname = parsed.hostname
+    if not hostname:
+        return "That link has no host name."
+    hostname_lower = hostname.lower().strip("[]")
+    if hostname_lower in ("localhost", "0.0.0.0"):
+        return "That address is not allowed."
+    try:
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    except ValueError:
+        return "That link has an invalid port."
+    try:
+        infos = socket.getaddrinfo(hostname_lower, port, proto=socket.IPPROTO_TCP)
+    except socket.gaierror:
+        return "Could not reach that site. Check your internet connection and try again."
+    if not infos:
+        return "Could not reach that site. Check your internet connection and try again."
+    for info in infos:
+        address = str(info[4][0]).split("%")[0]
+        try:
+            ip = ipaddress.ip_address(address)
+        except ValueError:
+            return "That address is not allowed."
+        if not ip.is_global:
+            return "That address is not allowed."
+    return None
+
+
+def is_safe_external_url(url: str) -> bool:
+    """True when the URL is http(s) and its host resolves to a public address."""
+    return external_url_problem(url) is None
+
+
+_NETWORK_ERROR_HINTS = (
+    "getaddrinfo", "name or service not known", "temporary failure in name resolution",
+    "nodename nor servname", "no address associated", "network is unreachable",
+    "no route to host", "connection refused", "connection reset", "connection aborted",
+    "connection error", "timed out", "urlopen error", "unable to download webpage",
+    "unable to download video", "unable to connect", "errno 11001", "errno 10054",
+    "errno 10060", "ssl:", "certificate verify failed", "[errno 2] no such file or directory",
+)
+
+
+def friendly_error_message(exc: BaseException) -> str:
+    """Translate a technical download/provider error into something the user can act on.
+
+    yt-dlp reports things like "[Errno 2] No such file or directory: ...part-Frag7"
+    when the network drops mid-fragment; the raw text tells the user nothing.
+    """
+    raw = str(exc).strip()
+    text = raw.lower()
+    if any(hint in text for hint in _NETWORK_ERROR_HINTS):
+        return "The download was interrupted. Check your internet connection and try again."
+    if "sign in to confirm" in text or "not a bot" in text or "cookies" in text and "sign" in text:
+        return "YouTube asked this request to sign in. Upload cookies in Settings, then try again."
+    if "private video" in text or "video unavailable" in text or "this video is unavailable" in text:
+        return "This video is private, deleted, or blocked in your region."
+    if "http error 404" in text or "not found" in text:
+        return "The video could not be found. Check the link and try again."
+    if "http error 403" in text or "forbidden" in text:
+        return "The site refused the download (403). Cookies in Settings may help for this video."
+    if "unsupported url" in text:
+        return "That link is not a supported video page."
+    if "no space left" in text:
+        return "The disk is full. Free some space and try again."
+    if "permission denied" in text:
+        return "Luna could not write to the output folder. Check its permissions."
+    if raw:
+        return raw[:240]
+    return "The job failed for an unknown reason."
 
 
 # Utilities
@@ -813,8 +861,9 @@ async def api_info(req: InfoRequest):
     url = req.url.strip()
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
-    if not is_safe_external_url(url):
-        raise HTTPException(status_code=400, detail="URL is invalid or not allowed")
+    problem = external_url_problem(url)
+    if problem:
+        raise HTTPException(status_code=400, detail=problem)
 
     platform = detect_platform(url)
     fast_title = None
@@ -966,8 +1015,11 @@ async def api_info(req: InfoRequest):
 @app.get("/api/check-transcript")
 async def api_check_transcript(url: str = Query(...)):
     """Check if YouTube video has native transcript/subtitles in < 0.5s."""
-    if not url or not is_safe_external_url(url):
-        raise HTTPException(status_code=400, detail="URL is invalid or not allowed")
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required")
+    problem = external_url_problem(url)
+    if problem:
+        raise HTTPException(status_code=400, detail=problem)
     try:
         from .clipper.downloader import _extract_youtube_video_id
         vid = _extract_youtube_video_id(url)
@@ -1709,9 +1761,11 @@ def _worker_process(job_id: str, req: ProcessRequest):
         import traceback
         traceback.print_exc()
         if job_id in jobs:
+            message = friendly_error_message(e)
             jobs[job_id]["status"] = "failed"
-            jobs[job_id]["error"] = str(e)
-            jobs[job_id]["logs"].append(f"Error: {str(e)}")
+            jobs[job_id]["error"] = message
+            jobs[job_id]["error_detail"] = str(e)
+            jobs[job_id]["logs"].append(f"Error: {message}")
     finally:
         # The worker owns cleanup: deleting the folder from the cancel endpoint
         # pulled the rug out from under yt-dlp/ffmpeg still writing into it.
@@ -1722,8 +1776,9 @@ def _worker_process(job_id: str, req: ProcessRequest):
 
 @app.post("/api/process")
 async def api_process(req: ProcessRequest, background_tasks: BackgroundTasks):
-    if not req.url or not req.url.strip().startswith("http") or not is_safe_external_url(req.url.strip()):
-        raise HTTPException(status_code=400, detail="URL is invalid or not allowed")
+    problem = external_url_problem(req.url)
+    if problem:
+        raise HTTPException(status_code=400, detail=problem)
 
     # Validate trim input before accepting the job: a bad timestamp used to become
     # a clip rendered at the wrong offset instead of a 400.

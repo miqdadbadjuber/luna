@@ -73,6 +73,15 @@ class TestApiInfo(unittest.TestCase):
         self.assertEqual(len(jobs), 60)
         jobs.clear()
 
+    def test_friendly_error_messages(self):
+        from luna.app import friendly_error_message
+
+        interrupted = OSError("[Errno 2] No such file or directory: 'video.part-Frag7'")
+        self.assertIn("internet connection", friendly_error_message(interrupted))
+        self.assertIn("private", friendly_error_message(RuntimeError("Private video")))
+        self.assertIn("not a supported", friendly_error_message(RuntimeError("Unsupported URL")))
+        self.assertEqual(friendly_error_message(RuntimeError("boom")), "boom")
+
     def test_frontend_format_duration_logic(self):
         res = self.client.get("/")
         self.assertEqual(res.status_code, 200)

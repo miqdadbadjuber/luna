@@ -29,6 +29,13 @@ class TestFrontendVaultUI(unittest.TestCase):
         self.assertIn("function selectOpenaiModel", html)
         self.assertIn("function toggleMenu", html)
 
+    def test_failed_job_can_be_dismissed(self):
+        """A failed job must keep a working close control and a calm badge."""
+        html = self.response.text
+        self.assertIn("setCancelButtonVisible(true, 'Close')", html)
+        self.assertNotIn('Failed <span class="animate-spin', html)
+        self.assertIn("The download was interrupted", html)
+
     def test_navbar_tabs_exist(self):
         """Check for tabBtnStudio and tabBtnVault."""
         html = self.response.text
