@@ -403,7 +403,7 @@
       <div class="flex items-center gap-2 text-xs font-semibold text-zinc-400">
         <span class="text-white">Luna Media Engine</span>
         <span>•</span>
-        <span>Dokumentasi Resmi</span>
+        <span>Documentation</span>
         <span>•</span>
         <span>User Guide</span>
       </div>
@@ -419,13 +419,13 @@
         <div class="t-tabs" role="tablist" id="guideTabsBar">
           <span class="t-tabs-pill" id="tabsPill" aria-hidden="true"></span>
           <button type="button" class="t-tab active" role="tab" aria-selected="true" onclick="switchGuideTab('workflow', this)">
-            Alur Workflow
+            Workflow
           </button>
           <button type="button" class="t-tab" role="tab" aria-selected="false" onclick="switchGuideTab('modes', this)">
-            Fitur &amp; Mode
+            Features &amp; Modes
           </button>
           <button type="button" class="t-tab" role="tab" aria-selected="false" onclick="switchGuideTab('setup', this)">
-            Setup &amp; Prasyarat
+            Setup &amp; Requirements
           </button>
           <button type="button" class="t-tab" role="tab" aria-selected="false" onclick="switchGuideTab('vault', this)">
             Media Vault
@@ -444,7 +444,7 @@
       
       <div class="space-y-1">
         <h2 class="text-lg font-bold text-white tracking-tight">
-          Peta Workflow (Workflow Railway)
+          Workflow Map
         </h2>
         <p class="text-xs text-zinc-400 leading-relaxed">
           See how media moves from the source URL to upload-ready vertical clips. Click a row to view technical details:
@@ -490,7 +490,7 @@
                   </div>
                   <div class="flex items-center justify-between">
                     <span class="text-[12px] text-zinc-400">Invalid Download Prevention</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Modal Alert Instan</span>
+                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Instant Alert</span>
                   </div>
                 </div>
               </div>
@@ -526,14 +526,14 @@
                 <div class="flex flex-col gap-1.5 pb-1">
                   <div class="flex items-center justify-between">
                     <span class="text-[12px] text-zinc-400">Target Aspect Ratio</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">9:16 Vertical (1080x1920)</span>
+                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">9:16 Vertical (cropped from the source)</span>
                   </div>
                   <div class="flex items-center justify-between">
                     <span class="text-[12px] text-zinc-400">Target Clip Count</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">3, 5, or 10 clips</span>
+                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">3, 5 or 7 clips</span>
                   </div>
                   <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Algoritma Crop Dinamis</span>
+                    <span class="text-[12px] text-zinc-400">Crop Mode</span>
                     <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Face Tracking / Center</span>
                   </div>
                 </div>
@@ -570,14 +570,14 @@
                 <div class="flex flex-col gap-1.5 pb-1">
                   <div class="flex items-center justify-between">
                     <span class="text-[12px] text-zinc-400">Engine Downloader</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">yt-dlp v2025.x</span>
+                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">yt-dlp, kept current</span>
                   </div>
                   <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Muxing Stream Terpisah</span>
+                    <span class="text-[12px] text-zinc-400">Merging Video and Audio</span>
                     <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">FFmpeg H.264 / AAC</span>
                   </div>
                   <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Bypass Proteksi Bot</span>
+                    <span class="text-[12px] text-zinc-400">YouTube Sign-in Checks</span>
                     <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">cookies.txt Support</span>
                   </div>
                 </div>
@@ -598,7 +598,7 @@
               </span>
             </span>
             <span class="min-w-0 flex-1 truncate text-[13px] font-medium text-white">
-              Transkripsi Suara Akurat (OpenAI Whisper)
+              Transcription (subtitles first, then Whisper)
             </span>
             <span class="text-[12.5px] text-zinc-400 tabular-nums">Word-level</span>
             <span aria-hidden="true" class="ml-1.5 flex size-7 shrink-0 items-center justify-center rounded-full text-zinc-400">
@@ -614,11 +614,11 @@
                 <div class="flex flex-col gap-1.5 pb-1">
                   <div class="flex items-center justify-between">
                     <span class="text-[12px] text-zinc-400">Model Engine</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Faster-Whisper (CUDA/CPU)</span>
+                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Groq Whisper, Gemini or local Faster-Whisper</span>
                   </div>
                   <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Word-level timestamps</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Milidetik (Word Timestamps)</span>
+                    <span class="text-[12px] text-zinc-400">Timestamps</span>
+                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Per segment</span>
                   </div>
                   <div class="flex items-center justify-between">
                     <span class="text-[12px] text-zinc-400">Language Support</span>
@@ -642,9 +642,9 @@
               </span>
             </span>
             <span class="min-w-0 flex-1 truncate text-[13px] font-medium text-white">
-              Analisis Virality &amp; Hook Scoring (AI)
+              Virality &amp; Hook Scoring (AI)
             </span>
-            <span class="text-[12.5px] text-zinc-400 tabular-nums">Skor 0-100</span>
+            <span class="text-[12.5px] text-zinc-400 tabular-nums">Score 0-100</span>
             <span aria-hidden="true" class="ml-1.5 flex size-7 shrink-0 items-center justify-center rounded-full text-zinc-400">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="task-chevron">
                 <path d="M6 9l6 6 6-6" />
@@ -657,15 +657,15 @@
                 <span aria-hidden="true" class="mx-auto h-full w-px bg-white/10"></span>
                 <div class="flex flex-col gap-1.5 pb-1">
                   <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Deteksi Hook Pembuka</span>
+                    <span class="text-[12px] text-zinc-400">Opening Hook</span>
                     <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Opening 3–5 Seconds</span>
                   </div>
                   <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Rubrik Penilaian</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Emotional Peak &amp; Retensi</span>
+                    <span class="text-[12px] text-zinc-400">Scoring Rubric</span>
+                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Emotional Peak &amp; Retention</span>
                   </div>
                   <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Alasan Rekomendasi</span>
+                    <span class="text-[12px] text-zinc-400">Reason Given</span>
                     <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">AI Viral Justification</span>
                   </div>
                 </div>
@@ -688,7 +688,7 @@
             <span class="min-w-0 flex-1 truncate text-[13px] font-medium text-white">
               Auto-reframe to 9:16 &amp; burn subtitles dynamically
             </span>
-            <span class="text-[12.5px] text-zinc-400 tabular-nums">Vertikal HD</span>
+            <span class="text-[12.5px] text-zinc-400 tabular-nums">Vertical</span>
             <span aria-hidden="true" class="ml-1.5 flex size-7 shrink-0 items-center justify-center rounded-full text-zinc-400">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="task-chevron">
                 <path d="M6 9l6 6 6-6" />
@@ -702,15 +702,15 @@
                 <div class="flex flex-col gap-1.5 pb-1">
                   <div class="flex items-center justify-between">
                     <span class="text-[12px] text-zinc-400">Smart Framing</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">MediaPipe Face Tracking</span>
+                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">OpenCV Face Detection</span>
                   </div>
                   <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Animated subtitles</span>
+                    <span class="text-[12px] text-zinc-400">Burned-in subtitles</span>
                     <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Per segment</span>
                   </div>
                   <div class="flex items-center justify-between">
                     <span class="text-[12px] text-zinc-400">Format Output Render</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">MP4 60fps Crisp</span>
+                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">MP4, source frame rate</span>
                   </div>
                 </div>
               </div>
@@ -730,7 +730,7 @@
               </span>
             </span>
             <span class="min-w-0 flex-1 truncate text-[13px] font-medium text-white">
-              Presentasi AI Clipper Canvas &amp; Arsip Media Vault
+              AI Clipper Canvas &amp; Media Vault
             </span>
             <span class="text-[12.5px] text-zinc-400 tabular-nums">D:\Luna-Media</span>
             <span aria-hidden="true" class="ml-1.5 flex size-7 shrink-0 items-center justify-center rounded-full text-zinc-400">
@@ -788,7 +788,7 @@
               <th class="py-3 px-3">Operating Mode</th>
               <th class="py-3 px-3">Output Aspect Ratio</th>
               <th class="py-3 px-3">Estimated Time</th>
-              <th class="py-3 px-3">Tujuan Usersan</th>
+              <th class="py-3 px-3">Use It For</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-white/[0.06] text-zinc-300">
@@ -797,18 +797,18 @@
                 <div class="font-semibold text-white">AI Short Clips</div>
                 <span class="text-xs text-zinc-500">Auto Virality &amp; Subtitles</span>
               </td>
-              <td class="py-3.5 px-3 font-mono text-zinc-200">9:16 Vertikal / 1:1</td>
-              <td class="py-3.5 px-3 font-mono text-zinc-400">2 - 4 menit</td>
+              <td class="py-3.5 px-3 font-mono text-zinc-200">9:16 Vertical / 1:1</td>
+              <td class="py-3.5 px-3 font-mono text-zinc-400">2 to 4 min</td>
               <td class="py-3.5 px-3 text-zinc-300">Turn long podcasts and seminars into TikTok and Reels clips.</td>
             </tr>
 
             <tr class="hover:bg-white/[0.02]">
               <td class="py-3.5 px-3">
                 <div class="font-semibold text-white">Manual Trimmer</div>
-                <span class="text-xs text-zinc-500">Timestamp Presisi</span>
+                <span class="text-xs text-zinc-500">Exact Timestamps</span>
               </td>
-              <td class="py-3.5 px-3 font-mono text-zinc-200">16:9 Asli (1080p)</td>
-              <td class="py-3.5 px-3 font-mono text-zinc-400">20 - 40 detik</td>
+              <td class="py-3.5 px-3 font-mono text-zinc-200">Original 16:9 (1080p)</td>
+              <td class="py-3.5 px-3 font-mono text-zinc-400">20 to 40 s</td>
               <td class="py-3.5 px-3 text-zinc-300">Trim a specific segment (for example, 03:10 to 05:20) without using extra quota.</td>
             </tr>
 
@@ -818,7 +818,7 @@
                 <span class="text-xs text-zinc-500">Full Download</span>
               </td>
               <td class="py-3.5 px-3 font-mono text-zinc-200">Selected Resolution (1080p - 360p)</td>
-              <td class="py-3.5 px-3 font-mono text-zinc-400">15 - 60 detik</td>
+              <td class="py-3.5 px-3 font-mono text-zinc-400">15 to 60 s</td>
               <td class="py-3.5 px-3 text-zinc-300">Save full videos from YouTube, Reels, or TikTok without a watermark.</td>
             </tr>
 
@@ -828,7 +828,7 @@
                 <span class="text-xs text-zinc-500">Studio Bitrate 320kbps</span>
               </td>
               <td class="py-3.5 px-3 font-mono text-zinc-200">MP3 Audio File</td>
-              <td class="py-3.5 px-3 font-mono text-zinc-400">10 - 20 detik</td>
+              <td class="py-3.5 px-3 font-mono text-zinc-400">10 to 20 s</td>
               <td class="py-3.5 px-3 text-zinc-300">Extract high-quality audio from speakers, interviews, or background music.</td>
             </tr>
           </tbody>
@@ -850,7 +850,7 @@
           <div class="space-y-1">
             <span class="font-semibold text-white block">Clip Cards (Right Side)</span>
             <p class="text-zinc-400 leading-relaxed">
-              Each card represents one vertical video clip. It shows the viral score (for example, 94/100), clip duration, hook quote, and an instant preview button.
+              Each card represents one vertical video clip. It shows the model's viral score (for example, 94/100, an estimate and not a measurement), clip duration, hook quote, and an instant preview button.
             </p>
           </div>
         </div>
@@ -868,20 +868,20 @@
           System Configuration &amp; Requirements
         </h2>
         <p class="text-xs text-zinc-400 leading-relaxed">
-          Install these three components so Luna can process videos:
+          Luna needs these three things to process videos:
         </p>
       </div>
 
       <!-- Command Box 1: FFmpeg -->
       <div class="space-y-1.5">
         <div class="flex items-center justify-between text-xs">
-          <span class="font-semibold text-white">1. FFmpeg Location (Required for Rendering &amp; Subtitles)</span>
-          <span class="text-zinc-500 font-mono text-[11px]">C:\ffmpeg\bin</span>
+          <span class="font-semibold text-white">1. FFmpeg (for rendering and subtitles)</span>
+          <span class="text-zinc-500 font-mono text-[11px]">installed automatically</span>
         </div>
-        <div class="subpage-cmd-box" onclick="copySnippet('C:\\ffmpeg\\bin\\ffmpeg.exe', this)">
+        <div class="subpage-cmd-box" onclick="copySnippet('ffmpeg -version', this)">
           <div class="subpage-cmd-left">
             <span class="subpage-cmd-prompt">$</span>
-            <code class="subpage-cmd-code">C:\ffmpeg\bin\ffmpeg.exe</code>
+            <code class="subpage-cmd-code">ffmpeg -version</code>
           </div>
           <button type="button" class="spell-copy-btn" aria-label="Copy">
             <span class="spell-icon-copy">
@@ -898,14 +898,14 @@
           </button>
         </div>
         <p class="text-xs text-zinc-400 leading-relaxed">
-          Luna uses FFmpeg to merge 1080p audio and video, crop to 9:16, and burn subtitles into the video.
+          If FFmpeg is not on your PATH, Luna downloads a copy on first start. It merges audio and video, crops the frame and burns subtitles into the video.
         </p>
       </div>
 
       <!-- Command Box 2: OpenAI-compatible API key -->
       <div class="space-y-1.5">
         <div class="flex items-center justify-between text-xs">
-          <span class="font-semibold text-white">2. OpenAI-compatible API key (for viral hook analysis)</span>
+          <span class="font-semibold text-white">2. API keys (clip ranking and transcription)</span>
           <span class="text-zinc-500 font-mono text-[11px]">.env file</span>
         </div>
         <div class="subpage-cmd-box" onclick="copySnippet('OPENAI_API_KEY=your-api-key', this)">
@@ -928,7 +928,7 @@
           </button>
         </div>
         <p class="text-xs text-zinc-400 leading-relaxed">
-          Use a key from any provider with an OpenAI-compatible API, such as OpenAI.<code class="text-white font-mono">.env</code> file.
+          Clip ranking uses any OpenAI-compatible provider, or Gemini. Videos without subtitles are transcribed with Groq (default), Gemini or local Faster-Whisper. Enter keys in Settings or in the <code class="text-white font-mono">.env</code> file.
         </p>
       </div>
 
@@ -986,7 +986,7 @@
         <div class="pl-4 text-zinc-300">├── TikTok\ <span class="text-zinc-500">// TikTok video without a watermark</span></div>
         <div class="pl-4 text-zinc-300">├── Audio\ <span class="text-zinc-500">// 320 kbps MP3 audio</span></div>
         <div class="pl-4 text-emerald-400 font-bold">└── AI-Clips\ <span class="text-zinc-500">// Rendered 9:16 vertical clips</span></div>
-        <div class="pl-8 text-emerald-300 font-bold">└── {Nama_Workspace}\</div>
+        <div class="pl-8 text-emerald-300 font-bold">└── {Workspace_Name}\</div>
         <div class="pl-12 text-zinc-300">├── meta.json <span class="text-zinc-500">// Viral score and hook summary</span></div>
         <div class="pl-12 text-zinc-300">├── clip_01.mp4 <span class="text-zinc-500">// 9:16 short video #1</span></div>
         <div class="pl-12 text-zinc-300">└── clip_02.mp4 <span class="text-zinc-500">// 9:16 short video #2</span></div>
@@ -997,14 +997,14 @@
         <div class="space-y-1 p-3 rounded-lg bg-white/[0.02] border border-white/[0.06]">
           <div class="font-semibold text-white">Rename Workspace</div>
           <p class="text-zinc-400 leading-relaxed">
-            Click the pencil button to rename a workspace. The Windows folder and gallery update together.
+            Click the pencil button to rename a workspace. The folder on disk and the gallery update together.
           </p>
         </div>
 
         <div class="space-y-1 p-3 rounded-lg bg-white/[0.02] border border-white/[0.06]">
           <div class="font-semibold text-white">Open in Explorer</div>
           <p class="text-zinc-400 leading-relaxed">
-            Click the folder button to open Windows Explorer and select the related file.
+            Click the folder button to show the file in your file manager.
           </p>
         </div>
 
