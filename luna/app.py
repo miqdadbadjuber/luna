@@ -5,7 +5,6 @@
 
 import asyncio
 import copy
-import datetime
 from contextlib import asynccontextmanager
 import json
 import logging
@@ -36,7 +35,7 @@ import yt_dlp
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
@@ -68,7 +67,6 @@ from .storage_manager import (
     get_category_folder,
     get_workspace_folder,
     format_media_filename,
-    format_clip_folder,
     invalidate_storage_root_cache,
     is_writable,
     sanitize_name,
@@ -936,24 +934,29 @@ def _html_headers() -> Dict[str, str]:
     }
 
 
+def _asset_version() -> str:
+    """Changes whenever a UI file changes, so browsers never pair new HTML with cached JS."""
+    ui_dir = os.path.join(ASSETS_DIR, "ui")
+    try:
+        return str(int(max(os.path.getmtime(os.path.join(ui_dir, n)) for n in os.listdir(ui_dir))))
+    except (OSError, ValueError):
+        return "0"
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index():
     html_path = os.path.join(TEMPLATES_DIR, "index.html")
     if os.path.exists(html_path):
         with open(html_path, "r", encoding="utf-8") as f:
-            content = f.read()
+            content = f.read().replace("{{ASSET_VERSION}}", _asset_version())
         return HTMLResponse(content=content, headers=_html_headers())
     return HTMLResponse("<h1>Templates not found.</h1>", status_code=404)
 
 
-@app.get("/guide", response_class=HTMLResponse)
+@app.get("/guide")
 async def guide_page():
-    html_path = os.path.join(TEMPLATES_DIR, "guide.html")
-    if os.path.exists(html_path):
-        with open(html_path, "r", encoding="utf-8") as f:
-            content = f.read()
-        return HTMLResponse(content=content, headers=_html_headers())
-    return HTMLResponse("<h1>Guide page not found.</h1>", status_code=404)
+    # The guide lives in a tab of the main page; this keeps old links working.
+    return RedirectResponse("/#guide")
 
 
 
@@ -1142,7 +1145,7 @@ async def api_check_transcript(url: str = Query(...)):
             "provider": "YouTube Subtitle Scraper" if has_t else transcribe_provider_label(),
             "note": "Official YouTube transcript is available" if has_t else "No official transcript is available; using AI speech-to-text"
         }
-    except Exception as e:
+    except Exception:
         return {"has_transcript": True, "provider": transcribe_provider_label()}
 
 
@@ -1423,7 +1426,7 @@ def _worker_process(job_id: str, req: ProcessRequest):
                         tot_c = int(parts[2])
                         pct = 68.0 + (done_c / max(tot_c, 1)) * 27.0
                         _set_progress(round(pct, 1))
-                        jobs[job_id]["stage_detail"] = f"Rendering clip {done_c}/{tot_c} (AMD AMF)"
+                        jobs[job_id]["stage_detail"] = f"Rendering clip {done_c}/{tot_c}"
                     jobs[job_id]["stage"] = "rendering"
                     jobs[job_id]["download_speed"] = ""
                     jobs[job_id]["download_eta"] = ""
@@ -2276,7 +2279,7 @@ async def api_get_settings():
     cookie_size = f"{os.path.getsize(cookie_path) / 1024:.1f} KB" if has_cookies else "0 KB"
 
     try:
-        import cv2
+        import cv2  # noqa: F401  (imported only to check that OpenCV is installed)
         has_opencv = True
     except Exception:
         has_opencv = False

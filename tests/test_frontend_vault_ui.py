@@ -1,6 +1,7 @@
 import unittest
 from fastapi.testclient import TestClient
 from luna.app import app
+from tests import page_source
 
 
 class TestFrontendVaultUI(unittest.TestCase):
@@ -8,6 +9,7 @@ class TestFrontendVaultUI(unittest.TestCase):
     def setUpClass(cls):
         cls.client = TestClient(app)
         cls.response = cls.client.get("/")
+        cls.source = page_source(cls.client)
 
     def test_index_renders_http_200(self):
         """GET / should render HTTP 200 with HTML content."""
@@ -16,7 +18,7 @@ class TestFrontendVaultUI(unittest.TestCase):
 
     def test_provider_dropdown_markup_exists(self):
         """All three settings dropdowns are custom menus, not native selects."""
-        html = self.response.text
+        html = self.source
         for element_id in (
             "llmProviderTrigger", "llmProviderMenu", "selectLlmProvider",
             "transcribeTrigger", "transcribeMenu", "selectTranscribeProvider",
@@ -29,16 +31,22 @@ class TestFrontendVaultUI(unittest.TestCase):
         self.assertIn("function selectOpenaiModel", html)
         self.assertIn("function toggleMenu", html)
 
+    def test_ui_files_are_versioned_and_the_guide_has_one_source(self):
+        self.assertNotIn("{{ASSET_VERSION}}", self.response.text)
+        self.assertRegex(self.response.text, r'/assets/ui/app\.js\?v=\d+')
+        res = self.client.get("/guide", follow_redirects=False)
+        self.assertEqual((res.status_code, res.headers["location"]), (307, "/#guide"))
+
     def test_failed_job_can_be_dismissed(self):
         """A failed job must keep a working close control and a calm badge."""
-        html = self.response.text
+        html = self.source
         self.assertIn("setCancelButtonVisible(true, 'Close')", html)
         self.assertNotIn('Failed <span class="animate-spin', html)
         self.assertIn("The download was interrupted", html)
 
     def test_navbar_tabs_exist(self):
         """Check for tabBtnStudio and tabBtnVault."""
-        html = self.response.text
+        html = self.source
         self.assertIn('id="tabBtnStudio"', html)
         self.assertIn('id="tabBtnVault"', html)
         self.assertIn('id="mainTabsPill"', html)
@@ -49,7 +57,7 @@ class TestFrontendVaultUI(unittest.TestCase):
 
     def test_main_content_sections_exist(self):
         """Check for section-studio and section-vault."""
-        html = self.response.text
+        html = self.source
         self.assertIn('id="section-studio"', html)
         self.assertIn('id="section-vault"', html)
         # section-vault should initially have 'hidden' class
@@ -57,7 +65,7 @@ class TestFrontendVaultUI(unittest.TestCase):
 
     def test_media_vault_gallery_elements_exist(self):
         """Check for vault gallery grid, storage header, filters, search, and empty state."""
-        html = self.response.text
+        html = self.source
         self.assertIn('id="vaultGalleryGrid"', html)
         self.assertIn('id="vaultStoragePath"', html)
         self.assertIn('id="vaultTotalFiles"', html)
@@ -75,7 +83,7 @@ class TestFrontendVaultUI(unittest.TestCase):
 
     def test_delete_modal_exists(self):
         """Check for delete confirmation modal and its key elements."""
-        html = self.response.text
+        html = self.source
         self.assertIn('id="deleteModal"', html)
         self.assertIn('id="deleteModalTitle"', html)
         self.assertIn('id="deleteModalPath"', html)
@@ -85,7 +93,7 @@ class TestFrontendVaultUI(unittest.TestCase):
 
     def test_required_js_functions_exist(self):
         """Verify presence of all required JS state and functions in index.html."""
-        html = self.response.text
+        html = self.source
         required_functions = [
             "function switchMainTab",
             "function updateTabsPill",
@@ -112,7 +120,7 @@ class TestFrontendVaultUI(unittest.TestCase):
 
     def test_api_calls_and_vault_urls_in_script(self):
         """Verify JS script calls appropriate vault endpoints and /media-vault/ URLs."""
-        html = self.response.text
+        html = self.source
         self.assertIn("/api/vault", html)
         self.assertIn("/api/vault/open-file", html)
         self.assertIn("/api/vault/open-folder", html)
@@ -120,7 +128,7 @@ class TestFrontendVaultUI(unittest.TestCase):
 
     def test_modal_styling_and_buttons(self):
         """Verify modals use neutral dark #171717 and use t-btn atoms instead of btn-luxe-cta."""
-        html = self.response.text
+        html = self.source
         # No blueish #0c0e14 allowed
         self.assertNotIn("0c0e14", html)
 
