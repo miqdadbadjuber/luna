@@ -32,7 +32,7 @@ class TestVideoFormatOptions(unittest.TestCase):
         self.assertEqual(req.segments[0]["start_time"], "01:00")
         self.assertEqual(req.segments[1]["end_time"], "07:00")
 
-    @patch("subprocess.run")
+    @patch("luna.app._run_ffmpeg")
     def test_extract_clip_segment(self, mock_run):
         mock_run.return_value = MagicMock(returncode=0)
         out = extract_clip_segment("/fake/full.mp4", "/fake/out.mp4", 60.0, 120.0, ratio="9:16")
@@ -60,7 +60,7 @@ class TestVideoFormatOptions(unittest.TestCase):
         res = format_video_target(path, ratio="original", fps="auto")
         self.assertEqual(res, path)
 
-    @patch("subprocess.run")
+    @patch("luna.app._run_ffmpeg")
     def test_format_video_target_crop_and_fps(self, mock_run):
         mock_run.return_value = MagicMock(returncode=0)
         res = format_video_target("/fake/path/myvideo.mp4", ratio="9:16", fps="60")
@@ -76,7 +76,7 @@ class TestVideoFormatOptions(unittest.TestCase):
         self.assertEqual(cmd[r_idx + 1], "60")
         self.assertIn("+faststart", cmd)
 
-    @patch("subprocess.run")
+    @patch("luna.app._run_ffmpeg")
     def test_extract_clip_segment_original_ratio(self, mock_run):
         mock_run.return_value = MagicMock(returncode=0)
         out = extract_clip_segment("/fake/full.mp4", "/fake/out.mp4", 10.0, 25.0, ratio="original")

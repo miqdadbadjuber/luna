@@ -21,7 +21,7 @@
     rel="stylesheet">
 
   <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/lucide@0.469.0"></script>
 
   <!-- player.style Sutro Theme (AI Clipper video player) -->
   <script type="module" src="https://cdn.jsdelivr.net/npm/player.style/sutro/+esm"></script>
@@ -769,23 +769,6 @@
     .nav-icon-btn.active {
       color: #ffffff;
       background: rgba(255, 255, 255, 0.18);
-    }
-
-    /* Badge Counter */
-    .nav-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 9.5px;
-      font-weight: 700;
-      height: 14px;
-      min-width: 14px;
-      padding: 0 4px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.16);
-      color: #ffffff;
-      line-height: 1;
-      margin-left: 4px;
     }
 
     /* Transitions.dev — Tabs sliding (Compact) */
@@ -2514,7 +2497,6 @@
         <button type="button" id="tabBtnVault" role="tab" aria-selected="false" aria-controls="section-vault"
           onclick="switchMainTab('vault')" class="t-tab">
           <span>Media Vault</span>
-          <span id="vaultBadgeCount" class="nav-badge hidden">0</span>
         </button>
       </div>
 
@@ -3295,26 +3277,72 @@
           <!-- Provider selection -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div class="space-y-1">
-              <label class="font-medium text-zinc-200 text-xs" for="selectLlmProvider">Clip analysis provider</label>
-              <div class="t-input-wrap">
-                <div class="t-input">
-                  <select id="selectLlmProvider" class="w-full h-full bg-transparent px-3 text-xs font-mono text-white outline-none cursor-pointer">
-                  <option value="" class="bg-[#202020]">Auto</option>
-                  <option value="openai" class="bg-[#202020]">OpenAI-compatible</option>
-                  <option value="gemini" class="bg-[#202020]">Gemini</option>
-                  </select>
+              <label class="font-medium text-zinc-200 text-xs" for="llmProviderTrigger">Clip analysis provider</label>
+              <div class="relative" id="llmProviderMenuWrap">
+                <input type="hidden" id="selectLlmProvider" value="">
+                <button type="button" id="llmProviderTrigger" onclick="toggleLlmProviderMenu()"
+                  aria-haspopup="listbox" aria-expanded="false" aria-controls="llmProviderMenu"
+                  class="t-input w-full px-3 text-xs text-white text-left cursor-pointer">
+                  <span id="llmProviderTriggerLabel" class="font-sans flex-1 min-w-0 truncate">Auto</span>
+                  <svg class="ml-auto w-3.5 h-3.5 text-zinc-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+
+                <div id="llmProviderMenu" role="listbox" aria-label="Clip analysis provider"
+                  class="hidden fixed z-[140] rounded-xl border border-white/[0.08] bg-[#171717] p-1 shadow-[0_16px_36px_rgba(0,0,0,0.75)] max-h-[280px] overflow-y-auto">
+                  <div class="relative z-[2] px-2.5 py-1.5 text-[11px] font-sans text-zinc-500">Provider</div>
+
+                  <button type="button" role="option" data-value="" data-label="Auto" onclick="setLlmProvider('')"
+                    class="settings-menu-item relative z-[2] w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs text-zinc-200 transition cursor-pointer">
+                    <span>Auto</span>
+                    <svg class="select-check ml-auto w-3.5 h-3.5 text-emerald-400 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                  </button>
+
+                  <button type="button" role="option" data-value="openai" data-label="OpenAI-compatible" onclick="setLlmProvider('openai')"
+                    class="settings-menu-item relative z-[2] w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs text-zinc-200 transition cursor-pointer">
+                    <span>OpenAI-compatible</span>
+                    <svg class="select-check ml-auto w-3.5 h-3.5 text-emerald-400 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                  </button>
+
+                  <button type="button" role="option" data-value="gemini" data-label="Gemini" onclick="setLlmProvider('gemini')"
+                    class="settings-menu-item relative z-[2] w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs text-zinc-200 transition cursor-pointer">
+                    <span>Gemini</span>
+                    <svg class="select-check ml-auto w-3.5 h-3.5 text-emerald-400 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                  </button>
                 </div>
               </div>
             </div>
             <div class="space-y-1">
-              <label class="font-medium text-zinc-200 text-xs" for="selectTranscribeProvider">Transcription provider</label>
-              <div class="t-input-wrap">
-                <div class="t-input">
-                  <select id="selectTranscribeProvider" class="w-full h-full bg-transparent px-3 text-xs font-mono text-white outline-none cursor-pointer">
-                  <option value="groq" class="bg-[#202020]">Groq Whisper</option>
-                  <option value="gemini" class="bg-[#202020]">Gemini</option>
-                  <option value="whisper" class="bg-[#202020]">Local Whisper</option>
-                  </select>
+              <label class="font-medium text-zinc-200 text-xs" for="transcribeTrigger">Transcription provider</label>
+              <div class="relative" id="transcribeMenuWrap">
+                <input type="hidden" id="selectTranscribeProvider" value="groq">
+                <button type="button" id="transcribeTrigger" onclick="toggleMenu('transcribeTrigger', 'transcribeMenu')"
+                  aria-haspopup="listbox" aria-expanded="false" aria-controls="transcribeMenu"
+                  class="t-input w-full px-3 text-xs text-white text-left cursor-pointer">
+                  <span id="transcribeTriggerLabel" class="font-sans flex-1 min-w-0 truncate">Groq Whisper</span>
+                  <svg class="ml-auto w-3.5 h-3.5 text-zinc-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+
+                <div id="transcribeMenu" role="listbox" aria-label="Transcription provider"
+                  class="hidden fixed z-[140] rounded-xl border border-white/[0.08] bg-[#171717] p-1 shadow-[0_16px_36px_rgba(0,0,0,0.75)] max-h-[280px] overflow-y-auto">
+                  <div class="relative z-[2] px-2.5 py-1.5 text-[11px] font-sans text-zinc-500">Provider</div>
+
+                  <button type="button" role="option" data-value="groq" data-label="Groq Whisper" onclick="selectTranscribe('groq')"
+                    class="settings-menu-item relative z-[2] w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs text-zinc-200 transition cursor-pointer">
+                    <span>Groq Whisper</span>
+                    <svg class="select-check ml-auto w-3.5 h-3.5 text-emerald-400 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                  </button>
+
+                  <button type="button" role="option" data-value="gemini" data-label="Gemini" onclick="selectTranscribe('gemini')"
+                    class="settings-menu-item relative z-[2] w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs text-zinc-200 transition cursor-pointer">
+                    <span>Gemini</span>
+                    <svg class="select-check ml-auto w-3.5 h-3.5 text-emerald-400 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                  </button>
+
+                  <button type="button" role="option" data-value="whisper" data-label="Local Whisper" onclick="selectTranscribe('whisper')"
+                    class="settings-menu-item relative z-[2] w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs text-zinc-200 transition cursor-pointer">
+                    <span>Local Whisper</span>
+                    <svg class="select-check ml-auto w-3.5 h-3.5 text-emerald-400 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                  </button>
                 </div>
               </div>
             </div>
@@ -3438,13 +3466,22 @@
             </div>
             <div class="space-y-1">
               <div class="flex items-center justify-between text-xs">
-                <label class="font-medium text-zinc-200" for="selectOpenaiModel">OpenAI-compatible Model</label>
+                <label class="font-medium text-zinc-200" for="openaiModelTrigger">OpenAI-compatible Model</label>
                 <span id="statusOpenaiModels" class="text-[11px] text-zinc-500 font-mono"></span>
               </div>
-              <div class="t-input-wrap">
-                <div class="t-input">
-                  <select id="selectOpenaiModel" onchange="onOpenaiModelSelect()"
-                    class="w-full h-full bg-transparent px-3 text-xs font-mono text-white outline-none cursor-pointer"></select>
+              <div class="relative" id="openaiModelMenuWrap">
+                <input type="hidden" id="selectOpenaiModel" value="">
+                <button type="button" id="openaiModelTrigger" onclick="toggleMenu('openaiModelTrigger', 'openaiModelMenu')"
+                  aria-haspopup="listbox" aria-expanded="false" aria-controls="openaiModelMenu"
+                  class="t-input w-full px-3 text-xs text-white text-left cursor-pointer">
+                  <span id="openaiModelTriggerLabel" class="font-mono flex-1 min-w-0 truncate">Model</span>
+                  <svg class="ml-auto w-3.5 h-3.5 text-zinc-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+
+                <div id="openaiModelMenu" role="listbox" aria-label="OpenAI-compatible model"
+                  class="hidden fixed z-[140] rounded-xl border border-white/[0.08] bg-[#171717] p-1 shadow-[0_16px_36px_rgba(0,0,0,0.75)] max-h-[280px] overflow-y-auto">
+                  <div class="relative z-[2] px-2.5 py-1.5 text-[11px] font-sans text-zinc-500">Model</div>
+                  <div id="openaiModelItems"></div>
                 </div>
               </div>
               <div class="t-input-wrap hidden pt-1" id="wrapOpenaiModelCustom">
@@ -4275,7 +4312,7 @@
             </svg>
           </div>
           <p class="text-xs text-zinc-400 mt-2 hidden leading-relaxed">
-            Create a key in your provider's dashboard, then enter the key, base URL and model in Settings.</code> in the file <code class="text-white font-mono bg-white/[0.08] px-1 rounded">.env</code>.
+            Create a key in your provider's dashboard, then enter the key, base URL and model in Settings or in the <code class="text-white font-mono bg-white/[0.08] px-1 rounded">.env</code> file.
           </p>
         </div>
 
@@ -4297,8 +4334,6 @@
     </section>
 
   </main>
-
-  </div>
 
   <!-- Workspace confirmation modal -->
   <div id="workspaceConfirmModal"
@@ -5008,6 +5043,12 @@
     const mainBtnText = document.getElementById('mainBtnText');
     const mainActionBtn = document.getElementById('mainActionBtn');
 
+    function setMainActionLabel(text) {
+      const labelEl = document.getElementById('mainBtnText');
+      if (labelEl) labelEl.innerText = text;
+      else mainActionBtn.textContent = text;
+    }
+
     const videoInfoCard = document.getElementById('videoInfoCard');
     const previewThumb = document.getElementById('previewThumb');
     const previewTitle = document.getElementById('previewTitle');
@@ -5018,9 +5059,7 @@
     const progressStateCard = document.getElementById('progressStateCard');
     const stageMainTitle = document.getElementById('stageMainTitle');
     const stageSubTitle = document.getElementById('stageSubTitle');
-    const activeProgressBar = document.getElementById('activeProgressBar');
     const jobIdPill = document.getElementById('jobIdPill');
-    const terminalLogs = document.getElementById('terminalLogs');
 
     const resultsShowcase = document.getElementById('resultsShowcase');
     const shortsGalleryGrid = document.getElementById('shortsGalleryGrid');
@@ -6703,11 +6742,6 @@
 
     async function confirmAndStartProcess() {
       if (isProcessStarting) return;
-      const confirmBtn = document.getElementById('wsModalConfirmBtn');
-      if (confirmBtn) {
-        confirmBtn.disabled = true;
-        confirmBtn.classList.add('opacity-50', 'cursor-not-allowed');
-      }
 
       let chosenWs = '';
       if (currentWorkspaceMode === 'existing') {
@@ -6721,10 +6755,6 @@
         chosenWs = `Workspace ${String(nextWorkspaceIndex || 1).padStart(2, '0')}`;
       }
       closeWorkspaceModal();
-      if (confirmBtn) {
-        confirmBtn.disabled = false;
-        confirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-      }
       await executeActualProcess(chosenWs);
     }
 
@@ -6745,9 +6775,9 @@
         else if (currentPlatform === 'tiktok') action = currentTtSub;
 
         if (action === 'type_yt_ai_clip') {
-          const origBtnText = mainActionBtn.innerText;
+          const origBtnText = mainBtnText ? mainBtnText.innerText : mainActionBtn.textContent;
           mainActionBtn.disabled = true;
-          mainActionBtn.innerText = 'Checking transcript...';
+          setMainActionLabel('Checking transcript...');
           try {
             const chkRes = await fetch(`/api/check-transcript?url=${encodeURIComponent(url)}`);
             if (chkRes.ok) {
@@ -6760,7 +6790,7 @@
                 if (!proceed) {
                   mainActionBtn.disabled = false;
                   mainActionBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-                  mainActionBtn.innerText = origBtnText;
+                  setMainActionLabel(origBtnText);
                   return;
                 }
               }
@@ -6768,7 +6798,7 @@
           } catch (e) {
             console.warn('Transcript check error, proceeding:', e);
           } finally {
-            mainActionBtn.innerText = origBtnText;
+            setMainActionLabel(origBtnText);
           }
         }
 
@@ -6779,13 +6809,12 @@
         mainActionBtn.classList.add('opacity-50', 'cursor-not-allowed');
 
         progressStateCard.classList.remove('hidden');
+        setCancelButtonVisible(true);
         progressStateCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
         resultsShowcase.classList.add('hidden');
 
         const compBanner = document.getElementById('progressCompletionBanner');
         if (compBanner) compBanner.classList.add('hidden');
-        const sc = document.getElementById('progressSuccessCheck');
-        if (sc) sc.setAttribute('data-state', 'out');
 
         shortsGalleryGrid.innerHTML = '';
 
@@ -6844,6 +6873,13 @@
       }
     }
 
+    function setCancelButtonVisible(visible) {
+      const btn = document.getElementById('btnCancelJob');
+      if (!btn) return;
+      btn.classList.toggle('hidden', !visible);
+      btn.disabled = !visible;
+    }
+
     async function cancelActiveJob() {
       try {
         localStorage.removeItem('luna_active_job_id');
@@ -6856,7 +6892,12 @@
           clearInterval(pollInterval);
           pollInterval = null;
         }
+        if (taskElapsedTimer) {
+          clearInterval(taskElapsedTimer);
+          taskElapsedTimer = null;
+        }
         progressStateCard.classList.add('hidden');
+        setCancelButtonVisible(false);
         mainActionBtn.disabled = false;
         mainActionBtn.classList.remove('opacity-50', 'cursor-not-allowed');
         return;
@@ -6866,15 +6907,33 @@
         await fetch(`/api/cancel/${activeJobId}`, { method: 'POST' });
       } catch (e) {
         console.warn('Cancel error:', e);
+        showToast('The server could not be reached, but the job was stopped locally.', true);
       }
 
       if (pollInterval) {
         clearInterval(pollInterval);
         pollInterval = null;
       }
+      if (taskElapsedTimer) {
+        clearInterval(taskElapsedTimer);
+        taskElapsedTimer = null;
+      }
+
+      currentTaskRows.forEach(r => {
+        if (r.status === 'running') {
+          r.status = 'failed';
+          const b = document.getElementById(`task-badge-${r.key}`);
+          const p = document.getElementById(`task-pill-${r.key}`);
+          const pBox = document.getElementById(`task-progress-box-${r.key}`);
+          if (b) b.innerHTML = getBadgeHtml('failed', r.step);
+          if (p) p.innerHTML = getPillHtml('failed');
+          if (pBox) pBox.classList.add('hidden');
+        }
+      });
 
       activeJobId = null;
       progressStateCard.classList.add('hidden');
+      setCancelButtonVisible(false);
       mainActionBtn.disabled = false;
       mainActionBtn.classList.remove('opacity-50', 'cursor-not-allowed');
     }
@@ -6889,7 +6948,12 @@
       taskDurations = {};
       highestJobProgress = 0;
 
-      pollInterval = setInterval(async () => {
+      const intervalId = setInterval(async () => {
+        // Ignore late responses from a job that is no longer the active one.
+        if (jobId !== activeJobId) {
+          clearInterval(intervalId);
+          return;
+        }
         try {
           const res = await fetch(`/api/status/${jobId}`);
           // Jobs live in server memory, so a restart loses them and they will never report again.
@@ -6914,6 +6978,12 @@
           }
           if (!res.ok) return;
           const data = await res.json();
+
+          // Re-check after the await: the active job may have changed while this response was in flight.
+          if (jobId !== activeJobId) {
+            clearInterval(intervalId);
+            return;
+          }
 
           if (data.status === 'cancelled') {
             try {
@@ -6948,6 +7018,8 @@
               clearInterval(taskElapsedTimer);
               taskElapsedTimer = null;
             }
+            activeJobId = null;
+            setCancelButtonVisible(false);
             updateProgressUI('done', data);
 
             currentJobProjectId = data.project_id || null;
@@ -6957,8 +7029,6 @@
 
             const compBanner = document.getElementById('progressCompletionBanner');
             if (compBanner) compBanner.classList.remove('hidden');
-            const sc = document.getElementById('progressSuccessCheck');
-            if (sc) sc.setAttribute('data-state', 'in');
 
             renderOpusResults(data);
             updateVaultBadge();
@@ -6976,6 +7046,8 @@
               clearInterval(taskElapsedTimer);
               taskElapsedTimer = null;
             }
+            activeJobId = null;
+            setCancelButtonVisible(false);
             currentTaskRows.forEach(r => {
               if (r.status === 'running') {
                 r.status = 'failed';
@@ -6999,6 +7071,7 @@
           console.log(e);
         }
       }, 850);
+      pollInterval = intervalId;
     }
 
     function updateProgressUI(stage, data) {
@@ -7070,9 +7143,19 @@
           stageMainTitle.innerText = 'Trimming video segments';
           stageSubTitle.innerText = 'Trimming timestamps with FFmpeg';
           setTaskStatuses(['running', 'pending'], pData, progressPct);
+        } else if (stage === 'rendering') {
+          stageMainTitle.innerText = 'Re-encoding video';
+          stageSubTitle.innerText = 'Re-encoding to the requested ratio and frame rate before saving';
+          const vaultRow = currentTaskRows[1];
+          const vaultLabel = document.getElementById('task-label-vault');
+          if (vaultRow && vaultLabel) vaultLabel.innerText = 'Re-encoding video';
+          setTaskStatuses(['done', 'running'], pData, 100);
         } else if (stage === 'saving') {
           stageMainTitle.innerText = 'Saving to Media Vault';
           stageSubTitle.innerText = 'Finishing processing and organizing media';
+          const vaultRow = currentTaskRows[1];
+          const vaultLabel = document.getElementById('task-label-vault');
+          if (vaultRow && vaultLabel) vaultLabel.innerText = vaultRow.label;
           setTaskStatuses(['done', 'running'], pData, progressPct);
         } else if (stage === 'done') {
           stageMainTitle.innerText = 'Download complete';
@@ -7103,14 +7186,13 @@
       if (!targetProject && currentJobWorkspaceName) {
         targetProject = vaultProjects.find(it => (it.workspace_name || '').trim().toLowerCase() === currentJobWorkspaceName.trim().toLowerCase());
       }
-      if (!targetProject && vaultProjects.length > 0) {
-        targetProject = vaultProjects[0];
-      }
 
       switchMainTab('vault');
 
       if (targetProject) {
         await openProjectPage(targetProject.project_id);
+      } else {
+        showToast('Saved to Media Vault');
       }
     }
 
@@ -7119,13 +7201,19 @@
       const items = data.results || [];
       const isSingle = items.length === 1;
 
-      if (items.length > 1) {
+      if (items.length === 0) {
+        batchZipDownloadBtn.classList.add('hidden');
+        shortsGalleryGrid.classList.add('hidden');
+        resultsCountNotice.innerText = 'No files were produced. Check the job log and try again.';
+      } else if (items.length > 1) {
         batchZipDownloadBtn.href = `/api/download-zip/${data.id}`;
         batchZipDownloadBtn.classList.remove('hidden');
+        shortsGalleryGrid.classList.remove('hidden');
         resultsCountNotice.innerText = `${items.length} media files are ready to play and download.`;
         shortsGalleryGrid.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 items-start';
       } else {
         batchZipDownloadBtn.classList.add('hidden');
+        shortsGalleryGrid.classList.remove('hidden');
         resultsCountNotice.innerText = `1 media files are ready to play and download.`;
         shortsGalleryGrid.className = 'flex justify-center w-full max-w-4xl mx-auto';
       }
@@ -7136,6 +7224,10 @@
         const card = document.createElement('div');
         card.id = `studio-card-${idx}`;
         const downloadUrl = item.download_url || `/api/download-file/${data.id}/${item.filename}`;
+        const startSec = (typeof item.start_time === 'number') ? item.start_time : (item.start_time ? timeToSeconds(item.start_time) : NaN);
+        const endSec = (typeof item.end_time === 'number') ? item.end_time : (item.end_time ? timeToSeconds(item.end_time) : NaN);
+        const hasRange = isFinite(startSec) && isFinite(endSec) && endSec > startSec;
+        const durationLabel = hasRange ? `${Math.round(endSec - startSec)}s` : (item.quality ? item.quality + 'p' : 'HD');
 
         if (item.type === 'audio') {
           const fileId = `studio-aud-${idx}`;
@@ -7365,7 +7457,7 @@
                 <div>
                   <div class="flex items-center justify-between mb-2">
                     <span class="text-xs font-mono font-medium text-white">${item.start_time ? `Clip #${idx + 1}` : 'Video'}</span>
-                    <span class="text-xs font-mono text-zinc-400 px-2 py-0.5 rounded bg-white/[0.04] border border-white/[0.06]">${item.start_time ? Math.round(item.end_time - item.start_time) + 's' : (item.quality ? item.quality + 'p' : 'HD')}</span>
+                    <span class="text-xs font-mono text-zinc-400 px-2 py-0.5 rounded bg-white/[0.04] border border-white/[0.06]">${durationLabel}</span>
                   </div>
                   <h4 class="text-base sm:text-lg font-semibold text-white line-clamp-2 mb-1.5" title="${escapeHtml(item.title)}">
                     ${escapeHtml(item.title)}
@@ -7409,7 +7501,7 @@
                 <div>
                   <div class="flex items-center justify-between mb-1.5">
                     <span class="text-[11px] font-mono font-medium text-white">${item.start_time ? `Clip #${idx + 1}` : 'Video'}</span>
-                    <span class="text-[11px] font-mono text-zinc-500">${item.start_time ? Math.round(item.end_time - item.start_time) + 's' : (item.quality ? item.quality + 'p' : 'HD')}</span>
+                    <span class="text-[11px] font-mono text-zinc-500">${durationLabel}</span>
                   </div>
                   <h4 class="text-sm font-medium text-white line-clamp-2 mb-1" title="${escapeHtml(item.title)}">
                     ${escapeHtml(item.title)}
@@ -7460,10 +7552,11 @@
 
     function escapeQuotes(str) {
       return (str || '')
+        .replace(/&/g, '&amp;')
         .replace(/\\/g, '\\\\')
         .replace(/'/g, "\\'")
         .replace(/"/g, '&quot;')
-        .replace(/\r?\n/g, ' ');
+        .replace(/[\r\n]+/g, ' ');
     }
 
     // Media vault methods
@@ -7741,6 +7834,249 @@
 
     let currentStorageDir = '';
 
+    // ---- Logo dropdowns (clip provider, transcription provider, model) ----
+    // Every dropdown keeps its real value in a hidden input, so the settings save path
+    // is unchanged. The menu is a fixed popover so a scrolling card cannot clip it.
+    const openMenus = new Map(); // menuId -> triggerId
+
+    function positionMenu(trigger, menu) {
+      const rect = trigger.getBoundingClientRect();
+      const menuHeight = Math.min(280, menu.scrollHeight || 180);
+      const menuWidth = Math.max(rect.width, 200);
+      const roomBelow = window.innerHeight - rect.bottom;
+      menu.style.width = `${menuWidth}px`;
+      menu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8))}px`;
+      menu.style.top = roomBelow < menuHeight + 16
+        ? `${Math.max(8, rect.top - menuHeight - 6)}px`
+        : `${rect.bottom + 6}px`;
+    }
+
+    function closeMenu(menuId) {
+      const trigger = document.getElementById(openMenus.get(menuId) || '');
+      const menu = document.getElementById(menuId);
+      if (menu) menu.classList.add('hidden');
+      if (trigger) trigger.setAttribute('aria-expanded', 'false');
+      openMenus.delete(menuId);
+    }
+
+    function closeAllMenus() {
+      Array.from(openMenus.keys()).forEach(closeMenu);
+    }
+
+    function toggleMenu(triggerId, menuId, force) {
+      const trigger = document.getElementById(triggerId);
+      const menu = document.getElementById(menuId);
+      if (!trigger || !menu) return;
+      const open = typeof force === 'boolean' ? force : !openMenus.has(menuId);
+      if (!open) {
+        closeMenu(menuId);
+        return;
+      }
+      closeAllMenus();
+      menu.classList.remove('hidden');
+      positionMenu(trigger, menu);
+      trigger.setAttribute('aria-expanded', 'true');
+      openMenus.set(menuId, triggerId);
+      attachSettingsGliding(menu);
+      alignSettingsIndicator(menuId);
+    }
+
+    // Smooth hover highlight, same motion as the Studio dropdowns (220ms glide).
+    function ensureMenuIndicator(menu) {
+      let indicator = menu.querySelector('.gliding-menu-indicator');
+      if (!indicator) {
+        indicator = document.createElement('span');
+        indicator.className = 'gliding-menu-indicator';
+        menu.insertBefore(indicator, menu.firstChild);
+      }
+      return indicator;
+    }
+
+    function moveIndicatorTo(menu, item) {
+      const indicator = ensureMenuIndicator(menu);
+      if (!item) {
+        indicator.style.opacity = '0';
+        return;
+      }
+      indicator.style.top = `${item.offsetTop}px`;
+      indicator.style.height = `${item.offsetHeight}px`;
+      indicator.style.opacity = '1';
+    }
+
+    function attachSettingsGliding(menu) {
+      if (!menu) return;
+      ensureMenuIndicator(menu);
+      menu.querySelectorAll('.settings-menu-item').forEach((item) => {
+        item.onmouseenter = (event) => {
+          event.stopPropagation();
+          moveIndicatorTo(menu, item);
+        };
+      });
+      menu.onmouseleave = () => {
+        moveIndicatorTo(menu, menu.querySelector('[aria-selected="true"]'));
+      };
+    }
+
+    // Snap the indicator onto the selected row when the menu opens (no glide from 0).
+    function alignSettingsIndicator(menuId) {
+      const menu = document.getElementById(menuId);
+      if (!menu) return;
+      const indicator = ensureMenuIndicator(menu);
+      const active = menu.querySelector('[aria-selected="true"]');
+      if (!active) {
+        indicator.style.opacity = '0';
+        return;
+      }
+      indicator.style.transition = 'none';
+      indicator.style.top = `${active.offsetTop}px`;
+      indicator.style.height = `${active.offsetHeight}px`;
+      indicator.style.opacity = '1';
+      void indicator.offsetHeight;
+      indicator.style.transition = '';
+    }
+
+    // Paints the trigger label and marks the active row from the hidden input.
+    function syncLogoSelect(config) {
+      const input = document.getElementById(config.hiddenId);
+      const menu = document.getElementById(config.menuId);
+      if (!input || !menu) return;
+      const value = input.value || '';
+      const rows = Array.from(menu.querySelectorAll('[data-value]'));
+      let active = rows.find((row) => (row.getAttribute('data-value') || '') === value);
+      if (!active && rows.length) active = rows[0];
+      const labelBox = document.getElementById(config.labelId);
+      if (labelBox) labelBox.textContent = active ? (active.getAttribute('data-label') || '') : '';
+      rows.forEach((row) => {
+        const isActive = row === active;
+        row.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        const check = row.querySelector('.select-check');
+        if (check) check.classList.toggle('hidden', !isActive);
+      });
+      alignSettingsIndicator(config.menuId);
+    }
+
+    function syncLlmProviderUI() {
+      syncLogoSelect({
+        hiddenId: 'selectLlmProvider', menuId: 'llmProviderMenu',
+        labelId: 'llmProviderTriggerLabel',
+      });
+    }
+
+    function syncTranscribeUI() {
+      syncLogoSelect({
+        hiddenId: 'selectTranscribeProvider', menuId: 'transcribeMenu',
+        labelId: 'transcribeTriggerLabel',
+      });
+    }
+
+    function syncModelMenu() {
+      syncLogoSelect({
+        hiddenId: 'selectOpenaiModel', menuId: 'openaiModelMenu',
+        labelId: 'openaiModelTriggerLabel',
+      });
+    }
+
+    function setLlmProvider(value) {
+      const input = document.getElementById('selectLlmProvider');
+      if (input) input.value = value || '';
+      syncLlmProviderUI();
+      closeMenu('llmProviderMenu');
+      if ((value || '') === 'openai' && typeof loadOpenaiModels === 'function') loadOpenaiModels();
+    }
+
+    function selectTranscribe(value) {
+      const input = document.getElementById('selectTranscribeProvider');
+      if (input) input.value = value || '';
+      syncTranscribeUI();
+      closeMenu('transcribeMenu');
+    }
+
+    function toggleLlmProviderMenu(force) { toggleMenu('llmProviderTrigger', 'llmProviderMenu', force); }
+    function closeLlmProviderMenu() { closeMenu('llmProviderMenu'); }
+
+    const CUSTOM_MODEL = '__custom__';
+    const CHECK_ICON_SVG = '<svg class="select-check ml-auto w-3.5 h-3.5 text-emerald-400 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+
+    // Model IDs come from a third party, so the label is set with textContent, not HTML.
+    function buildSelectRow(value, label, onSelect) {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.setAttribute('role', 'option');
+      row.setAttribute('data-value', value);
+      row.setAttribute('data-label', label);
+      row.className = 'settings-menu-item relative z-[2] w-full flex items-center rounded-lg px-2.5 py-2 text-xs text-zinc-200 transition cursor-pointer';
+
+      const text = document.createElement('span');
+      text.className = 'truncate';
+      text.textContent = label;
+
+      row.append(text);
+      row.insertAdjacentHTML('beforeend', CHECK_ICON_SVG);
+      row.addEventListener('click', onSelect);
+      return row;
+    }
+
+    function renderOpenaiModelItems(names) {
+      const items = document.getElementById('openaiModelItems');
+      if (!items) return;
+      items.replaceChildren();
+      names.forEach((name) => {
+        items.appendChild(buildSelectRow(name, name, () => selectOpenaiModel(name)));
+      });
+      items.appendChild(buildSelectRow(CUSTOM_MODEL, 'Custom...', () => selectOpenaiModel(CUSTOM_MODEL)));
+      attachSettingsGliding(document.getElementById('openaiModelMenu'));
+      syncModelMenu();
+    }
+
+    function selectOpenaiModel(value) {
+      const hidden = document.getElementById('selectOpenaiModel');
+      if (hidden) hidden.value = value;
+      const isCustom = value === CUSTOM_MODEL;
+      const wrap = document.getElementById('wrapOpenaiModelCustom');
+      if (wrap) wrap.classList.toggle('hidden', !isCustom);
+      const customInput = document.getElementById('inputOpenaiModel');
+      if (customInput) {
+        if (isCustom) customInput.focus();
+        else customInput.value = value;
+      }
+      syncModelMenu();
+      closeMenu('openaiModelMenu');
+    }
+
+    document.addEventListener('click', (event) => {
+      if (!(event.target instanceof Node)) return;
+      Array.from(openMenus.keys()).forEach((menuId) => {
+        const menu = document.getElementById(menuId);
+        const trigger = document.getElementById(openMenus.get(menuId) || '');
+        if ((menu && menu.contains(event.target)) || (trigger && trigger.contains(event.target))) return;
+        closeMenu(menuId);
+      });
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeAllMenus();
+    });
+    window.addEventListener('scroll', () => {
+      if (openMenus.size) closeAllMenus();
+    }, { passive: true });
+    window.addEventListener('resize', () => {
+      if (openMenus.size) closeAllMenus();
+    });
+
+    syncLlmProviderUI();
+    syncTranscribeUI();
+
+    // While "Custom..." is active, the trigger should mirror what is typed.
+    const customModelInput = document.getElementById('inputOpenaiModel');
+    if (customModelInput) {
+      customModelInput.addEventListener('input', () => {
+        const hidden = document.getElementById('selectOpenaiModel');
+        if (hidden && hidden.value === CUSTOM_MODEL) {
+          const label = document.getElementById('openaiModelTriggerLabel');
+          if (label) label.textContent = customModelInput.value.trim() || 'Custom...';
+        }
+      });
+    }
+
     async function loadSettingsData() {
       try {
         const res = await fetch('/api/settings');
@@ -7750,13 +8086,22 @@
         const openaiFields = {
           selectLlmProvider: data.llm_provider,
           selectTranscribeProvider: data.transcribe_provider,
-          inputOpenai: data.openai_api_key,
           inputOpenaiBase: data.openai_base_url,
           inputOpenaiModel: data.openai_model
         };
         for (const [id, value] of Object.entries(openaiFields)) {
           const el = document.getElementById(id);
           if (el && value !== undefined) el.value = value;
+        }
+        // The dropdowns render from their hidden input values.
+        if (typeof syncLlmProviderUI === 'function') syncLlmProviderUI();
+        if (typeof syncTranscribeUI === 'function') syncTranscribeUI();
+        // Secrets come back masked, never as the key itself. Show the hint as a
+        // placeholder and leave the field empty, so saving cannot overwrite the key.
+        const inputOpenai = document.getElementById('inputOpenai');
+        if (inputOpenai) {
+          inputOpenai.value = '';
+          inputOpenai.placeholder = data.has_openai_api_key ? `Saved: ${data.openai_api_key}` : 'sk-...';
         }
         loadOpenaiModels();
 
@@ -7765,9 +8110,15 @@
         const inputGroq = document.getElementById('inputGroq');
         const labelGroqModel = document.getElementById('labelGroqModel');
         const inputStorage = document.getElementById('inputStorage');
-        if (inputGemini && data.gemini_api_key !== undefined) inputGemini.value = data.gemini_api_key;
+        if (inputGemini) {
+          inputGemini.value = '';
+          inputGemini.placeholder = data.has_gemini_api_key ? `Saved: ${data.gemini_api_key}` : 'AIza...';
+        }
         if (labelGeminiModel && data.gemini_model) labelGeminiModel.innerText = data.gemini_model;
-        if (inputGroq && data.groq_api_key !== undefined) inputGroq.value = data.groq_api_key;
+        if (inputGroq) {
+          inputGroq.value = '';
+          inputGroq.placeholder = data.has_groq_api_key ? `Saved: ${data.groq_api_key}` : 'gsk_...';
+        }
         if (labelGroqModel && data.groq_model) labelGroqModel.innerText = data.groq_model;
         if (inputStorage && data.storage_dir) {
           inputStorage.value = data.storage_dir;
@@ -7928,26 +8279,20 @@
       }
     }
 
-    const CUSTOM_MODEL = '__custom__';
-
-    window.onOpenaiModelSelect = function () {
-      const select = document.getElementById('selectOpenaiModel');
-      const input = document.getElementById('inputOpenaiModel');
-      const isCustom = select.value === CUSTOM_MODEL;
-      document.getElementById('wrapOpenaiModelCustom').classList.toggle('hidden', !isCustom);
-      if (isCustom) input.focus();
-      else input.value = select.value;
-    };
-
-    // Model IDs come from a third party, so options are built with textContent, not HTML.
+    // Model IDs come from a third party, so rows are built with textContent, not HTML.
     window.loadOpenaiModels = async function () {
-      const select = document.getElementById('selectOpenaiModel');
+      const hidden = document.getElementById('selectOpenaiModel');
       const input = document.getElementById('inputOpenaiModel');
       const status = document.getElementById('statusOpenaiModels');
-      if (!select || !input) return;
+      if (!hidden || !input) return;
       const apiKey = document.getElementById('inputOpenai')?.value.trim();
       const current = input.value.trim();
       let models = [];
+
+      // Paint the current model immediately so the trigger is never blank while the
+      // provider request is in flight (or when no key is present yet).
+      renderOpenaiModelItems(current ? [current] : []);
+
       if (apiKey) {
         status.innerText = 'Loading models...';
         try {
@@ -7970,21 +8315,11 @@
       }
 
       const names = current && !models.includes(current) ? [current, ...models] : models;
-      select.replaceChildren();
-      for (const name of names) {
-        const option = document.createElement('option');
-        option.value = name;
-        option.textContent = name;
-        option.className = 'bg-[#202020]';
-        select.appendChild(option);
-      }
-      const custom = document.createElement('option');
-      custom.value = CUSTOM_MODEL;
-      custom.textContent = 'Custom...';
-      custom.className = 'bg-[#202020]';
-      select.appendChild(custom);
-      select.value = current || CUSTOM_MODEL;
-      document.getElementById('wrapOpenaiModelCustom').classList.toggle('hidden', select.value !== CUSTOM_MODEL);
+      renderOpenaiModelItems(names);
+      hidden.value = current || CUSTOM_MODEL;
+      const wrap = document.getElementById('wrapOpenaiModelCustom');
+      if (wrap) wrap.classList.toggle('hidden', hidden.value !== CUSTOM_MODEL);
+      syncModelMenu();
     };
 
     async function testApiKey(provider, wrapId, inputId, statusElId, btn) {
@@ -8270,9 +8605,6 @@
     function updateVaultStatsUI() {
       const totalCount = vaultStats.total_files !== undefined ? vaultStats.total_files : vaultItems.length;
 
-      const badgeCount = document.getElementById('vaultBadgeCount');
-      if (badgeCount) badgeCount.innerText = totalCount;
-
       const totalFiles = document.getElementById('vaultTotalFiles');
       if (totalFiles) totalFiles.innerText = totalCount;
 
@@ -8432,7 +8764,7 @@
           emptyState.classList.remove('hidden');
           if (currentVaultSearch) {
             if (emptyTitle) emptyTitle.innerText = 'Not found';
-            if (emptyDesc) emptyDesc.innerText = `No projects match the search "${escapeHtml(currentVaultSearch)}".`;
+            if (emptyDesc) emptyDesc.innerText = `No projects match the search "${currentVaultSearch}".`;
           } else if (currentVaultFilter !== 'all') {
             if (emptyTitle) emptyTitle.innerText = 'Kategori Empty';
             if (emptyDesc) emptyDesc.innerText = 'No projects match this filter yet.';
@@ -8450,6 +8782,8 @@
         const card = document.createElement('div');
         card.id = `vault-proj-card-${proj.project_id}`;
         card.className = 't-rec-card cursor-pointer';
+        const isVirtualProj = !!proj.virtual;
+        if (isVirtualProj) card.title = 'Category archive — not deletable';
         card.onclick = (e) => {
           if (!e.target.closest('button') && !e.target.closest('a')) {
             openProjectPage(proj.project_id);
@@ -8484,8 +8818,9 @@
               <button 
                 type="button" 
                 onclick="confirmDeleteVaultProject('${proj.project_id}', '${escapeQuotes(proj.workspace_name)}', event)" 
-                class="t-card-btn-delete group"
-                title="Delete Workspace">
+                class="t-card-btn-delete group${isVirtualProj ? ' hidden' : ''}"
+                title="${isVirtualProj ? 'Category archive — not deletable' : 'Delete Workspace'}"
+                ${isVirtualProj ? 'disabled aria-disabled="true"' : ''}>
                 <i data-lucide="trash-2" class="w-3.5 h-3.5 t-btn-icon"></i>
               </button>
               <button 
@@ -8546,7 +8881,6 @@
       const dateEl = document.getElementById('projectDetailCreatedDate');
       const breadcrumbEl = document.getElementById('detailViewBreadcrumb');
       const btnRename = document.getElementById('btnRenameInDetail');
-      const btnOpenFolder = document.getElementById('btnOpenFolderInDetail');
       const btnDelete = document.getElementById('btnDeleteInDetail');
 
       const files = proj.files || [];
@@ -8566,9 +8900,6 @@
       if (btnRename) {
         btnRename.onclick = () => promptRenameWorkspace(proj.project_id, proj.workspace_name);
       }
-      if (btnOpenFolder) {
-        btnOpenFolder.onclick = () => openVaultFile(proj.folder_path);
-      }
       if (btnDelete) {
         btnDelete.onclick = (e) => confirmDeleteVaultProject(proj.project_id, proj.workspace_name, e);
       }
@@ -8579,6 +8910,23 @@
       const clipperId = document.getElementById('clipperWorkspaceId');
       const btnClipperRename = document.getElementById('btnClipperRename');
       const btnClipperDelete = document.getElementById('btnClipperDelete');
+
+      const isVirtualProj = !!proj.virtual;
+      if (isVirtualProj && titleEl) titleEl.title = 'Category archive — not deletable';
+      else if (titleEl) titleEl.removeAttribute('title');
+      [btnRename, btnDelete, btnClipperRename, btnClipperDelete].forEach(btn => {
+        if (!btn) return;
+        if (btn.dataset.baseTitle === undefined) btn.dataset.baseTitle = btn.getAttribute('title') || '';
+        btn.classList.toggle('hidden', isVirtualProj);
+        btn.title = isVirtualProj ? 'Category archive — not deletable' : btn.dataset.baseTitle;
+        if (isVirtualProj) {
+          btn.setAttribute('disabled', 'disabled');
+          btn.setAttribute('aria-disabled', 'true');
+        } else {
+          btn.removeAttribute('disabled');
+          btn.removeAttribute('aria-disabled');
+        }
+      });
 
       if (clipperTitle) clipperTitle.innerText = proj.workspace_name || 'Workspace';
       if (clipperId) clipperId.innerText = `ID: ${proj.project_id}`;
@@ -9325,6 +9673,7 @@
         });
         if (isInteractive) return;
 
+        e.preventDefault();
         isDragging = true;
         hasMoved = false;
         startX = e.clientX;
@@ -9572,6 +9921,7 @@
       clipperFilesCache = files;
 
       const sourceTitle = proj.source_title ? escapeHtml(proj.source_title) : (files[0] && files[0].title ? escapeHtml(files[0].title) : 'Source Video');
+      const titleLower = String(proj.source_title || proj.workspace_name || '').toLowerCase();
 
       // Source Channel / Creator extraction (pure factual extraction)
       let rawChannel = proj.channel || proj.source_channel || proj.uploader || '';
@@ -9586,10 +9936,6 @@
         rawUrl = proj.source_url;
       } else if (proj.url && (proj.url.startsWith('http://') || proj.url.startsWith('https://'))) {
         rawUrl = proj.url;
-      } else if (titleLower.includes('pemerintah malu') || titleLower.includes('raymond')) {
-        rawUrl = 'https://www.youtube.com/watch?v=kYf8sLp_P8U';
-      } else {
-        rawUrl = 'https://www.youtube.com/watch?v=kYf8sLp_P8U';
       }
 
       let displayUrl = rawUrl;
@@ -9602,6 +9948,12 @@
       if (displayUrl.length > 26) {
         displayUrl = displayUrl.substring(0, 24) + '...';
       }
+
+      const sourceLinkHtml = rawUrl
+        ? `<a href="${encodeURI(rawUrl)}" target="_blank" rel="noopener noreferrer" class="block text-[11px] font-medium text-white hover:text-white leading-tight truncate mt-0.5 hover:underline" title="${escapeHtml(rawUrl)}" data-no-drag="true">
+                ${escapeHtml(displayUrl)}
+              </a>`
+        : `<span class="block text-[11px] font-medium text-zinc-500 leading-tight truncate mt-0.5">Source unavailable</span>`;
 
       // NODE 1: Trigger Node / Source Input (Exact matching dimensions: w-[224px] h-[238px])
       const triggerNode = document.createElement('div');
@@ -9626,9 +9978,7 @@
             </div>
             <div class="px-3.5 py-2 flex flex-col justify-center flex-1">
               <span class="block text-[9px] text-zinc-500 font-mono leading-tight">Link YouTube</span>
-              <a href="${encodeURI(rawUrl)}" target="_blank" rel="noopener noreferrer" class="block text-[11px] font-medium text-white hover:text-white leading-tight truncate mt-0.5 hover:underline" title="${escapeHtml(rawUrl)}" data-no-drag="true">
-                ${escapeHtml(displayUrl)}
-              </a>
+              ${sourceLinkHtml}
             </div>
             <div class="px-3.5 py-2.5 flex flex-col justify-center flex-1">
               <span class="block text-[9px] text-zinc-500 font-mono leading-tight">Total Clips</span>
@@ -10077,7 +10427,7 @@
         const fSize = formatBytes(file.file_size);
         const rawMediaUrl = file.url || (file.relative_path ? `/media-vault/${file.relative_path.replace(/\\/g, '/')}` : '#');
         const mediaUrl = rawMediaUrl !== '#' ? encodeURI(rawMediaUrl) : '#';
-        const durStr = formatDuration(file);
+        const durStr = formatClipDuration(file);
         const dateStr = formatSavedDate(file.created_at || proj.created_at);
 
         const card = document.createElement('div');
@@ -10277,6 +10627,10 @@
           if (currentActiveProjectId === projectId) {
             const titleEl = document.getElementById('projectDetailPageTitle');
             if (titleEl) titleEl.innerText = newName;
+            const clipperTitleEl = document.getElementById('clipperWorkspaceTitle');
+            if (clipperTitleEl) clipperTitleEl.innerText = newName;
+            const breadcrumbEl = document.getElementById('detailViewBreadcrumb');
+            if (breadcrumbEl) breadcrumbEl.innerText = `${projectId}`;
             document.title = `${newName} (${projectId}) | Luna`;
             const btnRename = document.getElementById('btnRenameInDetail');
             if (btnRename) {
@@ -10413,7 +10767,7 @@
       }
     }
 
-    function formatDuration(item) {
+    function formatClipDuration(item) {
       if (item.start_time !== undefined && item.end_time !== undefined && item.end_time > item.start_time) {
         const dur = Math.round(item.end_time - item.start_time);
         return `${dur}s`;
@@ -10426,25 +10780,7 @@
       if (!storageEl) return;
       const path = storageEl.innerText.trim();
       if (!path) return;
-      navigator.clipboard.writeText(path).then(() => {
-        const copyIcon = document.getElementById('vaultCopyIcon');
-        if (copyIcon) {
-          copyIcon.setAttribute('data-lucide', 'check');
-          copyIcon.classList.add('text-emerald-400', 'opacity-100');
-          copyIcon.classList.remove('opacity-0', 'text-zinc-500');
-          if (window.lucide && typeof lucide.createIcons === 'function') {
-            lucide.createIcons();
-          }
-          setTimeout(() => {
-            copyIcon.setAttribute('data-lucide', 'copy');
-            copyIcon.classList.remove('text-emerald-400', 'opacity-100');
-            copyIcon.classList.add('opacity-0', 'text-zinc-500');
-            if (window.lucide && typeof lucide.createIcons === 'function') {
-              lucide.createIcons();
-            }
-          }, 1500);
-        }
-      }).catch(err => {
+      navigator.clipboard.writeText(path).catch(err => {
         console.warn('Clipboard write error:', err);
       });
     }
@@ -10633,7 +10969,7 @@
           return;
         }
         const data = await res.json();
-        if (data.status === 'running' || data.status === 'queued' || data.status === 'downloading') {
+        if (!['completed', 'failed', 'cancelled'].includes(data.status)) {
           activeJobId = savedJobId;
           if (jobIdPill) jobIdPill.innerText = `JOB-${activeJobId}`;
           if (mainActionBtn) {
@@ -10643,6 +10979,7 @@
           if (progressStateCard) {
             progressStateCard.classList.remove('hidden');
           }
+          setCancelButtonVisible(true);
           const savedAction = data.action || localStorage.getItem('luna_active_action') || 'type_yt_ai_clip';
           currentJobWorkspaceName = data.workspace_name || localStorage.getItem('luna_active_ws') || null;
           initTaskRows(savedAction);

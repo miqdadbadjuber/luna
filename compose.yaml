@@ -5,6 +5,16 @@ services:
     init: true
     restart: unless-stopped
     user: "${LUNA_UID:-1000}:${LUNA_GID:-1000}"
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     environment:
       MEDIA_STORAGE_DIR: /app/media-vault
     ports:

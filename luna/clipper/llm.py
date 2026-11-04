@@ -1,18 +1,49 @@
+# SPDX-License-Identifier: MIT
+# This file is part of Luna's clip pipeline. See luna/clipper/LICENSE and
+# THIRD_PARTY_NOTICES.md for the upstream notice.
+
 """Clip ranking through an OpenAI-compatible endpoint or Gemini."""
 import time
 
-from .config import GEMINI_MODEL, llm_provider, openai_base_url, openai_model, require_gemini_key, require_openai_key
+from .config import gemini_model, llm_provider, openai_base_url, openai_model, require_gemini_key, require_openai_key
+
+# Some self-hosted OpenAI-compatible endpoints return 400 for response_format.
+# Remember the first rejection so later calls skip JSON mode instead of paying
+# for a failed round trip every time.
+_OPENAI_JSON_MODE_SUPPORTED = True
+
+
+def _response_format_rejected(exc: Exception) -> bool:
+    """True when an endpoint refuses response_format itself, not the request."""
+    if isinstance(exc, TypeError):
+        return True
+    message = str(exc).lower()
+    return "response_format" in message or "json_object" in message
 
 
 def call_openai_llm(prompt: str) -> str:
     from openai import OpenAI  # imported here because it adds about 0.3 s to app startup
 
-    client = OpenAI(api_key=require_openai_key(), base_url=openai_base_url())
-    response = client.chat.completions.create(
-        model=openai_model(),
-        temperature=0.7,
-        messages=[{"role": "user", "content": prompt}],
-    )
+    global _OPENAI_JSON_MODE_SUPPORTED
+    client = OpenAI(api_key=require_openai_key(), base_url=openai_base_url(), timeout=60, max_retries=2)
+    request = {
+        "model": openai_model(),
+        "temperature": 0.7,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    if _OPENAI_JSON_MODE_SUPPORTED:
+        try:
+            response = client.chat.completions.create(**request, response_format={"type": "json_object"})
+            return response.choices[0].message.content or ""
+        except Exception as e:
+            if not _response_format_rejected(e):
+                raise
+            _OPENAI_JSON_MODE_SUPPORTED = False
+            print(
+                f"[llm/openai] endpoint rejected response_format ({e}), continuing without JSON mode",
+                flush=True,
+            )
+    response = client.chat.completions.create(**request)
     return response.choices[0].message.content or ""
 
 
@@ -31,7 +62,7 @@ def call_gemini_llm(prompt: str) -> str:
 
     # Priority cascade: user's configured model first, followed by reliable fallbacks
     models_to_try = []
-    for m in [GEMINI_MODEL, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
+    for m in [gemini_model(), "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
         if m and m not in models_to_try:
             models_to_try.append(m)
 
@@ -55,6 +86,9 @@ def call_gemini_llm(prompt: str) -> str:
                 err_str = str(e)
                 last_err = e
                 print(f"[llm/gemini] model={model_name} attempt {attempt} failed: {err_str}", flush=True)
+                if "400" in err_str or "401" in err_str or "403" in err_str:
+                    # bad key or bad request: retrying and switching models cannot fix it
+                    raise e
                 if "503" in err_str or "UNAVAILABLE" in err_str or "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
                     time.sleep(2 * attempt)
                     continue

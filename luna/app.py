@@ -1,12 +1,21 @@
+# Copyright (C) 2026 Miqdad
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# This file is part of Luna. See LICENSE and NOTICE at the repository root.
+
 import asyncio
+import copy
 import datetime
+from contextlib import asynccontextmanager
 import json
 import logging
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
+import threading
 try:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -15,11 +24,12 @@ try:
 except Exception:
     pass
 import ipaddress
+import tempfile
 import time
 import urllib.parse
 import uuid
 import zipfile
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Literal, Optional
 
 import requests
 import yt_dlp
@@ -27,7 +37,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.dirname(PACKAGE_DIR)
@@ -58,7 +68,9 @@ from .storage_manager import (
     get_workspace_folder,
     format_media_filename,
     format_clip_folder,
+    invalidate_storage_root_cache,
     is_writable,
+    sanitize_name,
 )
 from .vault_service import (
     save_media_metadata,
@@ -70,6 +82,7 @@ from .vault_service import (
     get_next_workspace_index,
     delete_vault_item,
     get_storage_stats,
+    workspace_name_taken,
 )
 
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
@@ -84,7 +97,45 @@ os.makedirs(ASSETS_DIR, exist_ok=True)
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Luna: Multi-Platform Media & AI Shorts Web Studio")
+
+def _cli_value(flag: str) -> Optional[str]:
+    """Read --flag value from argv, for uvicorn started with explicit flags."""
+    argv = sys.argv
+    for index, item in enumerate(argv):
+        if item == flag and index + 1 < len(argv):
+            return argv[index + 1]
+        if item.startswith(flag + "="):
+            return item.split("=", 1)[1]
+    return None
+
+
+def _startup_banner() -> str:
+    """Human-readable URL line printed once the server is ready.
+
+    Uvicorn reports the bind address (127.0.0.1), which reads as a different site to
+    people who typed localhost. Both work, so show both. CLI flags win over env vars,
+    matching how uvicorn was invoked.
+    """
+    port = (_cli_value("--port") or os.getenv("LUNA_PORT", "8000")).strip() or "8000"
+    host = (_cli_value("--host") or os.getenv("LUNA_HOST", "127.0.0.1")).strip().lower() or "127.0.0.1"
+    if host in ("127.0.0.1", "localhost", "::1", "0.0.0.0", "::"):
+        return f"Luna is running: http://127.0.0.1:{port}  or  http://localhost:{port}"
+    return f"Luna is running: http://{host}:{port}  (or http://localhost:{port} if it is the same machine)"
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    # "uvicorn.error" is where uvicorn's own startup lines go, so the banner lands in
+    # the same stream and ordering. In tests (no uvicorn logging config) INFO is
+    # dropped by the root logger, so the suite stays quiet.
+    logging.getLogger("uvicorn.error").info(_startup_banner())
+    yield
+
+
+app = FastAPI(
+    title="Luna: Multi-Platform Media & AI Shorts Web Studio",
+    lifespan=_lifespan,
+)
 
 storage_root = get_storage_root()
 os.makedirs(storage_root, exist_ok=True)
@@ -108,23 +159,76 @@ app.mount("/media-vault", DynamicStorageStaticFiles(directory=storage_root), nam
 
 jobs: Dict[str, Dict] = {}
 
+# Cancellation is kept outside the job dict: a threading.Event cannot be JSON-encoded
+# or deep-copied, and /api/status copies the dict while the worker mutates it.
+job_cancel_events: Dict[str, threading.Event] = {}
+job_finished: set = set()
+
+
+def _cleanup_job_output(job_id: str) -> None:
+    """Remove the temporary output folder for a job (vault copies are untouched)."""
+    folder = os.path.join(OUTPUT_DIR, job_id)
+    if os.path.isdir(folder):
+        shutil.rmtree(folder, ignore_errors=True)
+
 
 def _prune_old_jobs(max_keep: int = 50):
-    """Keep memory tidy by removing oldest completed, cancelled, or failed jobs when job count exceeds max_keep."""
+    """Drop the oldest terminal jobs once the registry grows past max_keep.
+
+    Only jobs whose worker has already returned are eligible: a cancelled job can
+    still be encoding, and evicting it used to raise KeyError inside the worker.
+    """
     if len(jobs) <= max_keep:
         return
     terminal_keys = [
         k for k, v in jobs.items()
-        if v.get("status") in ("completed", "failed", "cancelled")
+        if v.get("status") in ("completed", "failed", "cancelled") and k in job_finished
     ]
     for k in terminal_keys:
         if len(jobs) <= max_keep:
             break
         jobs.pop(k, None)
+        job_cancel_events.pop(k, None)
+        job_finished.discard(k)
+        _cleanup_job_output(k)
+
+
+def cleanup_expired_jobs(max_age_days: int = 30) -> int:
+    """Delete output/<job> folders older than max_age_days that no live job owns.
+
+    Media Vault keeps its own copy of everything that was saved, so these folders are
+    only the transient working copies. Only 8-hex job ids are touched.
+    """
+    cutoff = time.time() - max_age_days * 86400
+    removed = 0
+    try:
+        entries = os.listdir(OUTPUT_DIR)
+    except OSError:
+        return 0
+    for name in entries:
+        if not re.fullmatch(r"[0-9a-f]{8}", name):
+            continue
+        path = os.path.join(OUTPUT_DIR, name)
+        if not os.path.isdir(path) or name in jobs:
+            continue
+        try:
+            if os.path.getmtime(path) >= cutoff:
+                continue
+            shutil.rmtree(path, ignore_errors=True)
+            removed += 1
+        except OSError:
+            continue
+    if removed:
+        logger.info(f"Removed {removed} expired job folder(s) from {OUTPUT_DIR}")
+    return removed
 
 
 def is_safe_external_url(url: str) -> bool:
-    """Validate that the URL has an HTTP/HTTPS scheme and doesn't target private or local networks (SSRF prevention)."""
+    """Reject URLs whose host resolves to a non-public address (SSRF prevention).
+
+    Every resolved address must be globally routable. Checking only the literal host
+    string let decimal/octal IPs and DNS names pointing at 127.0.0.1 through.
+    """
     if not url or not isinstance(url, str):
         return False
     url = url.strip()
@@ -135,15 +239,24 @@ def is_safe_external_url(url: str) -> bool:
         hostname = parsed.hostname
         if not hostname:
             return False
-        hostname_lower = hostname.lower()
-        if hostname_lower in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+        hostname_lower = hostname.lower().strip("[]")
+        if hostname_lower in ("localhost", "0.0.0.0"):
             return False
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
         try:
-            ip = ipaddress.ip_address(hostname_lower)
-            if ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_link_local:
+            infos = socket.getaddrinfo(hostname_lower, port, proto=socket.IPPROTO_TCP)
+        except socket.gaierror:
+            return False
+        if not infos:
+            return False
+        for info in infos:
+            address = str(info[4][0]).split("%")[0]
+            try:
+                ip = ipaddress.ip_address(address)
+            except ValueError:
                 return False
-        except ValueError:
-            pass
+            if not ip.is_global:
+                return False
         return True
     except Exception:
         return False
@@ -151,23 +264,73 @@ def is_safe_external_url(url: str) -> bool:
 
 # Utilities
 def sanitize_title(title: str) -> str:
-    title = re.sub(r'#\S+', '', title)
-    title = re.sub(r'[\\/*?:"<>|]', '', title)
-    title = ' '.join(title.split()).strip()
-    return title[:80].strip() or "media"
+    """Turn a media title into a safe file stem (reserved names, trailing dots, length)."""
+    title = re.sub(r'#\S+', '', str(title or ""))
+    cleaned = sanitize_name(title, max_length=80)
+    return cleaned or "media"
 
 
 def parse_timestamp(ts: str) -> float:
-    ts = str(ts).strip()
-    parts = ts.split(":")
+    """Parse "HH:MM:SS", "MM:SS" or plain seconds.
+
+    Raises ValueError instead of silently returning 0.0, so a typo in the trim form
+    becomes a 400 rather than a clip rendered at the wrong offset.
+    """
+    raw = str(ts or "").strip()
+    if not raw:
+        raise ValueError("Timestamp is empty")
+    parts = raw.split(":")
+    if len(parts) > 3:
+        raise ValueError(f"Invalid timestamp: {ts!r}")
     try:
-        if len(parts) == 2:
-            return int(parts[0]) * 60 + float(parts[1])
-        elif len(parts) == 3:
-            return int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
-        return float(ts)
-    except:
-        return 0.0
+        values = [float(p) for p in parts]
+    except ValueError:
+        raise ValueError(f"Invalid timestamp: {ts!r}")
+    for value in values:
+        if value < 0:
+            raise ValueError(f"Timestamp cannot be negative: {ts!r}")
+    for value in values[1:]:
+        if value >= 60:
+            raise ValueError(f"Minutes and seconds must be below 60: {ts!r}")
+    seconds = 0.0
+    for value in values:
+        seconds = seconds * 60 + value
+    return seconds
+
+
+def _run_ffmpeg(cmd: List[str], timeout_sec: float, cancel_event: Optional[threading.Event] = None) -> None:
+    """Run an ffmpeg command, capturing stderr so the failure reason survives.
+
+    The process is polled instead of blocking in subprocess.run so a cancel can
+    terminate it, and the timeout keeps a stuck encode from pinning a worker forever.
+    """
+    deadline = time.time() + max(30.0, timeout_sec)
+    try:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    except FileNotFoundError:
+        raise RuntimeError("ffmpeg was not found. Install FFmpeg or let Luna download it on first run.")
+
+    while True:
+        if cancel_event is not None and cancel_event.is_set():
+            proc.terminate()
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+            raise RuntimeError("CANCELLED_BY_USER")
+        try:
+            _out, err = proc.communicate(timeout=1)
+            break
+        except subprocess.TimeoutExpired:
+            if time.time() > deadline:
+                proc.kill()
+                _out, err = proc.communicate()
+                raise RuntimeError(f"ffmpeg timed out after {int(timeout_sec)}s")
+            continue
+
+    if proc.returncode != 0:
+        tail = (err or "").strip()[-2000:]
+        raise RuntimeError(f"ffmpeg failed (exit {proc.returncode}): {tail or 'no stderr output'}")
 
 
 def get_ytdl_base_opts(extra_opts=None):
@@ -240,6 +403,9 @@ def create_progress_hook(job_id: str):
             return
         if jobs.get(job_id, {}).get("cancelled"):
             raise RuntimeError("CANCELLED_BY_USER")
+        event = job_cancel_events.get(job_id)
+        if event is not None and event.is_set():
+            raise RuntimeError("CANCELLED_BY_USER")
         status = d.get("status")
         if status == "downloading":
             downloaded = d.get("downloaded_bytes", 0)
@@ -303,6 +469,7 @@ def download_youtube_video(url: str, output_dir: str, quality: str = "1080", pro
         "format": f"bestvideo[height<={h}]+bestaudio/best[height<={h}]/best",
         "outtmpl": os.path.join(output_dir, "video.%(ext)s"),
         "merge_output_format": "mp4",
+        "noplaylist": True,
     }
     if progress_hook:
         base_opts["progress_hooks"] = [progress_hook]
@@ -326,6 +493,7 @@ def download_instagram_reels(url: str, output_dir: str, progress_hook: Optional[
         "format": "bestvideo+bestaudio/best",
         "outtmpl": os.path.join(output_dir, "reels.%(ext)s"),
         "merge_output_format": "mp4",
+        "noplaylist": True,
         "quiet": True,
         "http_headers": {
             "User-Agent": "Instagram 219.0.0.12.117 Android (28/9; 411dpi; 1080x2226; Xiaomi; Mi A2; jasmine_sprout; qcom; en_US; 302733750)"
@@ -363,6 +531,7 @@ def download_tiktok_video(url: str, output_dir: str, progress_hook: Optional[Cal
                 "format": "bestvideo[ext=mp4]+bestaudio/bestvideo+bestaudio/best",
                 "outtmpl": os.path.join(output_dir, "video.%(ext)s"),
                 "merge_output_format": "mp4",
+                "noplaylist": True,
                 "quiet": True,
                 "impersonate": target,
             }
@@ -425,6 +594,7 @@ def download_mp3(url: str, output_dir: str, progress_hook: Optional[Callable] = 
     base_opts = {
         "format": "bestaudio/best",
         "outtmpl": os.path.join(output_dir, "audio.%(ext)s"),
+        "noplaylist": True,
         "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "320"}],
     }
     if progress_hook:
@@ -443,48 +613,13 @@ def download_mp3(url: str, output_dir: str, progress_hook: Optional[Callable] = 
     return src
 
 
-def download_and_clip(
-    url: str,
-    output_dir: str,
-    start_sec: float,
-    end_sec: float,
-    ratio: str = "16:9",
-    progress_hook: Optional[Callable] = None,
-    on_stage: Optional[Callable[[str], None]] = None,
-) -> str:
-    base_opts = {
-        "format": "bestvideo[height<=1080]+bestaudio/best",
-        "outtmpl": os.path.join(output_dir, "full.%(ext)s"),
-        "merge_output_format": "mp4",
-    }
-    if progress_hook:
-        base_opts["progress_hooks"] = [progress_hook]
-    opts = get_ytdl_base_opts(base_opts)
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        title = info.get("title", "video")
-
-    full_path = None
-    for ext in ["mp4", "mkv", "webm"]:
-        candidate = os.path.join(output_dir, f"full.{ext}")
-        if os.path.exists(candidate):
-            full_path = candidate
-            break
-    if not full_path:
-        raise RuntimeError("Downloaded file was not found")
-
-    if on_stage:
-        on_stage("clipping")
-
-    clean = sanitize_title(title)
-    out_clip = os.path.join(output_dir, f"{clean}_clip.mp4")
-
 def extract_clip_segment(
     source_path: str,
     out_clip: str,
     start_sec: float,
     end_sec: float,
     ratio: str = "16:9",
+    cancel_event: Optional[threading.Event] = None,
 ) -> str:
     if ratio in ("9:16", "916"):
         vf = "crop=ih*9/16:ih,scale=1080:1920"
@@ -509,53 +644,16 @@ def extract_clip_segment(
     cmd.extend([
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
         "-threads", "0",
+        "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "192k",
         "-movflags", "+faststart",
         out_clip,
     ])
-    subprocess.run(cmd, check=True)
+    _run_ffmpeg(cmd, timeout_sec=dur * 4 + 120, cancel_event=cancel_event)
     return out_clip
 
 
-def download_and_clip(
-    url: str,
-    output_dir: str,
-    start_sec: float,
-    end_sec: float,
-    ratio: str = "16:9",
-    progress_hook: Optional[Callable] = None,
-    on_stage: Optional[Callable[[str], None]] = None,
-) -> str:
-    base_opts = {
-        "format": "bestvideo[height<=1080]+bestaudio/best",
-        "outtmpl": os.path.join(output_dir, "full.%(ext)s"),
-        "merge_output_format": "mp4",
-    }
-    if progress_hook:
-        base_opts["progress_hooks"] = [progress_hook]
-    opts = get_ytdl_base_opts(base_opts)
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        title = info.get("title", "video")
-
-    full_path = None
-    for ext in ["mp4", "mkv", "webm"]:
-        candidate = os.path.join(output_dir, f"full.{ext}")
-        if os.path.exists(candidate):
-            full_path = candidate
-            break
-    if not full_path:
-        raise RuntimeError("Downloaded file was not found")
-
-    if on_stage:
-        on_stage("clipping")
-
-    clean = sanitize_title(title)
-    out_clip = os.path.join(output_dir, f"{clean}_clip.mp4")
-    return extract_clip_segment(full_path, out_clip, start_sec, end_sec, ratio)
-
-
-def format_video_target(input_path: str, ratio: str = "original", fps: str = "auto") -> str:
+def format_video_target(input_path: str, ratio: str = "original", fps: str = "auto", cancel_event: Optional[threading.Event] = None) -> str:
     """
     Format full video to target aspect ratio (original, 9:16, 3:4, 1:1) and FPS (auto, 60, 30).
     Returns path to the formatted video file (or original if unchanged).
@@ -592,11 +690,12 @@ def format_video_target(input_path: str, ratio: str = "original", fps: str = "au
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
         "-c:a", "aac", "-b:a", "192k",
         "-movflags", "+faststart",
+        "-pix_fmt", "yuv420p",
         "-threads", "0",
         out_path
     ])
 
-    subprocess.run(cmd, check=True)
+    _run_ffmpeg(cmd, timeout_sec=7200, cancel_event=cancel_event)
     return out_path
 
 
@@ -607,24 +706,85 @@ class InfoRequest(BaseModel):
 
 class ProcessRequest(BaseModel):
     url: str
-    action: str  # "type_yt_ai_clip", "type_yt_video", "type_yt_short", "type_yt_mp3", "type_yt_clip", "type_ig_reels", "type_ig_ai_clip", "type_tt_video", "type_tt_mp3"
-    num_clips: int = 5
+    action: Literal[
+        "type_yt_ai_clip", "type_ig_ai_clip", "type_yt_video", "type_yt_short", "type_yt_mp3",
+        "type_ig_reels", "ig_reels", "type_tt_video", "tt_video",
+        "type_tt_mp3", "type_yt_clip", "ai_clip", "mp3", "manual_clip",
+    ]
+    num_clips: int = Field(5, ge=1, le=20)
     aspect_ratio: str = "9:16"
     use_face_detect: bool = False
     quality: str = "1080"
     fps: Optional[str] = "auto"
     start_time: str = "00:00"
     end_time: str = "00:30"
-    segments: Optional[List[Dict[str, str]]] = None
+    segments: Optional[List[Dict[str, str]]] = Field(default=None, max_length=20)
     workspace_name: Optional[str] = "Workspace 01"
+
+    @field_validator("aspect_ratio")
+    @classmethod
+    def _check_ratio(cls, value: str) -> str:
+        cleaned = str(value or "").strip()
+        if cleaned not in ("original", "16:9", "9:16", "3:4", "1:1"):
+            raise ValueError("Unsupported aspect ratio")
+        return cleaned
+
+    @field_validator("quality")
+    @classmethod
+    def _check_quality(cls, value: str) -> str:
+        cleaned = str(value or "").strip()
+        return cleaned if cleaned in ("1080", "720", "480", "360") else "1080"
+
+    @field_validator("fps")
+    @classmethod
+    def _check_fps(cls, value: Optional[str]) -> str:
+        cleaned = str(value or "auto").strip()
+        return cleaned if cleaned in ("auto", "30", "60") else "auto"
+
+    @field_validator("workspace_name")
+    @classmethod
+    def _check_workspace(cls, value: Optional[str]) -> str:
+        cleaned = " ".join(str(value or "").split()).strip()
+        return cleaned[:80] or "Workspace 01"
 
 
 class RenameProjectRequest(BaseModel):
     new_name: str
 
+    @field_validator("new_name")
+    @classmethod
+    def _check_name(cls, value: str) -> str:
+        cleaned = " ".join(str(value or "").split()).strip()
+        if not cleaned:
+            raise ValueError("Name cannot be empty")
+        return cleaned[:80]
+
 
 class OpenFileRequest(BaseModel):
     file_path: str
+
+
+def _html_headers() -> Dict[str, str]:
+    """Headers for the two HTML pages. The CSP allows the pinned CDNs the UI uses."""
+    return {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "Referrer-Policy": "no-referrer",
+        "Content-Security-Policy": (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' "
+            "https://cdn.tailwindcss.com https://unpkg.com https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
+            "font-src 'self' data: https://fonts.gstatic.com; "
+            "img-src 'self' data: blob: https:; "
+            "media-src 'self' blob: https:; "
+            "connect-src 'self' https:; "
+            "frame-ancestors 'none'"
+        ),
+    }
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -633,14 +793,7 @@ async def index():
     if os.path.exists(html_path):
         with open(html_path, "r", encoding="utf-8") as f:
             content = f.read()
-        return HTMLResponse(
-            content=content,
-            headers={
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "Pragma": "no-cache",
-                "Expires": "0",
-            },
-        )
+        return HTMLResponse(content=content, headers=_html_headers())
     return HTMLResponse("<h1>Templates not found.</h1>", status_code=404)
 
 
@@ -650,14 +803,7 @@ async def guide_page():
     if os.path.exists(html_path):
         with open(html_path, "r", encoding="utf-8") as f:
             content = f.read()
-        return HTMLResponse(
-            content=content,
-            headers={
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "Pragma": "no-cache",
-                "Expires": "0",
-            },
-        )
+        return HTMLResponse(content=content, headers=_html_headers())
     return HTMLResponse("<h1>Guide page not found.</h1>", status_code=404)
 
 
@@ -857,7 +1003,7 @@ def _save_single_media_to_vault(
     extra_meta: Optional[Dict] = None,
 ) -> Optional[Dict]:
     if not file_path or not os.path.exists(file_path):
-        return None
+        raise FileNotFoundError(f"Media file is missing: {file_path}")
     try:
         target_vault_dir = get_category_folder(category_key)
         filename = os.path.basename(file_path)
@@ -868,6 +1014,9 @@ def _save_single_media_to_vault(
             prefix=prefix,
         )
         vault_file_path = os.path.join(target_vault_dir, vault_filename)
+        # Defence in depth: a crafted prefix must never escape the category folder.
+        if os.path.dirname(os.path.abspath(vault_file_path)) != os.path.abspath(target_vault_dir):
+            raise ValueError("Refusing to write outside the Media Vault category folder")
         if os.path.abspath(file_path) != os.path.abspath(vault_file_path):
             shutil.copy2(file_path, vault_file_path)
 
@@ -893,7 +1042,7 @@ def _save_single_media_to_vault(
         return vault_item
     except Exception as e:
         print(f"[Vault Error] {e}", flush=True)
-        return None
+        raise
 
 
 def _save_project_to_vault(
@@ -930,6 +1079,9 @@ def _save_project_to_vault(
             target_vault_dir = get_workspace_folder(action, ws_name)
 
         storage_root_path = get_storage_root()
+        # folder_path comes from meta.json, which may be stale or edited by hand.
+        if not _path_is_inside(target_vault_dir, [storage_root_path]):
+            raise ValueError("Workspace folder is outside the Media Vault")
 
         saved_files = []
         for item in files_to_save:
@@ -938,6 +1090,13 @@ def _save_project_to_vault(
                 fname = os.path.basename(src_path)
                 dst_path = os.path.join(target_vault_dir, fname)
                 if os.path.abspath(src_path) != os.path.abspath(dst_path):
+                    # Never overwrite a different recording that happens to share a name
+                    # (AI clips are always short_00.mp4 ...), and never let a second run
+                    # leave the first run's metadata attached to new bytes.
+                    if os.path.exists(dst_path) and os.path.getsize(dst_path) != os.path.getsize(src_path):
+                        stem, suffix = os.path.splitext(fname)
+                        fname = f"{stem}_{uuid.uuid4().hex[:6]}{suffix}"
+                        dst_path = os.path.join(target_vault_dir, fname)
                     shutil.copy2(src_path, dst_path)
                 rel = os.path.relpath(dst_path, storage_root_path).replace("\\", "/")
                 file_record = {
@@ -966,19 +1125,30 @@ def _save_project_to_vault(
             try:
                 with open(existing_meta_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
-                        existing_record = data[0]
+                    if isinstance(data, list):
+                        records = [d for d in data if isinstance(d, dict)]
+                        existing_record = next(
+                            (r for r in records if isinstance(r.get("files"), list)),
+                            records[0] if records else None,
+                        )
                     elif isinstance(data, dict):
                         existing_record = data
             except Exception:
                 existing_record = None
 
         if existing_record:
-            combined_files = existing_record.get("files", [])
-            existing_fnames = {f.get("filename") for f in combined_files if f.get("filename")}
+            combined_files = [f for f in existing_record.get("files", []) if isinstance(f, dict)]
+            index_by_name = {
+                f.get("filename"): idx for idx, f in enumerate(combined_files) if f.get("filename")
+            }
             for sf in saved_files:
-                if sf.get("filename") not in existing_fnames:
+                idx = index_by_name.get(sf.get("filename"))
+                if idx is None:
                     combined_files.append(sf)
+                    index_by_name[sf.get("filename")] = len(combined_files) - 1
+                else:
+                    # Same file written again: refresh its metadata instead of keeping stale values.
+                    combined_files[idx] = sf
             existing_record["files"] = combined_files
             existing_record["updated_at"] = time.time()
             if ws_name:
@@ -1014,24 +1184,34 @@ def _save_project_to_vault(
         return project_record
     except Exception as e:
         print(f"[Vault Project Save Error] {e}", flush=True)
-        return None
+        raise
 
 
 def _worker_process(job_id: str, req: ProcessRequest):
-    if jobs.get(job_id, {}).get("cancelled"):
+    cancel_event = job_cancel_events.get(job_id)
+
+    def _cancelled() -> bool:
+        return bool(cancel_event and cancel_event.is_set()) or bool(jobs.get(job_id, {}).get("cancelled"))
+
+    def _set_progress(value: float) -> None:
+        """Progress never moves backwards (the old stage table went 50 -> 40 -> 35)."""
+        if job_id not in jobs:
+            return
+        jobs[job_id]["progress"] = max(float(jobs[job_id].get("progress") or 0.0), float(value))
+
+    if _cancelled():
+        job_finished.add(job_id)
         return
 
     job_output_dir = os.path.join(OUTPUT_DIR, job_id)
     os.makedirs(job_output_dir, exist_ok=True)
 
-    # Sanitize LOCAL_OUTPUT_DIR in environment in case of stale/corrupted env value
-    current_local_out = os.environ.get("LOCAL_OUTPUT_DIR", "output")
-    if "=" in current_local_out or not current_local_out.strip():
-        os.environ["LOCAL_OUTPUT_DIR"] = "output"
     url = req.url.strip()
     platform = detect_platform(url)
     action = req.action
     ws_name = req.workspace_name or "Workspace 01"
+    if ws_name == ".." or "/" in ws_name or "\\" in ws_name:
+        ws_name = "Workspace 01"
 
     progress_hook = create_progress_hook(job_id)
     jobs[job_id]["progress"] = 0.0
@@ -1047,39 +1227,39 @@ def _worker_process(job_id: str, req: ProcessRequest):
             jobs[job_id]["logs"].append("Downloading source video...")
 
             def on_status(stage: str):
-                if jobs.get(job_id, {}).get("cancelled"):
+                if _cancelled():
                     raise RuntimeError("CANCELLED_BY_USER")
                 jobs[job_id]["stage"] = stage
                 jobs[job_id]["logs"].append(f"Stage: {stage}")
                 if stage in ("downloading", "queued"):
-                    jobs[job_id]["progress"] = 20.0
+                    _set_progress(20.0)
                 elif stage == "checking_transcript":
-                    jobs[job_id]["progress"] = 30.0
+                    _set_progress(30.0)
                     jobs[job_id]["download_speed"] = ""
                     jobs[job_id]["download_eta"] = ""
                     jobs[job_id]["stage_detail"] = "Checking YouTube captions..."
                 elif stage == "transcript_found":
-                    jobs[job_id]["progress"] = 50.0
+                    _set_progress(50.0)
                     jobs[job_id]["download_speed"] = ""
                     jobs[job_id]["download_eta"] = ""
                     jobs[job_id]["stage_detail"] = "YouTube transcript found"
                 elif stage == "transcribing_groq":
-                    jobs[job_id]["progress"] = 40.0
+                    _set_progress(40.0)
                     jobs[job_id]["download_speed"] = ""
                     jobs[job_id]["download_eta"] = ""
                     jobs[job_id]["stage_detail"] = f"Transcribing audio with {transcribe_provider_label()}..."
                 elif stage == "transcribing_local":
-                    jobs[job_id]["progress"] = 40.0
+                    _set_progress(40.0)
                     jobs[job_id]["download_speed"] = ""
                     jobs[job_id]["download_eta"] = ""
                     jobs[job_id]["stage_detail"] = "Transcribing audio with local Faster-Whisper..."
                 elif stage in ("transcribing", "extracting_audio", "uploading"):
-                    jobs[job_id]["progress"] = 35.0
+                    _set_progress(35.0)
                     jobs[job_id]["download_speed"] = ""
                     jobs[job_id]["download_eta"] = ""
                     jobs[job_id]["stage_detail"] = "Extracting and transcribing audio..."
                 elif stage in ("ranking_highlights", "detecting_highlights"):
-                    jobs[job_id]["progress"] = 65.0
+                    _set_progress(65.0)
                     jobs[job_id]["download_speed"] = ""
                     jobs[job_id]["download_eta"] = ""
                     jobs[job_id]["stage_detail"] = "Analyzing viral potential and clip moments..."
@@ -1089,28 +1269,28 @@ def _worker_process(job_id: str, req: ProcessRequest):
                         done_c = int(parts[1])
                         tot_c = int(parts[2])
                         pct = 68.0 + (done_c / max(tot_c, 1)) * 27.0
-                        jobs[job_id]["progress"] = round(pct, 1)
+                        _set_progress(round(pct, 1))
                         jobs[job_id]["stage_detail"] = f"Rendering clip {done_c}/{tot_c} (AMD AMF)"
                     jobs[job_id]["stage"] = "rendering"
                     jobs[job_id]["download_speed"] = ""
                     jobs[job_id]["download_eta"] = ""
                 elif stage in ("clipping", "rendering"):
-                    jobs[job_id]["progress"] = 70.0
+                    _set_progress(70.0)
                     jobs[job_id]["download_speed"] = ""
                     jobs[job_id]["download_eta"] = ""
                     jobs[job_id]["stage_detail"] = "Rendering 9:16 clips (vertical crop)..."
                 elif stage == "saving":
-                    jobs[job_id]["progress"] = 96.0
+                    _set_progress(96.0)
                     jobs[job_id]["stage_detail"] = "Saving to Media Vault..."
                 elif stage == "done":
-                    jobs[job_id]["progress"] = 100.0
+                    _set_progress(100.0)
                     jobs[job_id]["stage_detail"] = "Complete"
 
             result = generate_shorts(
                 youtube_url=url,
                 num_clips=req.num_clips,
                 aspect_ratio=req.aspect_ratio,
-                download_format="1080",
+                download_format=req.quality,
                 language=None,
                 use_face_detect=req.use_face_detect,
                 on_status=on_status,
@@ -1188,9 +1368,10 @@ def _worker_process(job_id: str, req: ProcessRequest):
                 print(f"[Vault AI Clips Error] {v_err}", flush=True)
                 jobs[job_id]["logs"].append(f"Media Vault warning: {v_err}")
 
-            jobs[job_id]["status"] = "completed"
-            jobs[job_id]["stage"] = "done"
-            jobs[job_id]["progress"] = 100.0
+            if not _cancelled():
+                jobs[job_id]["status"] = "completed"
+                jobs[job_id]["stage"] = "done"
+                jobs[job_id]["progress"] = 100.0
 
         elif action in ("type_yt_video", "type_yt_short"):
             if jobs.get(job_id, {}).get("cancelled"):
@@ -1206,7 +1387,7 @@ def _worker_process(job_id: str, req: ProcessRequest):
                 jobs[job_id]["stage"] = "rendering"
                 jobs[job_id]["logs"].append(f"Converting video to {req.aspect_ratio} aspect ratio ({req.fps or 'auto'} FPS)...")
                 try:
-                    file_path = format_video_target(file_path, ratio=req.aspect_ratio, fps=req.fps or "auto")
+                    file_path = format_video_target(file_path, ratio=req.aspect_ratio, fps=req.fps or "auto", cancel_event=cancel_event)
                 except Exception as fmt_err:
                     print(f"[Format Video Error] {fmt_err}", flush=True)
                     jobs[job_id]["logs"].append(f"Format conversion warning: {fmt_err}")
@@ -1236,22 +1417,15 @@ def _worker_process(job_id: str, req: ProcessRequest):
                 if saved_proj:
                     jobs[job_id]["project_id"] = saved_proj.get("project_id")
                     jobs[job_id]["workspace_name"] = saved_proj.get("workspace_name")
-                _save_single_media_to_vault(
-                    file_path=file_path,
-                    category_key="youtube_video",
-                    action=action,
-                    platform="youtube",
-                    prefix=f"{req.quality}p" if req.quality else "",
-                    extra_meta={"quality": req.quality},
-                )
                 jobs[job_id]["logs"].append(f"Saved to Media Vault ({ws_name}).")
             except Exception as v_err:
                 print(f"[Vault Error] {v_err}", flush=True)
                 jobs[job_id]["logs"].append(f"Media Vault warning: {v_err}")
 
-            jobs[job_id]["status"] = "completed"
-            jobs[job_id]["stage"] = "done"
-            jobs[job_id]["progress"] = 100.0
+            if not _cancelled():
+                jobs[job_id]["status"] = "completed"
+                jobs[job_id]["stage"] = "done"
+                jobs[job_id]["progress"] = 100.0
 
         elif action in ("type_ig_reels", "ig_reels"):
             if jobs.get(job_id, {}).get("cancelled"):
@@ -1287,20 +1461,15 @@ def _worker_process(job_id: str, req: ProcessRequest):
                 if saved_proj:
                     jobs[job_id]["project_id"] = saved_proj.get("project_id")
                     jobs[job_id]["workspace_name"] = saved_proj.get("workspace_name")
-                _save_single_media_to_vault(
-                    file_path=file_path,
-                    category_key="instagram_video",
-                    action=action,
-                    platform="instagram",
-                )
                 jobs[job_id]["logs"].append(f"Saved to Media Vault ({ws_name}).")
             except Exception as v_err:
                 print(f"[Vault Error] {v_err}", flush=True)
                 jobs[job_id]["logs"].append(f"Media Vault warning: {v_err}")
 
-            jobs[job_id]["status"] = "completed"
-            jobs[job_id]["stage"] = "done"
-            jobs[job_id]["progress"] = 100.0
+            if not _cancelled():
+                jobs[job_id]["status"] = "completed"
+                jobs[job_id]["stage"] = "done"
+                jobs[job_id]["progress"] = 100.0
 
         elif action in ("type_tt_video", "tt_video"):
             if jobs.get(job_id, {}).get("cancelled"):
@@ -1336,20 +1505,15 @@ def _worker_process(job_id: str, req: ProcessRequest):
                 if saved_proj:
                     jobs[job_id]["project_id"] = saved_proj.get("project_id")
                     jobs[job_id]["workspace_name"] = saved_proj.get("workspace_name")
-                _save_single_media_to_vault(
-                    file_path=file_path,
-                    category_key="tiktok_video",
-                    action=action,
-                    platform="tiktok",
-                )
                 jobs[job_id]["logs"].append(f"Saved to Media Vault ({ws_name}).")
             except Exception as v_err:
                 print(f"[Vault Error] {v_err}", flush=True)
                 jobs[job_id]["logs"].append(f"Media Vault warning: {v_err}")
 
-            jobs[job_id]["status"] = "completed"
-            jobs[job_id]["stage"] = "done"
-            jobs[job_id]["progress"] = 100.0
+            if not _cancelled():
+                jobs[job_id]["status"] = "completed"
+                jobs[job_id]["stage"] = "done"
+                jobs[job_id]["progress"] = 100.0
 
         elif action in ("type_yt_mp3", "type_tt_mp3", "mp3"):
             if jobs.get(job_id, {}).get("cancelled"):
@@ -1385,21 +1549,15 @@ def _worker_process(job_id: str, req: ProcessRequest):
                 if saved_proj:
                     jobs[job_id]["project_id"] = saved_proj.get("project_id")
                     jobs[job_id]["workspace_name"] = saved_proj.get("workspace_name")
-                _save_single_media_to_vault(
-                    file_path=file_path,
-                    category_key="youtube_audio",
-                    action=action,
-                    platform=platform if platform != "unknown" else "youtube",
-                    prefix="320kbps",
-                )
                 jobs[job_id]["logs"].append(f"Saved to Media Vault ({ws_name}).")
             except Exception as v_err:
                 print(f"[Vault Error] {v_err}", flush=True)
                 jobs[job_id]["logs"].append(f"Media Vault warning: {v_err}")
 
-            jobs[job_id]["status"] = "completed"
-            jobs[job_id]["stage"] = "done"
-            jobs[job_id]["progress"] = 100.0
+            if not _cancelled():
+                jobs[job_id]["status"] = "completed"
+                jobs[job_id]["stage"] = "done"
+                jobs[job_id]["progress"] = 100.0
 
         elif action in ("type_yt_clip", "manual_clip"):
             if jobs.get(job_id, {}).get("cancelled"):
@@ -1435,6 +1593,7 @@ def _worker_process(job_id: str, req: ProcessRequest):
                 "format": "bestvideo[height<=1080]+bestaudio/best",
                 "outtmpl": os.path.join(job_output_dir, "full.%(ext)s"),
                 "merge_output_format": "mp4",
+                "noplaylist": True,
             }
             if progress_hook:
                 base_opts["progress_hooks"] = [progress_hook]
@@ -1482,6 +1641,7 @@ def _worker_process(job_id: str, req: ProcessRequest):
                     seg["start_s"],
                     seg["end_s"],
                     ratio=req.aspect_ratio,
+                    cancel_event=cancel_event,
                 )
 
                 clip_title = f"Clip #{idx+1} ({st_str} - {et_str})" if is_multi else f"Clip ({st_str} - {et_str})"
@@ -1508,63 +1668,75 @@ def _worker_process(job_id: str, req: ProcessRequest):
             jobs[job_id]["stage"] = "saving"
             jobs[job_id]["progress"] = 95.0
 
-            # Register to Media Vault
+            # Register to Media Vault. Both single and multi trims become a workspace,
+            # otherwise "Open Workspace" had no project to open for a one-segment trim.
             try:
-                if is_multi:
-                    # Multi-clip (> 1): Enter Trim Workspace (Project-based)
-                    saved_proj = _save_project_to_vault(
-                        workspace_name=ws_name,
-                        action=action,
-                        platform="youtube",
-                        source_title=title,
-                        source_url=url,
-                        channel=channel,
-                        aspect_ratio=req.aspect_ratio,
-                        files_to_save=files_to_save,
-                    )
-                    if saved_proj:
-                        jobs[job_id]["project_id"] = saved_proj.get("project_id")
-                        jobs[job_id]["workspace_name"] = saved_proj.get("workspace_name")
-                    jobs[job_id]["logs"].append(f"Saved to Trim Workspace: {ws_name} ({len(files_to_save)} clips).")
-                else:
-                    # Single clip (1): Enter standard Media Vault workspace
-                    _save_single_media_to_vault(
-                        file_path=files_to_save[0]["file_path"],
-                        category_key="youtube_video",
-                        action=action,
-                        platform="youtube",
-                        prefix="clip",
-                        custom_title=files_to_save[0]["title"],
-                    )
-                    jobs[job_id]["logs"].append(f"Saved to Media Vault ({ws_name}).")
+                saved_proj = _save_project_to_vault(
+                    workspace_name=ws_name,
+                    action=action,
+                    platform="youtube",
+                    source_title=title,
+                    source_url=url,
+                    channel=channel,
+                    aspect_ratio=req.aspect_ratio,
+                    files_to_save=files_to_save,
+                )
+                if saved_proj:
+                    jobs[job_id]["project_id"] = saved_proj.get("project_id")
+                    jobs[job_id]["workspace_name"] = saved_proj.get("workspace_name")
+                jobs[job_id]["logs"].append(
+                    f"Saved to Trim Workspace: {ws_name} ({len(files_to_save)} clip(s))."
+                )
             except Exception as v_err:
                 print(f"[Vault Trimmer Error] {v_err}", flush=True)
                 jobs[job_id]["logs"].append(f"Media Vault warning: {v_err}")
 
-            jobs[job_id]["status"] = "completed"
-            jobs[job_id]["stage"] = "done"
-            jobs[job_id]["progress"] = 100.0
+            if not _cancelled():
+                jobs[job_id]["status"] = "completed"
+                jobs[job_id]["stage"] = "done"
+                jobs[job_id]["progress"] = 100.0
 
         else:
             raise ValueError(f"Unknown action: {action}")
 
     except Exception as e:
-        if str(e) == "CANCELLED_BY_USER" or jobs.get(job_id, {}).get("cancelled"):
-            jobs[job_id]["status"] = "cancelled"
-            jobs[job_id]["stage"] = "cancelled"
-            jobs[job_id]["logs"].append("Job cancelled by user.")
+        if str(e) == "CANCELLED_BY_USER" or _cancelled():
+            if job_id in jobs:
+                jobs[job_id]["status"] = "cancelled"
+                jobs[job_id]["stage"] = "cancelled"
+                jobs[job_id]["logs"].append("Job cancelled by user.")
             return
         import traceback
         traceback.print_exc()
-        jobs[job_id]["status"] = "failed"
-        jobs[job_id]["error"] = str(e)
-        jobs[job_id]["logs"].append(f"Error: {str(e)}")
+        if job_id in jobs:
+            jobs[job_id]["status"] = "failed"
+            jobs[job_id]["error"] = str(e)
+            jobs[job_id]["logs"].append(f"Error: {str(e)}")
+    finally:
+        # The worker owns cleanup: deleting the folder from the cancel endpoint
+        # pulled the rug out from under yt-dlp/ffmpeg still writing into it.
+        job_finished.add(job_id)
+        if _cancelled():
+            _cleanup_job_output(job_id)
 
 
 @app.post("/api/process")
 async def api_process(req: ProcessRequest, background_tasks: BackgroundTasks):
     if not req.url or not req.url.strip().startswith("http") or not is_safe_external_url(req.url.strip()):
         raise HTTPException(status_code=400, detail="URL is invalid or not allowed")
+
+    # Validate trim input before accepting the job: a bad timestamp used to become
+    # a clip rendered at the wrong offset instead of a 400.
+    if req.action in ("type_yt_clip", "manual_clip"):
+        segments = req.segments or [{"start_time": req.start_time, "end_time": req.end_time}]
+        for seg in segments:
+            try:
+                start_s = parse_timestamp(seg.get("start_time") or "00:00")
+                end_s = parse_timestamp(seg.get("end_time") or "00:30")
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+            if end_s <= start_s:
+                raise HTTPException(status_code=400, detail="End time must be after start time")
 
     _prune_old_jobs(50)
     job_id = str(uuid.uuid4())[:8]
@@ -1575,6 +1747,7 @@ async def api_process(req: ProcessRequest, background_tasks: BackgroundTasks):
         "workspace_name": req.workspace_name or "Workspace 01",
         "status": "queued",
         "stage": "queued",
+        "stage_detail": "",
         "progress": 0.0,
         "download_speed": "",
         "download_eta": "",
@@ -1582,8 +1755,11 @@ async def api_process(req: ProcessRequest, background_tasks: BackgroundTasks):
         "cancelled": False,
         "logs": ["Job added to queue..."],
         "results": [],
+        "project_id": None,
         "error": None,
     }
+    job_cancel_events[job_id] = threading.Event()
+    job_finished.discard(job_id)
 
     background_tasks.add_task(_worker_process, job_id, req)
     return {"job_id": job_id, "status": "queued"}
@@ -1591,9 +1767,11 @@ async def api_process(req: ProcessRequest, background_tasks: BackgroundTasks):
 
 @app.get("/api/status/{job_id}")
 async def api_status(job_id: str):
-    if job_id not in jobs:
+    job = jobs.get(job_id)
+    if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    return jobs[job_id]
+    # The worker thread mutates this dict continuously; copy before serializing.
+    return copy.deepcopy(job)
 
 
 @app.get("/api/download-file/{job_id}/{filename}")
@@ -1602,22 +1780,24 @@ async def api_download_file(job_id: str, filename: str):
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found")
 
+    # FileResponse already builds an RFC 5987 filename; the manual header we used to
+    # add crashed with UnicodeEncodeError for any emoji/CJK title.
     return FileResponse(
         file_path,
         filename=filename,
         media_type="application/octet-stream",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
 
 
 @app.get("/api/download-zip/{job_id}")
-async def api_download_zip(job_id: str):
+async def api_download_zip(job_id: str, background_tasks: BackgroundTasks):
     if job_id not in jobs or jobs[job_id].get("status") != "completed":
         raise HTTPException(status_code=400, detail="Job is not complete or was not found")
 
-    job_output_dir = _safe_output_job_dir(job_id)
+    _safe_output_job_dir(job_id)
     zip_filename = f"media_{job_id}.zip"
-    zip_path = _safe_join(OUTPUT_DIR, zip_filename)
+    fd, zip_path = tempfile.mkstemp(prefix=f"luna_{job_id}_", suffix=".zip")
+    os.close(fd)
 
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
         for item in jobs[job_id].get("results", []):
@@ -1630,54 +1810,60 @@ async def api_download_zip(job_id: str):
                 if os.path.exists(file_full):
                     zipf.write(file_full, arcname=fname)
 
-    return FileResponse(
-        zip_path,
-        filename=zip_filename,
-        media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{zip_filename}"'}
-    )
+    # Temporary file, removed after the response is sent instead of piling up in output/.
+    background_tasks.add_task(os.remove, zip_path)
+    return FileResponse(zip_path, filename=zip_filename, media_type="application/zip")
 
 
 @app.post("/api/cancel/{job_id}")
 async def api_cancel(job_id: str):
-    if job_id not in jobs:
+    job = jobs.get(job_id)
+    if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    jobs[job_id]["cancelled"] = True
-    jobs[job_id]["status"] = "cancelled"
-    jobs[job_id]["stage"] = "cancelled"
-    jobs[job_id]["logs"].append("Cancellation triggered by the user.")
 
-    job_output_dir = _safe_output_job_dir(job_id)
-    if os.path.exists(job_output_dir):
-        try:
-            shutil.rmtree(job_output_dir)
-        except Exception:
-            pass
+    if job.get("status") in ("completed", "failed", "cancelled"):
+        # Cancelling a finished job used to delete its output folder, so every
+        # download link for that job started returning 404.
+        return {"status": job.get("status"), "job_id": job_id, "detail": "Job already finished"}
 
+    event = job_cancel_events.setdefault(job_id, threading.Event())
+    event.set()
+    job["cancelled"] = True
+    job["status"] = "cancelled"
+    job["stage"] = "cancelled"
+    job["logs"].append("Cancellation requested; stopping the worker...")
+
+    # The worker owns the folder cleanup (it may still be writing while ffmpeg/yt-dlp
+    # are alive; deleting underneath them produced WinError 32 and orphaned partials).
     return {"status": "cancelled", "job_id": job_id}
 
 
 # Media vault routes
 @app.get("/api/vault")
 async def api_get_vault():
-    return {
-        "items": list_vault_items(),
-        "stats": get_storage_stats(),
-    }
+    # Full-tree walks are blocking; keep them off the event loop.
+    items = await asyncio.to_thread(list_vault_items)
+    stats = await asyncio.to_thread(get_storage_stats)
+    return {"items": items, "stats": stats}
 
 
 @app.get("/api/vault/projects")
 async def api_get_vault_projects():
+    projects = await asyncio.to_thread(list_vault_projects)
+    stats = await asyncio.to_thread(get_storage_stats)
+    next_index = await asyncio.to_thread(get_next_workspace_index)
     return {
-        "projects": list_vault_projects(),
-        "stats": get_storage_stats(),
-        "next_workspace_index": get_next_workspace_index(),
+        "projects": projects,
+        "stats": stats,
+        "next_workspace_index": next_index,
     }
 
 
 @app.patch("/api/vault/project/{project_id}/rename")
 async def api_rename_vault_project(project_id: str, req: RenameProjectRequest):
-    success = rename_vault_project(project_id, req.new_name)
+    if await asyncio.to_thread(workspace_name_taken, req.new_name, project_id):
+        raise HTTPException(status_code=409, detail="Another workspace already uses that name")
+    success = await asyncio.to_thread(rename_vault_project, project_id, req.new_name)
     if not success:
         raise HTTPException(status_code=404, detail="Project not found")
     return {"status": "renamed", "project_id": project_id, "new_name": req.new_name}
@@ -1685,17 +1871,21 @@ async def api_rename_vault_project(project_id: str, req: RenameProjectRequest):
 
 @app.delete("/api/vault/project/{project_id}")
 async def api_delete_vault_project(project_id: str):
-    success = delete_vault_project(project_id)
-    if not success:
+    result = await asyncio.to_thread(delete_vault_project, project_id)
+    if result == "not_found":
         raise HTTPException(status_code=404, detail="Project not found")
+    if result == "locked":
+        raise HTTPException(status_code=409, detail="Some files are open elsewhere. Close them and try again.")
     return {"status": "deleted", "project_id": project_id}
 
 
 @app.delete("/api/vault/{item_id}")
 async def api_delete_vault(item_id: str):
-    success = delete_vault_item(item_id)
-    if not success:
+    result = await asyncio.to_thread(delete_vault_item, item_id)
+    if result == "not_found":
         raise HTTPException(status_code=404, detail="Item not found in Media Vault")
+    if result == "locked":
+        raise HTTPException(status_code=409, detail="The file is open elsewhere. Close it and try again.")
     return {"status": "deleted", "item_id": item_id}
 
 
@@ -1742,8 +1932,8 @@ async def api_vault_open_folder(payload: Optional[Dict[str, Any]] = None):
         raise HTTPException(status_code=500, detail=f"Could not open folder: {e}")
 
 
-@app.post("/api/settings/browse-folder")
-async def api_browse_folder():
+def _browse_folder_dialog() -> str:
+    """Blocking native folder picker; runs in a worker thread, never on the event loop."""
     current_root = get_storage_root()
     selected_path = ""
     try:
@@ -1770,11 +1960,16 @@ async def api_browse_folder():
     except Exception as e:
         logger.warning(f"Error in browse folder dialog: {e}")
 
+    return selected_path
+
+
+@app.post("/api/settings/browse-folder")
+async def api_browse_folder():
+    selected_path = await asyncio.to_thread(_browse_folder_dialog)
     return {"status": "success" if selected_path else "cancelled", "path": selected_path}
 
 
-@app.post("/api/settings/check-system")
-async def api_check_system():
+def _system_status_sync() -> Dict[str, Any]:
     has_ffmpeg = bool(shutil.which("ffmpeg") or os.path.exists(r"C:\ffmpeg\bin\ffmpeg.exe"))
     ffmpeg_ver = "Available"
     if has_ffmpeg:
@@ -1821,6 +2016,21 @@ async def api_check_system():
     }
 
 
+@app.post("/api/settings/check-system")
+async def api_check_system():
+    return await asyncio.to_thread(_system_status_sync)
+
+
+def _mask_key(value: str) -> str:
+    """Return a display-only hint instead of the secret itself."""
+    key = (value or "").strip()
+    if not key:
+        return ""
+    if len(key) <= 8:
+        return "*" * len(key)
+    return f"{key[:3]}...{key[-4:]}"
+
+
 # Settings routes
 class SettingsUpdateRequest(BaseModel):
     llm_provider: Optional[str] = None
@@ -1832,6 +2042,27 @@ class SettingsUpdateRequest(BaseModel):
     groq_api_key: Optional[str] = None
     storage_dir: Optional[str] = None
     migrate_files: Optional[bool] = False
+
+    @field_validator("openai_api_key", "gemini_api_key", "groq_api_key")
+    @classmethod
+    def _check_secret(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if "\n" in cleaned or "\r" in cleaned:
+            raise ValueError("API keys cannot contain line breaks")
+        if len(cleaned) > 512:
+            raise ValueError("API key is too long")
+        return cleaned
+
+    @field_validator("openai_model", "storage_dir")
+    @classmethod
+    def _check_single_line(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        if "\n" in value or "\r" in value:
+            raise ValueError("This value cannot contain line breaks")
+        return value.strip()
 
 
 class OpenAIModelsRequest(BaseModel):
@@ -1861,15 +2092,24 @@ async def api_get_settings():
     ytdlp_ver = str(getattr(yt_dlp.version, "__version__", "v2025.02.19"))
     curr_storage = get_storage_root()
 
+    openai_key = os.getenv("OPENAI_API_KEY", "")
+    gemini_key = os.getenv("GEMINI_API_KEY", "")
+    groq_key = os.getenv("GROQ_API_KEY", "")
+
     return {
         "llm_provider": os.getenv("LLM_PROVIDER", "").strip().lower(),
         "transcribe_provider": transcribe_provider(),
-        "openai_api_key": os.getenv("OPENAI_API_KEY", ""),
+        # Secrets are never echoed back; only a hint plus a configured flag.
+        "openai_api_key": _mask_key(openai_key),
+        "openai_api_key_set": bool(openai_key.strip()),
+        "has_openai_api_key": bool(openai_key.strip()),
         "openai_base_url": openai_base_url(),
         "openai_model": openai_model(),
-        "gemini_api_key": os.getenv("GEMINI_API_KEY", ""),
+        "gemini_api_key": _mask_key(gemini_key),
+        "has_gemini_api_key": bool(gemini_key.strip()),
         "gemini_model": os.getenv("GEMINI_MODEL", "gemini-3.5-flash"),
-        "groq_api_key": os.getenv("GROQ_API_KEY", ""),
+        "groq_api_key": _mask_key(groq_key),
+        "has_groq_api_key": bool(groq_key.strip()),
         "groq_model": os.getenv("GROQ_WHISPER_MODEL", "whisper-large-v3-turbo"),
         "storage_dir": curr_storage,
         "status": {
@@ -1904,45 +2144,66 @@ async def api_save_settings(req: SettingsUpdateRequest):
         if not req.openai_base_url.strip().startswith(("http://", "https://")):
             raise HTTPException(status_code=400, detail="Base URL must start with http:// or https://")
     for env_key, value in (
-        ("OPENAI_API_KEY", req.openai_api_key),
         ("OPENAI_BASE_URL", req.openai_base_url),
         ("OPENAI_MODEL", req.openai_model),
     ):
         if value is not None:
             updates[env_key] = value.strip()
-    if req.gemini_api_key is not None:
-        updates["GEMINI_API_KEY"] = req.gemini_api_key.strip()
-    if req.groq_api_key is not None:
-        updates["GROQ_API_KEY"] = req.groq_api_key.strip()
+    # A blank secret means "keep the stored one", and so does re-submitting the masked
+    # hint: the UI only ever receives a mask, so echoing it back must not destroy a key.
+    for env_key, value in (
+        ("OPENAI_API_KEY", req.openai_api_key),
+        ("GEMINI_API_KEY", req.gemini_api_key),
+        ("GROQ_API_KEY", req.groq_api_key),
+    ):
+        if value and value.strip() != _mask_key(os.getenv(env_key, "")):
+            updates[env_key] = value.strip()
 
     migrated_info = None
     if req.storage_dir is not None and req.storage_dir.strip():
         norm_dir = os.path.abspath(req.storage_dir.strip())
-        if not is_writable(norm_dir):
+        if not await asyncio.to_thread(is_writable, norm_dir):
             raise HTTPException(status_code=400, detail="Storage directory is inaccessible or not writable.")
 
         old_dir = get_storage_root()
-        if req.migrate_files or os.path.abspath(old_dir) != os.path.abspath(norm_dir):
+        if req.migrate_files and os.path.abspath(old_dir) != os.path.abspath(norm_dir):
             from . import storage_manager
             try:
-                migrated_info = storage_manager.migrate_storage(old_dir, norm_dir)
+                # Copying gigabytes on the event loop froze every other request.
+                migrated_info = await asyncio.to_thread(storage_manager.migrate_storage, old_dir, norm_dir)
             except Exception as e:
                 logger.error(f"Error migrating storage: {e}")
                 raise HTTPException(status_code=500, detail=f"Could not move files: {e}")
 
         updates["MEDIA_STORAGE_DIR"] = norm_dir
         os.environ["MEDIA_STORAGE_DIR"] = norm_dir
+        invalidate_storage_root_cache()
 
     _update_env_file(updates)
     return {
         "status": "saved",
         "storage_dir": get_storage_root(),
         "migrated": migrated_info,
-        "stats": get_storage_stats(),
+        "stats": await asyncio.to_thread(get_storage_stats),
     }
 
 
+_ENV_LOCK = threading.Lock()
+
+
 def _update_env_file(updates: dict):
+    """Serialize .env read-modify-write; two Settings saves used to clobber each other."""
+    with _ENV_LOCK:
+        _update_env_file_locked(updates)
+
+
+def _update_env_file_locked(updates: dict):
+    for key, value in updates.items():
+        text = str(value)
+        if "\n" in text or "\r" in text:
+            # An embedded newline would append arbitrary KEY=value lines to .env.
+            raise ValueError(f"Value for {key} cannot contain line breaks")
+
     env_path = os.path.join(BASE_DIR, ".env")
     lines = []
     if os.path.exists(env_path):
@@ -1972,8 +2233,10 @@ def _update_env_file(updates: dict):
             new_lines.append(f"{k}={v}\n")
             os.environ[k] = str(v)
 
-    with open(env_path, "w", encoding="utf-8") as f:
+    tmp_path = f"{env_path}.tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
         f.writelines(new_lines)
+    os.replace(tmp_path, env_path)
 
 
 @app.post("/api/settings/openai-models")
@@ -2007,7 +2270,8 @@ async def api_test_key(req: TestKeyRequest):
         if not base_url.startswith(("http://", "https://")):
             return {"valid": False, "message": "Base URL must start with http(s)://"}
         try:
-            resp = requests.get(
+            resp = await asyncio.to_thread(
+                requests.get,
                 f"{base_url}/models",
                 headers={"Authorization": f"Bearer {key}"},
                 timeout=8,
@@ -2021,8 +2285,11 @@ async def api_test_key(req: TestKeyRequest):
 
     if provider == "gemini":
         try:
-            resp = requests.get(
-                f"https://generativelanguage.googleapis.com/v1beta/models?key={key}",
+            # Header auth: a key in the query string ends up in proxy/access logs.
+            resp = await asyncio.to_thread(
+                requests.get,
+                "https://generativelanguage.googleapis.com/v1beta/models",
+                headers={"x-goog-api-key": key},
                 timeout=8,
             )
             if resp.status_code == 200:
@@ -2035,7 +2302,8 @@ async def api_test_key(req: TestKeyRequest):
 
     elif provider == "groq":
         try:
-            resp = requests.get(
+            resp = await asyncio.to_thread(
+                requests.get,
                 "https://api.groq.com/openai/v1/models",
                 headers={"Authorization": f"Bearer {key}"},
                 timeout=8,
@@ -2055,12 +2323,30 @@ class CookieUploadRequest(BaseModel):
     filename: Optional[str] = "cookies.txt"
     content: str
 
+    @field_validator("content")
+    @classmethod
+    def _check_content(cls, value: str) -> str:
+        if len(value.encode("utf-8", errors="ignore")) > 5 * 1024 * 1024:
+            raise ValueError("Cookie file is too large (max 5 MB)")
+        if "\x00" in value:
+            raise ValueError("Cookie file contains binary data")
+        return value
+
 
 @app.post("/api/settings/upload-cookies")
 async def api_upload_cookies(req: CookieUploadRequest):
     cookie_path = os.path.join(BASE_DIR, "cookies.txt")
-    with open(cookie_path, "w", encoding="utf-8") as f:
+    tmp_path = f"{cookie_path}.tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
         f.write(req.content)
+    os.replace(tmp_path, cookie_path)
     size_kb = f"{len(req.content.encode('utf-8')) / 1024:.1f} KB"
     return {"status": "uploaded", "filename": req.filename or "cookies.txt", "size": size_kb}
+
+
+# Old job folders are temporary: the vault keeps its own copy of every saved file.
+try:
+    cleanup_expired_jobs(int(os.getenv("LUNA_JOB_RETENTION_DAYS", "30")))
+except Exception as _cleanup_err:  # pragma: no cover - best effort at startup
+    logger.warning(f"Could not clean old job folders: {_cleanup_err}")
 

@@ -1,9 +1,40 @@
 import os
+import sys
+import types
 import unittest
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from luna.app import app, _save_project_to_vault, create_progress_hook, jobs
 from luna.clipper.highlights import clean_caption
+
+TRANSCRIPT_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+
+
+def _fake_transcript_module(transcripts):
+    """Stand-in for youtube_transcript_api; records the video id it was asked about."""
+    module = types.ModuleType("youtube_transcript_api")
+    module.seen_video_ids = []
+
+    class YouTubeTranscriptApi:
+        def list(self, video_id):
+            module.seen_video_ids.append(video_id)
+            return list(transcripts)
+
+    module.YouTubeTranscriptApi = YouTubeTranscriptApi
+    return module
+
+
+def _failing_transcript_module():
+    """Stand-in whose transcript listing raises, as the real client does when blocked."""
+    module = types.ModuleType("youtube_transcript_api")
+
+    class YouTubeTranscriptApi:
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError("transcript service unavailable")
+
+    module.YouTubeTranscriptApi = YouTubeTranscriptApi
+    return module
 
 
 class TestTranscriptAndFactualPipeline(unittest.TestCase):
@@ -21,11 +52,39 @@ class TestTranscriptAndFactualPipeline(unittest.TestCase):
         self.assertLessEqual(len(cleaned), 90)
         self.assertTrue(cleaned.startswith("The secret to business success"))
 
-    def test_api_check_transcript_endpoint(self):
-        res = self.client.get("/api/check-transcript?url=https://www.youtube.com/watch?v=kJQP7kiw5Fk")
+    def test_api_check_transcript_reports_subtitle_availability(self):
+        available = _fake_transcript_module([{"text": "hello"}])
+        with patch.dict(sys.modules, {"youtube_transcript_api": available}):
+            res = self.client.get("/api/check-transcript", params={"url": TRANSCRIPT_URL})
         self.assertEqual(res.status_code, 200)
         data = res.json()
-        self.assertIn("has_transcript", data)
+        self.assertEqual(data["has_transcript"], True)
+        self.assertEqual(data["provider"], "YouTube Subtitle Scraper")
+        self.assertTrue(data["note"].startswith("Official YouTube transcript"))
+        self.assertEqual(available.seen_video_ids, ["dQw4w9WgXcQ"])
+
+        unavailable = _fake_transcript_module([])
+        with patch.dict(sys.modules, {"youtube_transcript_api": unavailable}):
+            res = self.client.get("/api/check-transcript", params={"url": TRANSCRIPT_URL})
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["has_transcript"], False)
+        self.assertNotEqual(data["provider"], "YouTube Subtitle Scraper")
+        self.assertTrue(data["note"].startswith("No official transcript"))
+
+    def test_api_check_transcript_stays_200_when_the_check_raises(self):
+        # Failure inside the subtitle lookup must not surface as a 5xx.
+        with patch.dict(sys.modules, {"youtube_transcript_api": _failing_transcript_module()}):
+            res = self.client.get("/api/check-transcript", params={"url": TRANSCRIPT_URL})
+        self.assertEqual(res.status_code, 200)
+        self.assertIsInstance(res.json().get("has_transcript"), bool)
+
+        # Failure of the lookup as a whole (bad extraction, network, unexpected error).
+        with patch("luna.clipper.downloader._extract_youtube_video_id", side_effect=RuntimeError("boom")):
+            res = self.client.get("/api/check-transcript", params={"url": TRANSCRIPT_URL})
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertIsInstance(data.get("has_transcript"), bool)
         self.assertIn("provider", data)
 
     def test_progress_hook_clears_eta_and_sets_ai_clip_progress(self):
@@ -46,7 +105,6 @@ class TestTranscriptAndFactualPipeline(unittest.TestCase):
 
     def test_save_project_to_vault_saves_channel_and_provider(self):
         import tempfile
-        from unittest.mock import patch
         with tempfile.TemporaryDirectory() as tmpdir:
             dummy_file = os.path.join(tmpdir, "clip_1.mp4")
             with open(dummy_file, "w") as f:

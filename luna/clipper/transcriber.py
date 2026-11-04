@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# This file is part of Luna's clip pipeline. See luna/clipper/LICENSE and
+# THIRD_PARTY_NOTICES.md for the upstream notice.
+
 """Local transcription via faster-whisper.
 
 Reads a local media file and returns the same shape the highlight generator
@@ -6,29 +10,34 @@ expects: {duration, segments[start, end, text]}.
 import json
 import os
 import re
-import subprocess
 import tempfile
 from pathlib import Path
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
+from .clipper import _run_ffmpeg
 from .config import (
-    GEMINI_MODEL,
-    LOCAL_OUTPUT_DIR,
-    LOCAL_WHISPER_DEVICE,
-    LOCAL_WHISPER_MODEL,
+    ROOT_DIR,
+    gemini_model,
+    local_output_dir,
+    local_whisper_device,
+    local_whisper_model,
+    local_whisper_vad_filter,
+    local_whisper_vad_parameters,
     require_gemini_key,
     transcribe_provider,
 )
 
+# Ignore short shared prefixes ("I", "the") when trimming repeated auto-caption lines.
+ROLLING_CAPTION_MIN_OVERLAP = 8
 
-def _transcript_cache_path(media_path: str) -> Path:
-    """Return the .srt cache path for a media file."""
-    raw_dir = str(LOCAL_OUTPUT_DIR)
-    if "=" in raw_dir or not raw_dir.strip():
-        raw_dir = "output"
-    cache_dir = Path(raw_dir)
+
+def _transcript_cache_path(media_path: str, provider: str = "", language: Optional[str] = None) -> Path:
+    """Return the .srt cache path for a media file, namespaced by provider and language."""
+    cache_dir = Path(local_output_dir())
     cache_dir.mkdir(parents=True, exist_ok=True)
-    return cache_dir / (Path(media_path).stem + ".srt")
+    provider_key = (provider or "unknown").strip() or "unknown"
+    lang_key = (language or "auto").strip() or "auto"
+    return cache_dir / f"{Path(media_path).stem}.{provider_key}.{lang_key}.srt"
 
 
 def _format_srt_timestamp(seconds: float) -> str:
@@ -43,15 +52,52 @@ def _format_srt_timestamp(seconds: float) -> str:
 
 
 def _parse_srt_timestamp(value: str) -> float:
-    match = re.fullmatch(r"(\d{2}):(\d{2}):(\d{2}),(\d{3})", value.strip())
+    """Parse SRT/VTT times: HH:MM:SS,mmm or MM:SS.mmm, with . or , as separator."""
+    match = re.fullmatch(r"(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2})[.,](\d{1,3})", value.strip())
     if not match:
         raise ValueError(f"Invalid SRT timestamp: {value!r}")
-    hours, minutes, seconds, millis = map(int, match.groups())
-    return hours * 3600 + minutes * 60 + seconds + (millis / 1000.0)
+    hours = int(match.group(1) or 0)
+    minutes, seconds = int(match.group(2)), int(match.group(3))
+    fraction = match.group(4).ljust(3, "0")
+    return hours * 3600 + minutes * 60 + seconds + int(fraction) / 1000.0
 
 
-def _write_srt_cache(media_path: str, transcript: Dict) -> Path:
-    cache_path = _transcript_cache_path(media_path)
+def _clean_caption_text(text: str) -> str:
+    """Strip subtitle markup (HTML tags, ASS override blocks) and fold lines."""
+    text = re.sub(r"\{\\[^}]*\}", "", text)
+    text = re.sub(r"<[^>]+>", "", text)
+    return " ".join(text.replace("\r", " ").replace("\n", " ").split())
+
+
+def _dedupe_rolling_captions(segments: List[Dict]) -> List[Dict]:
+    """YouTube rolling captions repeat the previous line; keep only the new tail."""
+    deduped: List[Dict] = []
+    for segment in segments:
+        text = str(segment.get("text", "")).strip()
+        if not text:
+            continue
+        if deduped:
+            previous = deduped[-1]
+            previous_text = previous["text"]
+            if text == previous_text:
+                # the line did not change, only its timing did
+                previous["end"] = max(previous["end"], segment["end"])
+                continue
+            if len(previous_text) >= ROLLING_CAPTION_MIN_OVERLAP and text.startswith(previous_text):
+                text = text[len(previous_text):].strip()
+            elif len(text) >= ROLLING_CAPTION_MIN_OVERLAP and previous_text.startswith(text):
+                # this cue only repeats what is already on screen
+                previous["end"] = max(previous["end"], segment["end"])
+                continue
+        if text:
+            deduped.append({"start": segment["start"], "end": segment["end"], "text": text})
+    return deduped
+
+
+def _write_srt_cache(
+    media_path: str, transcript: Dict, provider: str = "", language: Optional[str] = None
+) -> Path:
+    cache_path = _transcript_cache_path(media_path, provider, language)
     lines = []
     for idx, segment in enumerate(transcript.get("segments", []), start=1):
         start = _format_srt_timestamp(float(segment["start"]))
@@ -62,7 +108,16 @@ def _write_srt_cache(media_path: str, transcript: Dict) -> Path:
         lines.append(text)
         lines.append("")
 
-    cache_path.write_text("\n".join(lines), encoding="utf-8")
+    # a half-written cache would otherwise be loaded as a real transcript next run
+    fd, tmp_name = tempfile.mkstemp(prefix=f"{cache_path.name}.", suffix=".tmp", dir=str(cache_path.parent))
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+        os.replace(tmp_path, cache_path)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink()
     return cache_path
 
 
@@ -81,7 +136,10 @@ def _load_srt_cache(cache_path: Path) -> Dict:
         if not lines or "-->" not in lines[0]:
             continue
         start_raw, end_raw = [part.strip() for part in lines[0].split("-->", 1)]
-        text = "\n".join(lines[1:]).strip()
+        # auto-captions arrive with <i>/<font> tags, ASS overrides and stray arrows
+        text = _clean_caption_text("\n".join(line for line in lines[1:] if "-->" not in line))
+        if not text:
+            continue
         segments.append(
             {
                 "start": _parse_srt_timestamp(start_raw),
@@ -90,13 +148,15 @@ def _load_srt_cache(cache_path: Path) -> Dict:
             }
         )
 
+    segments = _dedupe_rolling_captions(segments)
     duration = segments[-1]["end"] if segments else 0.0
     return {"duration": duration, "segments": segments}
 
 
 def _resolve_device() -> str:
-    if LOCAL_WHISPER_DEVICE != "auto":
-        return LOCAL_WHISPER_DEVICE
+    configured = local_whisper_device()
+    if configured != "auto":
+        return configured
     try:
         import torch  # type: ignore
         if torch.cuda.is_available():
@@ -124,13 +184,14 @@ def _parse_vtt_content(content: str) -> Dict:
 
     for match in pattern.finditer(content):
         s_str, e_str, text_raw = match.groups()
-        clean_text = re.sub(r"<[^>]+>", "", text_raw).strip().replace("\r", "").replace("\n", " ")
+        clean_text = _clean_caption_text(text_raw)
         if clean_text:
             segments.append({
                 "start": to_sec(s_str),
                 "end": to_sec(e_str),
                 "text": clean_text
             })
+    segments = _dedupe_rolling_captions(segments)
     duration = segments[-1]["end"] if segments else 0.0
     return {"duration": duration, "segments": segments}
 
@@ -226,7 +287,7 @@ def _try_fetch_native_youtube_subtitles(
             sub_template = str(out_dir / f"{out_stem}.%(ext)s")
             sub_langs = [language] if language else ["id", "id-orig", "en", "en-orig"]
 
-            cookie_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "cookies.txt")
+            cookie_file = os.path.join(ROOT_DIR, "cookies.txt")
             ydl_sub_opts = {
                 "skip_download": True,
                 "writesubtitles": True,
@@ -278,25 +339,34 @@ def transcribe_local(
       3. If no native captions, falls back to Groq Whisper Large v3 Turbo (runs in ~2-4s).
       4. Fallback to faster-whisper local if Groq not configured.
     """
-    cache_path = _transcript_cache_path(media_path)
+    # the cache is scoped to the configured provider and requested language
+    cache_provider = transcribe_provider()
+    cache_path = _transcript_cache_path(media_path, cache_provider, language)
     if cache_path.exists():
         source_mtime = os.path.getmtime(media_path)
         cache_mtime = cache_path.stat().st_mtime
         if cache_mtime >= source_mtime:
             print(f"[transcribe/local] reusing cached transcript: {cache_path}", flush=True)
-            cached = _load_srt_cache(cache_path)
-            if not cached["segments"] or cached["duration"] <= 0.0:
-                print(f"[transcribe/local] cache is empty/invalid, deleting: {cache_path}", flush=True)
+            try:
+                cached = _load_srt_cache(cache_path)
+            except (OSError, ValueError) as e:
+                # corrupt timestamps or unreadable text: drop it and transcribe again
+                print(f"[transcribe/local] cached transcript is invalid ({e}), deleting: {cache_path}", flush=True)
                 cache_path.unlink(missing_ok=True)
-            else:
-                print(
-                    f"[transcribe/local] {len(cached['segments'])} cached segments, "
-                    f"{cached['duration']:.0f}s of audio",
-                    flush=True,
-                )
-                if on_status:
-                    on_status("transcript_found")
-                return cached
+                cached = None
+            if cached is not None:
+                if not cached["segments"] or cached["duration"] <= 0.0:
+                    print(f"[transcribe/local] cache is empty/invalid, deleting: {cache_path}", flush=True)
+                    cache_path.unlink(missing_ok=True)
+                else:
+                    print(
+                        f"[transcribe/local] {len(cached['segments'])} cached segments, "
+                        f"{cached['duration']:.0f}s of audio",
+                        flush=True,
+                    )
+                    if on_status:
+                        on_status("transcript_found")
+                    return cached
 
     # Step 1: Check YouTube native transcript
     if on_status:
@@ -307,7 +377,7 @@ def transcribe_local(
         native_transcript["provider"] = "YouTube Subtitle Scraper"
         if on_status:
             on_status("transcript_found")
-        _write_srt_cache(media_path, native_transcript)
+        _write_srt_cache(media_path, native_transcript, cache_provider, language)
         return native_transcript
 
     # Step 2: Native not found, fallback to Groq Whisper
@@ -329,7 +399,7 @@ def transcribe_local(
             f"Unknown LOCAL_TRANSCRIBE_PROVIDER={provider!r}. Use 'groq', 'gemini', or 'whisper'."
         )
 
-    cache_path = _write_srt_cache(media_path, transcript)
+    cache_path = _write_srt_cache(media_path, transcript, cache_provider, language)
     print(f"[transcribe/local] wrote cache: {cache_path} (provider: {transcript.get('provider')})", flush=True)
     return transcript
 
@@ -354,7 +424,7 @@ def _extract_compressed_audio(media_path: str, out_path: str) -> None:
         "-c:a", "libopus", "-b:a", "24k",
         out_path,
     ]
-    subprocess.run(cmd, check=True)
+    _run_ffmpeg(cmd)
 
 
 def _transcribe_local_groq(
@@ -370,11 +440,12 @@ def _transcribe_local_groq(
     """
     from openai import OpenAI
 
-    from .config import GROQ_BASE_URL, GROQ_WHISPER_MODEL, require_groq_key
+    from .config import groq_base_url, groq_whisper_model, require_groq_key
 
     if on_status:
         on_status("extracting_audio")
 
+    groq_model_name = groq_whisper_model()
     with tempfile.TemporaryDirectory() as tmpdir:
         audio_path = os.path.join(tmpdir, "audio.ogg")
         _extract_compressed_audio(media_path, audio_path)
@@ -393,13 +464,13 @@ def _transcribe_local_groq(
         if on_status:
             on_status("uploading")
 
-        print(f"[transcribe/local] groq model={GROQ_WHISPER_MODEL}", flush=True)
-        client = OpenAI(api_key=require_groq_key(), base_url=GROQ_BASE_URL)
+        print(f"[transcribe/local] groq model={groq_model_name}", flush=True)
+        client = OpenAI(api_key=require_groq_key(), base_url=groq_base_url())
 
         with open(audio_path, "rb") as f:
             response = client.audio.transcriptions.create(
                 file=f,
-                model=GROQ_WHISPER_MODEL,
+                model=groq_model_name,
                 language=language,
                 response_format="verbose_json",
                 timestamp_granularities=["segment"],
@@ -435,11 +506,10 @@ def _transcribe_local_whisper(media_path: str, language: Optional[str] = None) -
 
     device = _resolve_device()
     compute_type = "float16" if device == "cuda" else "int8"
-    print(f"[transcribe/local] faster-whisper model={LOCAL_WHISPER_MODEL} device={device}", flush=True)
+    whisper_model_name = local_whisper_model()
+    print(f"[transcribe/local] faster-whisper model={whisper_model_name} device={device}", flush=True)
 
-    from .config import LOCAL_WHISPER_VAD_FILTER, LOCAL_WHISPER_VAD_PARAMETERS
-
-    model = WhisperModel(LOCAL_WHISPER_MODEL, device=device, compute_type=compute_type)
+    model = WhisperModel(whisper_model_name, device=device, compute_type=compute_type)
 
     transcribe_kwargs = {
         "audio": media_path,
@@ -447,9 +517,9 @@ def _transcribe_local_whisper(media_path: str, language: Optional[str] = None) -
         "beam_size": 5,
         "condition_on_previous_text": False,
     }
-    if LOCAL_WHISPER_VAD_FILTER:
+    if local_whisper_vad_filter():
         transcribe_kwargs["vad_filter"] = True
-        transcribe_kwargs["vad_parameters"] = LOCAL_WHISPER_VAD_PARAMETERS
+        transcribe_kwargs["vad_parameters"] = local_whisper_vad_parameters()
     else:
         transcribe_kwargs["vad_filter"] = False
 
@@ -482,12 +552,68 @@ def _transcribe_local_whisper(media_path: str, language: Optional[str] = None) -
     return {"duration": duration, "segments": segments}
 
 
+GEMINI_CHUNK_SECONDS = 600  # 10 minutes: one request per chunk keeps the JSON response complete
+
+
+def _probe_media_duration(path: str) -> float:
+    """Return a media file's duration in seconds via ffprobe."""
+    out = _run_ffmpeg(
+        [
+            "ffprobe", "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            path,
+        ],
+        timeout=60,
+    ).stdout.strip()
+    return float(out)
+
+
+def _split_audio_chunks(audio_path: str, tmp_dir: str) -> List[Tuple[str, float]]:
+    """Cut audio into <=10-minute pieces, returning (path, offset_seconds) pairs.
+
+    An empty list means the audio could not be measured or split (no ffprobe,
+    unusual codec), so the caller should fall back to one whole-file request.
+    """
+    try:
+        duration = _probe_media_duration(audio_path)
+    except Exception as e:
+        print(f"[transcribe/gemini] cannot read audio duration ({e}), sending one request", flush=True)
+        return []
+    if duration <= GEMINI_CHUNK_SECONDS:
+        return [(audio_path, 0.0)]
+
+    chunks: List[Tuple[str, float]] = []
+    offset = 0.0
+    index = 0
+    while offset < duration:
+        chunk_path = os.path.join(tmp_dir, f"chunk_{index:03d}.mp3")
+        try:
+            _run_ffmpeg([
+                "ffmpeg", "-y", "-loglevel", "error",
+                "-ss", f"{offset:.3f}",
+                "-t", f"{GEMINI_CHUNK_SECONDS:.3f}",
+                "-i", audio_path,
+                "-c", "copy",
+                chunk_path,
+            ])
+        except RuntimeError as e:
+            print(f"[transcribe/gemini] chunk split failed ({e}), sending one request", flush=True)
+            return []
+        if not os.path.exists(chunk_path) or os.path.getsize(chunk_path) == 0:
+            return []
+        chunks.append((chunk_path, offset))
+        offset += GEMINI_CHUNK_SECONDS
+        index += 1
+    return chunks
+
+
 def _transcribe_local_gemini(
     media_path: str,
     language: Optional[str] = None,
     on_status: Optional[Callable[[str], None]] = None,
 ) -> Dict:
-    """Transcribe audio using Gemini Multimodal Audio API."""
+    """Transcribe audio using Gemini Multimodal Audio API, one <=10 min chunk per request."""
     try:
         from google import genai
         from google.genai import types
@@ -512,31 +638,13 @@ def _transcribe_local_gemini(
             "-c:a", "libmp3lame", "-b:a", "64k",
             audio_path,
         ]
-        subprocess.run(cmd, check=True)
+        _run_ffmpeg(cmd)
 
         audio_size = os.path.getsize(audio_path)
         print(f"[transcribe/gemini] extracted audio: {audio_size / 1024 / 1024:.1f} MB", flush=True)
 
-        if on_status:
-            on_status("uploading")
-
-        client = genai.Client(api_key=require_gemini_key())
-        print("[transcribe/gemini] uploading audio to Gemini Files API...", flush=True)
-        uploaded_file = client.files.upload(file=audio_path)
-
-        # Wait for file to become ACTIVE if still processing
-        import time
-        for _ in range(30):
-            if not uploaded_file.state or uploaded_file.state.name == "ACTIVE":
-                break
-            if uploaded_file.state.name == "FAILED":
-                raise RuntimeError("Gemini audio file processing failed on server.")
-            print("[transcribe/gemini] waiting for audio file to be ready...", flush=True)
-            time.sleep(2)
-            uploaded_file = client.files.get(name=uploaded_file.name)
-
-        if on_status:
-            on_status("transcribing_gemini")
+        chunks = _split_audio_chunks(audio_path, tmpdir) or [(audio_path, 0.0)]
+        print(f"[transcribe/gemini] transcribing {len(chunks)} audio chunk(s)", flush=True)
 
         lang_instruction = f" The audio language is {language}." if language else ""
         prompt = f"""Transcribe this audio file verbatim with accurate timestamps for each sentence or dialogue segment.{lang_instruction}
@@ -560,39 +668,94 @@ Rules:
 - Output pure JSON only.
 """
 
-        print(f"[transcribe/gemini] generating transcription with model={GEMINI_MODEL} (this may take 15-45s)...", flush=True)
+        client = genai.Client(api_key=require_gemini_key())
+        model_name = gemini_model()
+        segments: List[Dict] = []
+        total_duration = 0.0
+        uploaded_names: List[str] = []
         try:
-            response = client.models.generate_content(
-                model=GEMINI_MODEL or "gemini-3.5-flash",
-                contents=[uploaded_file, prompt],
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    temperature=0.1,
-                    max_output_tokens=8192,
-                ),
-            )
-            raw_text = response.text or "{}"
-            clean_json = re.sub(r"^```(?:json)?\s*", "", raw_text.strip(), flags=re.MULTILINE)
-            clean_json = re.sub(r"\s*```$", "", clean_json.strip(), flags=re.MULTILINE)
-            data = json.loads(clean_json)
+            for chunk_index, (chunk_path, offset) in enumerate(chunks, 1):
+                if on_status:
+                    on_status("uploading")
+                print(
+                    f"[transcribe/gemini] uploading chunk {chunk_index}/{len(chunks)} to Gemini Files API...",
+                    flush=True,
+                )
+                uploaded_file = client.files.upload(file=chunk_path)
+                uploaded_names.append(uploaded_file.name)
+
+                # Wait for file to become ACTIVE if still processing
+                import time
+                for _ in range(30):
+                    if not uploaded_file.state or uploaded_file.state.name == "ACTIVE":
+                        break
+                    if uploaded_file.state.name == "FAILED":
+                        raise RuntimeError("Gemini audio file processing failed on server.")
+                    print("[transcribe/gemini] waiting for audio file to be ready...", flush=True)
+                    time.sleep(2)
+                    uploaded_file = client.files.get(name=uploaded_file.name)
+
+                if on_status:
+                    on_status("transcribing_gemini")
+
+                print(
+                    f"[transcribe/gemini] generating transcription for chunk "
+                    f"{chunk_index}/{len(chunks)} with model={model_name} (this may take 15-45s)...",
+                    flush=True,
+                )
+                try:
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=[uploaded_file, prompt],
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            temperature=0.1,
+                            max_output_tokens=8192,
+                        ),
+                    )
+                    raw_text = response.text or "{}"
+                    clean_json = re.sub(r"^```(?:json)?\s*", "", raw_text.strip(), flags=re.MULTILINE)
+                    clean_json = re.sub(r"\s*```$", "", clean_json.strip(), flags=re.MULTILINE)
+                    data = json.loads(clean_json)
+                except json.JSONDecodeError as e:
+                    if len(chunks) > 1:
+                        raise RuntimeError(
+                            f"Gemini returned invalid JSON for audio chunk {chunk_index}/{len(chunks)}: {e}"
+                        ) from e
+                    raise RuntimeError(
+                        "Gemini returned invalid JSON for the audio and it could not be retried in "
+                        "smaller chunks (is ffprobe installed?). "
+                        "Set LOCAL_TRANSCRIBE_PROVIDER=groq or whisper to use another provider."
+                    ) from e
+
+                chunk_last_end = 0.0
+                for s in data.get("segments", []):
+                    try:
+                        start = float(s.get("start", 0.0)) + offset
+                        end = float(s.get("end", 0.0)) + offset
+                        text = str(s.get("text", "")).strip()
+                    except (ValueError, TypeError):
+                        continue
+                    if text and end > start:
+                        segments.append({"start": start, "end": end, "text": text})
+                        chunk_last_end = max(chunk_last_end, end - offset)
+
+                chunk_duration = float(data.get("duration", 0.0) or 0.0)
+                total_duration = max(total_duration, offset + max(chunk_duration, chunk_last_end))
+                print(
+                    f"[transcribe/gemini] chunk {chunk_index}/{len(chunks)} done, "
+                    f"{len(segments)} segments so far",
+                    flush=True,
+                )
         finally:
-            try:
-                client.files.delete(name=uploaded_file.name)
-            except Exception as e:
-                print(f"[transcribe/gemini] warning deleting remote file: {e}", flush=True)
+            for file_name in uploaded_names:
+                try:
+                    client.files.delete(name=file_name)
+                except Exception as e:
+                    print(f"[transcribe/gemini] warning deleting remote file: {e}", flush=True)
 
-    segments = []
-    for s in data.get("segments", []):
-        try:
-            start = float(s.get("start", 0.0))
-            end = float(s.get("end", 0.0))
-            text = str(s.get("text", "")).strip()
-            if text and end > start:
-                segments.append({"start": start, "end": end, "text": text})
-        except (ValueError, TypeError):
-            continue
-
-    duration = float(data.get("duration", 0.0))
+    segments.sort(key=lambda segment: float(segment["start"]))
+    duration = total_duration
     if duration <= 0.0 and segments:
         duration = segments[-1]["end"]
 

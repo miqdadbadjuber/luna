@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# This file is part of Luna's clip pipeline. See luna/clipper/LICENSE and
+# THIRD_PARTY_NOTICES.md for the upstream notice.
+
 """Local clipping: ultra-fast single-pass ffmpeg subclip + crop in parallel.
 
 Optimizations:
@@ -15,11 +19,29 @@ import subprocess
 import tempfile
 from typing import Callable, Dict, List, Optional, Tuple
 
-from .config import LOCAL_OUTPUT_DIR
-from .subtitles import overlay_args, render_cues, segments_for_clip
+from .config import local_output_dir
+from .subtitles import MAX_INLINE_OVERLAY_SCREENS, overlay_args, overlay_args_script, render_cues, segments_for_clip
 
 # Sample face position once per second (approx 30 frames) for tracking
 FACE_DETECT_SAMPLE_EVERY = 30
+
+# Ceiling for a single encode/probe. Shorts are a few minutes long, so a pass
+# that runs longer is stuck rather than slow and the job must fail visibly.
+FFMPEG_TIMEOUT_SECONDS = 3600
+
+
+def _run_ffmpeg(cmd: List[str], timeout: Optional[float] = None) -> subprocess.CompletedProcess:
+    """Run ffmpeg/ffprobe with a timeout and surface stderr when it fails."""
+    try:
+        return subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout or FFMPEG_TIMEOUT_SECONDS,
+            check=True,
+        )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"ffmpeg failed: {(e.stderr or '')[-2000:]}") from e
 
 
 def _ratio(aspect_ratio: str) -> float:
@@ -40,7 +62,7 @@ def _probe_dims(path: str) -> Tuple[int, int, float]:
         "-of", "csv=p=0",
         path,
     ]
-    out = subprocess.run(cmd, capture_output=True, text=True, check=True).stdout.strip()
+    out = _run_ffmpeg(cmd, timeout=60).stdout.strip()
     w_str, h_str, fps_str = out.split(",")
     width, height = int(w_str), int(h_str)
     if "/" in fps_str:
@@ -65,18 +87,73 @@ def _crop_box(src_w: int, src_h: int, aspect_ratio: str) -> Tuple[int, int]:
     return crop_w, crop_h
 
 
+def _escape_filter_path(path: str) -> str:
+    """Escape a filesystem path so it can sit inside an ffmpeg filtergraph value.
+
+    ffmpeg's filter parser treats backslash, colon, quote, comma, brackets and
+    semicolon as syntax, so a raw Windows path like C:\\temp\\x.txt tears the
+    graph apart. Normalise separators to forward slashes, backslash-escape the
+    rest, then wrap the whole value in single quotes.
+    """
+    escaped = str(path).replace("\\", "/")
+    for char in ("\\", ":", "'", ",", "[", "]", ";"):
+        escaped = escaped.replace(char, "\\" + char)
+    return f"'{escaped}'"
+
+
+def _apply_thread_budget(enc_flags: List[str], threads: int) -> List[str]:
+    """Replace the encoder's thread count with one worker's share of the CPU budget."""
+    flags = list(enc_flags)
+    if "-threads" not in flags:
+        # hardware encoders size their own pools, so leave those flags untouched
+        return flags
+    flags[flags.index("-threads") + 1] = str(max(1, threads))
+    return flags
+
+
 def _sample_face_centers(
     in_path: str, src_w: int, src_h: int, crop_w: int, crop_h: int, start_time: float, end_time: float, fps: float
 ) -> List[Tuple[int, int]]:
     """Fast face sampling on downscaled frames with linear interpolation."""
-    import cv2  # type: ignore
+    # same fallback the tracker already uses when the file cannot be opened:
+    # a missing cv2 or Haar cascade must not abort the clip, the static center
+    # crop still runs. The caller expects crop ORIGINS, not centres, so convert here.
+    static_center = (src_w // 2, src_h // 2)
+    static_origin = (
+        max(0, (src_w - crop_w) // 2),
+        max(0, (src_h - crop_h) // 2),
+    )
+    try:
+        import cv2  # type: ignore
+    except Exception as e:
+        print(f"[clip/local] face detect unavailable ({e}), using static center crop", flush=True)
+        return [static_origin]
 
     cap = cv2.VideoCapture(in_path)
     if not cap.isOpened():
-        return [(max(0, (src_w - crop_w) // 2), max(0, (src_h - crop_h) // 2))]
+        return [static_origin]
 
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    try:
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+        if face_cascade.empty():
+            print("[clip/local] Haar cascade missing, using static center crop", flush=True)
+            cap.release()
+            return [static_origin]
+    except Exception as e:
+        print(f"[clip/local] Haar cascade unavailable ({e}), using static center crop", flush=True)
+        cap.release()
+        return [static_origin]
+
     cap.set(cv2.CAP_PROP_POS_MSEC, max(0.0, start_time * 1000.0))
+    # the seek lands on the nearest keyframe before start_time, so drop frames
+    # until the read head reaches the clip start; capped at ~10s of frames so a
+    # backend that never reports POS_MSEC cannot stall the whole encode
+    target_ms = max(0.0, start_time * 1000.0)
+    for _ in range(300):
+        if cap.get(cv2.CAP_PROP_POS_MSEC) >= target_ms:
+            break
+        if not cap.grab():
+            break
 
     total_frames = int(max(1.0, (end_time - start_time) * (fps or 30.0)))
     sample_idxs: List[int] = []
@@ -182,20 +259,35 @@ def _encode(
     cues: Optional[List[Dict]],
     frame_w: int,
     frame_h: int,
+    worker_threads: Optional[int] = None,
 ) -> None:
     cmd = [
         "ffmpeg", "-y", "-loglevel", "error",
         "-ss", f"{start_time:.3f}",
-        "-to", f"{end_time:.3f}",
+        # -t is the clip length, which is unambiguous; -to depends on whether
+        # ffmpeg reads it as an input or output timestamp
+        "-t", f"{max(0.1, end_time - start_time):.3f}",
         "-i", source_path,
     ]
-    tail = [*enc_flags, "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", out_path]
+    if worker_threads:
+        enc_flags = _apply_thread_budget(enc_flags, worker_threads)
+    tail = [
+        *enc_flags, "-c:a", "aac", "-b:a", "128k",
+        "-pix_fmt", "yuv420p",  # 10-bit/HDR sources otherwise produce unplayable clips
+        "-movflags", "+faststart", out_path,
+    ]
     if not cues:
-        subprocess.run([*cmd, *(["-vf", vf] if vf else []), *tail], check=True)
+        _run_ffmpeg([*cmd, *(["-vf", vf] if vf else []), *tail])
         return
     with tempfile.TemporaryDirectory() as tmp:
         rendered = render_cues(cues, frame_w, frame_h, tmp)
-        subprocess.run([*cmd, *overlay_args(rendered, vf), *tail], check=True)
+        if len(rendered) > MAX_INLINE_OVERLAY_SCREENS:
+            # one -i per cue plus the inline graph overruns the Windows command
+            # line; the graph goes in a script file that TemporaryDirectory clears
+            script_path = os.path.join(tmp, "filtergraph.txt")
+            _run_ffmpeg([*cmd, *overlay_args_script(rendered, vf, script_path), *tail])
+        else:
+            _run_ffmpeg([*cmd, *overlay_args(rendered, vf), *tail])
 
 
 def crop_clip_local(
@@ -207,6 +299,7 @@ def crop_clip_local(
     use_face_detect: bool = False,
     src_dims: Optional[Tuple[int, int, float]] = None,
     cues: Optional[List[Dict]] = None,
+    worker_threads: Optional[int] = None,
 ) -> str:
     """Cut + reframe one highlight in a single fast ffmpeg pass with hardware acceleration."""
     if src_dims is None:
@@ -220,7 +313,7 @@ def crop_clip_local(
 
     if aspect_ratio == "16:9":
         # Native aspect ratio: subclip directly
-        _encode(source_path, start_time, padded_end, "", enc_flags, out_path, cues, src_w, src_h)
+        _encode(source_path, start_time, padded_end, "", enc_flags, out_path, cues, src_w, src_h, worker_threads=worker_threads)
         return out_path
 
     if use_face_detect:
@@ -232,18 +325,31 @@ def crop_clip_local(
                 f.write(f"{t:.5f} crop@c x {x0}, crop@c y {y0};\n")
 
         crop_filter = f"crop@c={crop_w}:{crop_h}:{centers[0][0]}:{centers[0][1]}"
-        vf = f"{crop_filter},sendcmd=f={sendcmd_path}"
-        try:
-            _encode(source_path, start_time, padded_end, vf, enc_flags, out_path, cues, crop_w, crop_h)
-        finally:
+        escaped_path = _escape_filter_path(sendcmd_path)
+        if "\n" in escaped_path or "\r" in escaped_path:
+            # a path we cannot express inside a filtergraph must not kill the clip
+            print("[clip/local] sendcmd path is not filter-safe, using static center crop", flush=True)
             if os.path.exists(sendcmd_path):
                 os.remove(sendcmd_path)
-        return out_path
+        else:
+            vf = f"{crop_filter},sendcmd=f={escaped_path}"
+            try:
+                _encode(
+                    source_path, start_time, padded_end, vf, enc_flags, out_path, cues, crop_w, crop_h,
+                    worker_threads=worker_threads,
+                )
+            finally:
+                if os.path.exists(sendcmd_path):
+                    os.remove(sendcmd_path)
+            return out_path
 
     # Static center crop (9:16, 1:1, 3:4, etc.) in a single fast pass
     x0 = max(0, (src_w - crop_w) // 2)
     y0 = max(0, (src_h - crop_h) // 2)
-    _encode(source_path, start_time, padded_end, f"crop={crop_w}:{crop_h}:{x0}:{y0}", enc_flags, out_path, cues, crop_w, crop_h)
+    _encode(
+        source_path, start_time, padded_end, f"crop={crop_w}:{crop_h}:{x0}:{y0}", enc_flags, out_path, cues,
+        crop_w, crop_h, worker_threads=worker_threads,
+    )
     return out_path
 
 
@@ -256,7 +362,7 @@ def crop_highlights_local(
     on_progress: Optional[Callable[[int, int], None]] = None,
     transcript_segments: Optional[List[Dict]] = None,
 ) -> List[Dict]:
-    out_dir = out_dir or LOCAL_OUTPUT_DIR
+    out_dir = out_dir or local_output_dir()
     if "=" in str(out_dir) or not str(out_dir).strip():
         out_dir = "output"
     os.makedirs(out_dir, exist_ok=True)
@@ -269,6 +375,11 @@ def crop_highlights_local(
     )
 
     results: List[Dict] = [{} for _ in highlights]
+    # Render up to 3 clips simultaneously, each with its share of the CPU budget
+    max_workers = min(3, max(1, (os.cpu_count() or 4) - 1))
+    # a single worker keeps libx264's own -threads 0 detection, otherwise it
+    # would oversubscribe the CPU across parallel ffmpeg processes
+    worker_threads = max(1, (os.cpu_count() or 4) // max_workers) if max_workers > 1 else 0
 
     def _process_one(idx: int, h: Dict) -> Dict:
         out_path = os.path.join(out_dir, f"short_{idx:02d}.mp4")
@@ -289,6 +400,7 @@ def crop_highlights_local(
                 cues=segments_for_clip(
                     transcript_segments or [], float(h["start_time"]), float(h["end_time"]) + 0.25
                 ),
+                worker_threads=worker_threads,
             )
             print(f"[clip/local] finished clip {idx}/{len(highlights)} -> {out_path}", flush=True)
             return {**h, "clip_url": out_path}
@@ -297,7 +409,6 @@ def crop_highlights_local(
             return {**h, "clip_url": None, "error": str(e)}
 
     # Render up to 3 clips simultaneously in parallel
-    max_workers = min(3, max(1, (os.cpu_count() or 4) - 1))
     completed_count = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(_process_one, i, h): i - 1 for i, h in enumerate(highlights, 1)}

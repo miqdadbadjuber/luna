@@ -1,3 +1,8 @@
+# Copyright (C) 2026 Miqdad
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# This file is part of Luna. See LICENSE and NOTICE at the repository root.
+
 import hashlib
 import json
 import os
@@ -13,21 +18,52 @@ from . import storage_manager
 INDEX_FILE_NAME = "meta.json"
 
 
-def _is_inside_storage(path: str, root: str) -> bool:
+def _atomic_write_json(path: str, data: Any) -> None:
+    """Write JSON through a temp file in the same directory, then replace atomically.
+
+    A crash or a full disk can no longer leave a truncated meta.json behind, which
+    used to be read back as "empty" and then overwritten with a single record.
+    """
+    tmp_path = f"{path}.tmp"
     try:
-        return os.path.commonpath([
-            os.path.realpath(os.path.abspath(root)),
-            os.path.realpath(os.path.abspath(path)),
-        ]) == os.path.realpath(os.path.abspath(root))
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, path)
+    finally:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+
+
+
+def _is_inside_storage(path: str, root: str) -> bool:
+    """True only for an entry strictly inside the storage root (not the root itself)."""
+    try:
+        root_real = os.path.realpath(os.path.abspath(root))
+        path_real = os.path.realpath(os.path.abspath(path))
+        if path_real == root_real:
+            return False
+        return os.path.commonpath([root_real, path_real]) == root_real
     except (TypeError, ValueError):
         return False
 
 
 def _generate_folder_project_id(folder_path: str) -> str:
-    """Generate deterministic project ID for legacy folders."""
-    if "2026-09-07_Rahasia-Sukses-Miliarder-Podcast" in folder_path:
-        return "proj_leg_995082"
-    norm = os.path.normpath(os.path.abspath(folder_path)).lower()
+    """Generate a deterministic project ID for legacy folders.
+
+    Keyed on the path relative to the storage root, so moving the vault to another
+    disk keeps the IDs stable (an absolute-path hash changed on every migration).
+    """
+    root = storage_manager.get_storage_root()
+    try:
+        rel = os.path.relpath(os.path.abspath(folder_path), os.path.abspath(root))
+    except ValueError:
+        rel = os.path.abspath(folder_path)
+    norm = rel.replace("\\", "/").lower()
     return f"proj_leg_{hashlib.md5(norm.encode('utf-8')).hexdigest()[:8]}"
 
 
@@ -82,73 +118,67 @@ def save_project_metadata(target_dir: str, project_data: Dict[str, Any]) -> Dict
     if not updated:
         current_entries.append(project_data)
 
-    with open(meta_path, "w", encoding="utf-8") as f:
-        json.dump(current_entries, f, indent=2, ensure_ascii=False)
+    _atomic_write_json(meta_path, current_entries)
 
     return project_data
 
 
 def list_vault_projects() -> List[Dict[str, Any]]:
-    """
-    Scan storage root for all projects.
-    Returns list of project dicts sorted by created_at descending.
-    Legacy flat records are automatically grouped into virtual projects.
+    """Scan storage root for all projects, sorted by created_at descending.
+
+    Read-only by contract: it never writes meta.json. Legacy flat records are grouped
+    into a virtual project in memory and flagged with ``virtual: true`` so the UI can
+    hide destructive actions (deleting the syntetic category project would delete
+    every loose file in that category).
     """
     root = storage_manager.get_storage_root()
+    root_abs = os.path.abspath(root)
+    category_roots = {os.path.abspath(p) for p in storage_manager.category_root_paths().values()}
     projects: List[Dict[str, Any]] = []
 
     if not os.path.exists(root):
         return projects
 
     for current_dir, _, files in os.walk(root):
-        if INDEX_FILE_NAME in files:
-            meta_path = os.path.join(current_dir, INDEX_FILE_NAME)
-            try:
-                with open(meta_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-            except Exception:
-                continue
+        if INDEX_FILE_NAME not in files:
+            continue
+        meta_path = os.path.join(current_dir, INDEX_FILE_NAME)
+        try:
+            with open(meta_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            continue
 
-            entries = []
-            if isinstance(data, list):
-                entries = [e for e in data if isinstance(e, dict)]
-            elif isinstance(data, dict):
-                entries = [data]
+        entries: List[Dict[str, Any]] = []
+        if isinstance(data, list):
+            entries = [e for e in data if isinstance(e, dict)]
+        elif isinstance(data, dict):
+            entries = [data]
 
-            legacy_files = []
-            for entry in entries:
-                if entry.get("project_id"):
-                    projects.append(entry)
-                else:
-                    if entry.get("filename") or entry.get("file_path"):
-                        legacy_files.append(entry)
+        legacy_files: List[Dict[str, Any]] = []
+        for entry in entries:
+            if entry.get("project_id"):
+                projects.append(entry)
+            elif entry.get("filename") or entry.get("file_path"):
+                legacy_files.append(entry)
 
-            if legacy_files:
-                # Synthesize project for legacy files in this directory
-                dir_name = os.path.basename(current_dir)
-                first = legacy_files[0]
-                proj_id = _generate_folder_project_id(current_dir)
-                proj_dict = {
-                    "project_id": proj_id,
-                    "workspace_name": dir_name if dir_name not in storage_manager.CATEGORY_MAP.values() else f"{dir_name} Archive",
-                    "platform": first.get("platform", "youtube"),
-                    "action": first.get("action", "type_yt_video"),
-                    "source_title": first.get("title", dir_name),
-                    "created_at": _extract_saved_at(first),
-                    "folder_path": current_dir,
-                    "files": legacy_files,
-                }
-                # If this is a dedicated subfolder (not root, and not category root), persist to meta.json
-                is_category_root = any(os.path.abspath(current_dir) == os.path.abspath(storage_manager.get_category_folder(k)) for k in storage_manager.CATEGORY_MAP)
-                if not is_category_root and os.path.abspath(current_dir) != os.path.abspath(root):
-                    try:
-                        with open(meta_path, "w", encoding="utf-8") as f:
-                            json.dump([proj_dict], f, indent=2, ensure_ascii=False)
-                    except Exception:
-                        pass
-                projects.append(proj_dict)
+        if legacy_files:
+            dir_name = os.path.basename(current_dir)
+            first = legacy_files[0]
+            is_category_root = os.path.abspath(current_dir) in category_roots
+            projects.append({
+                "project_id": _generate_folder_project_id(current_dir),
+                "workspace_name": f"{dir_name} Archive" if is_category_root else dir_name,
+                "platform": first.get("platform", "youtube"),
+                "action": first.get("action", "type_yt_video"),
+                "source_title": first.get("title", dir_name),
+                "created_at": _extract_saved_at(first),
+                "folder_path": current_dir,
+                "files": legacy_files,
+                "virtual": True,
+            })
 
-    projects.sort(key=lambda p: p.get("created_at", 0.0), reverse=True)
+    projects.sort(key=_extract_saved_at, reverse=True)
     return projects
 
 
@@ -182,8 +212,7 @@ def rename_vault_project(project_id: str, new_name: str) -> bool:
 
             if modified:
                 try:
-                    with open(meta_path, "w", encoding="utf-8") as f:
-                        json.dump(entries, f, indent=2, ensure_ascii=False)
+                    _atomic_write_json(meta_path, entries)
                     return True
                 except Exception:
                     pass
@@ -199,13 +228,7 @@ def rename_vault_project(project_id: str, new_name: str) -> bool:
                 continue
 
             entries = data if isinstance(data, list) else [data]
-            matches_legacy = (
-                project_id == _generate_folder_project_id(current_dir)
-                or (project_id == "proj_leg_995082" and "2026-09-07_Rahasia-Sukses-Miliarder-Podcast" in current_dir)
-                or project_id == f"proj_leg_{abs(hash(current_dir)) % 1000000:06d}"
-                or project_id == os.path.basename(current_dir)
-                or (project_id.startswith("proj_leg_") and os.path.basename(current_dir) in project_id)
-            )
+            matches_legacy = project_id == _generate_folder_project_id(current_dir)
 
             if matches_legacy:
                 updated = False
@@ -233,8 +256,7 @@ def rename_vault_project(project_id: str, new_name: str) -> bool:
                     entries = [proj_record]
 
                 try:
-                    with open(meta_path, "w", encoding="utf-8") as f:
-                        json.dump(entries, f, indent=2, ensure_ascii=False)
+                    _atomic_write_json(meta_path, entries)
                     return True
                 except Exception:
                     pass
@@ -262,90 +284,95 @@ def _safe_remove_path(filepath: str, max_retries: int = 3, delay: float = 0.15) 
     return not os.path.exists(filepath)
 
 
-def delete_vault_project(project_id: str) -> bool:
-    """
-    Delete project by ID, remove its files, and clean up directory.
-    Supports both structured project records and legacy folder projects.
+def delete_vault_project(project_id: str) -> str:
+    """Delete a project by ID and clean up its folder.
+
+    Returns "deleted", "locked" (a file is still open elsewhere) or "not_found".
+    Category roots are never treated as projects: deleting one used to wipe every
+    loose file in that category.
     """
     root = storage_manager.get_storage_root()
     if not os.path.exists(root):
-        return False
+        return "not_found"
+    category_roots = {os.path.abspath(p) for p in storage_manager.category_root_paths().values()}
 
     for current_dir, _, files in os.walk(root):
-        if INDEX_FILE_NAME in files:
-            meta_path = os.path.join(current_dir, INDEX_FILE_NAME)
-            try:
-                with open(meta_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-            except Exception:
-                continue
+        if INDEX_FILE_NAME not in files:
+            continue
+        meta_path = os.path.join(current_dir, INDEX_FILE_NAME)
+        try:
+            with open(meta_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            continue
 
-            entries = data if isinstance(data, list) else [data]
-            target_proj = None
+        entries = data if isinstance(data, list) else [data]
+        target_proj = None
+        remaining_entries = []
+
+        for entry in entries:
+            if isinstance(entry, dict) and entry.get("project_id") == project_id:
+                target_proj = entry
+            else:
+                remaining_entries.append(entry)
+
+        # Legacy folder project (no project_id stored on disk).
+        if target_proj is None and project_id == _generate_folder_project_id(current_dir):
+            target_proj = {
+                "project_id": project_id,
+                "workspace_name": os.path.basename(current_dir),
+                "folder_path": current_dir,
+                "files": [e for e in entries if isinstance(e, dict)],
+            }
             remaining_entries = []
 
-            for entry in entries:
-                if isinstance(entry, dict) and entry.get("project_id") == project_id:
-                    target_proj = entry
-                else:
-                    remaining_entries.append(entry)
+        if target_proj is None:
+            continue
 
-            # Fallback for legacy virtual project IDs
-            if target_proj is None:
-                matches_legacy = (
-                    project_id == _generate_folder_project_id(current_dir)
-                    or (project_id == "proj_leg_995082" and "2026-09-07_Rahasia-Sukses-Miliarder-Podcast" in current_dir)
-                    or project_id == f"proj_leg_{abs(hash(current_dir)) % 1000000:06d}"
-                    or project_id == os.path.basename(current_dir)
-                )
-                if matches_legacy:
-                    dir_name = os.path.basename(current_dir)
-                    target_proj = {
-                        "project_id": project_id,
-                        "workspace_name": dir_name,
-                        "folder_path": current_dir,
-                        "files": [e for e in entries if isinstance(e, dict)],
-                    }
-                    remaining_entries = []
+        if os.path.abspath(current_dir) in category_roots:
+            return "not_found"
 
-            if target_proj is not None:
-                # Delete files
-                for f in target_proj.get("files", []):
-                    if not isinstance(f, dict):
-                        continue
-                    fp = f.get("file_path")
-                    if fp and _is_inside_storage(fp, root) and os.path.exists(fp):
-                        _safe_remove_path(fp)
+        locked = False
+        for f in target_proj.get("files", []):
+            if not isinstance(f, dict):
+                continue
+            fp = f.get("file_path")
+            if not fp or not _is_inside_storage(fp, root):
+                continue
+            # Only ever unlink regular files; a metadata path must not rmtree a tree.
+            if os.path.isfile(fp) and not _safe_remove_path(fp):
+                locked = True
 
-                # If folder_path is a dedicated subfolder (not root or category root), delete it
-                proj_folder = target_proj.get("folder_path")
-                if (
-                    proj_folder
-                    and _is_inside_storage(proj_folder, root)
-                    and os.path.realpath(proj_folder) == os.path.realpath(current_dir)
-                    and os.path.exists(proj_folder)
-                    and os.path.abspath(proj_folder) != os.path.abspath(root)
-                ):
-                    is_category_root = any(os.path.abspath(proj_folder) == os.path.abspath(storage_manager.get_category_folder(k)) for k in storage_manager.CATEGORY_MAP)
-                    if not is_category_root:
-                        if _safe_remove_path(proj_folder):
-                            return True
+        if locked:
+            return "locked"
 
-                # Update meta.json if folder wasn't deleted
-                if remaining_entries:
-                    try:
-                        with open(meta_path, "w", encoding="utf-8") as f:
-                            json.dump(remaining_entries, f, indent=2, ensure_ascii=False)
-                    except Exception:
-                        pass
-                else:
-                    if os.path.exists(meta_path):
-                        try:
-                            os.remove(meta_path)
-                        except Exception:
-                            pass
-                return True
-    return False
+        proj_folder = target_proj.get("folder_path")
+        if (
+            proj_folder
+            and _is_inside_storage(proj_folder, root)
+            and os.path.abspath(proj_folder) == os.path.abspath(current_dir)
+            and os.path.abspath(proj_folder) not in category_roots
+            and not remaining_entries
+        ):
+            # Nothing else is recorded in this folder, so it belongs to the project.
+            if not _safe_remove_path(proj_folder):
+                return "locked"
+            return "deleted"
+
+        if remaining_entries:
+            try:
+                _atomic_write_json(meta_path, remaining_entries)
+            except Exception:
+                return "locked"
+        else:
+            try:
+                if os.path.exists(meta_path):
+                    os.remove(meta_path)
+            except Exception:
+                return "locked"
+        return "deleted"
+
+    return "not_found"
 
 
 def get_next_workspace_index() -> int:
@@ -363,7 +390,20 @@ def get_next_workspace_index() -> int:
                     max_idx = idx
             except ValueError:
                 pass
-    return max(max_idx + 1, len(projects) + 1, 1)
+    return max(max_idx + 1, 1)
+
+
+def workspace_name_taken(name: str, exclude_project_id: Optional[str] = None) -> bool:
+    """True when another project already uses this workspace name (case-insensitive)."""
+    wanted = (name or "").strip().lower()
+    if not wanted:
+        return False
+    for proj in list_vault_projects():
+        if exclude_project_id and proj.get("project_id") == exclude_project_id:
+            continue
+        if (proj.get("workspace_name") or "").strip().lower() == wanted:
+            return True
+    return False
 
 
 def save_media_metadata(target_dir: str, item_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -411,8 +451,7 @@ def save_media_metadata(target_dir: str, item_data: Dict[str, Any]) -> Dict[str,
     if not updated:
         current_items.append(item_data)
 
-    with open(meta_path, "w", encoding="utf-8") as f:
-        json.dump(current_items, f, indent=2, ensure_ascii=False)
+    _atomic_write_json(meta_path, current_items)
 
     return item_data
 
@@ -453,95 +492,94 @@ def list_vault_items() -> List[Dict[str, Any]]:
     return items
 
 
-def delete_vault_item(item_id: str) -> bool:
-    """
-    Locate item by id across all meta.json.
-    Deletes physical file at item["file_path"] if exists.
-    Removes item from meta.json (or deletes meta.json if last item).
-    Removes empty directory if left empty.
-    Returns True if found and deleted, False otherwise.
+def delete_vault_item(item_id: str) -> str:
+    """Delete one media item by id.
+
+    Returns "deleted", "locked" (file still open elsewhere) or "not_found".
+    The metadata entry is only removed once the file is really gone, so a failed
+    delete no longer leaves an untracked orphan on disk.
     """
     root = storage_manager.get_storage_root()
     if not os.path.exists(root):
-        return False
+        return "not_found"
 
     for current_dir, _, files in os.walk(root):
-        if INDEX_FILE_NAME in files:
-            meta_path = os.path.join(current_dir, INDEX_FILE_NAME)
-            try:
-                with open(meta_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-            except Exception:
-                continue
+        if INDEX_FILE_NAME not in files:
+            continue
+        meta_path = os.path.join(current_dir, INDEX_FILE_NAME)
+        try:
+            with open(meta_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            continue
 
-            item_found = False
-            item_to_delete: Optional[Dict[str, Any]] = None
-            remaining_items: List[Dict[str, Any]] = []
+        item_found = False
+        item_to_delete: Optional[Dict[str, Any]] = None
+        remaining_items: List[Dict[str, Any]] = []
 
-            if isinstance(data, dict):
-                data = [data]
+        if isinstance(data, dict):
+            data = [data]
 
-            if isinstance(data, list):
-                for entry in data:
-                    if not isinstance(entry, dict):
-                        continue
-                    if entry.get("id") == item_id:
-                        item_found = True
-                        item_to_delete = entry
-                    elif "files" in entry and isinstance(entry["files"], list):
-                        new_files = []
-                        for f in entry["files"]:
-                            if isinstance(f, dict) and f.get("id") == item_id:
-                                item_found = True
-                                item_to_delete = f
-                            else:
-                                new_files.append(f)
-                        entry["files"] = new_files
-                        remaining_items.append(entry)
-                    else:
-                        remaining_items.append(entry)
-
-            if item_found:
-                # 1. Delete physical file if exists
-                file_path = item_to_delete.get("file_path") if item_to_delete else None
-                if file_path and _is_inside_storage(file_path, root) and os.path.exists(file_path):
-                    _safe_remove_path(file_path)
-
-                # 2. Update or remove meta.json
-                has_files_left = False
-                for r in remaining_items:
-                    if isinstance(r, dict) and "files" in r:
-                        if len(r["files"]) > 0:
-                            has_files_left = True
-                            break
-                    else:
-                        has_files_left = True
-                        break
-
-                if remaining_items and has_files_left:
-                    try:
-                        with open(meta_path, "w", encoding="utf-8") as f:
-                            json.dump(remaining_items, f, indent=2, ensure_ascii=False)
-                    except Exception:
-                        pass
+        if isinstance(data, list):
+            for entry in data:
+                if not isinstance(entry, dict):
+                    continue
+                if entry.get("id") == item_id:
+                    item_found = True
+                    item_to_delete = entry
+                elif "files" in entry and isinstance(entry["files"], list):
+                    new_files = []
+                    for f in entry["files"]:
+                        if isinstance(f, dict) and f.get("id") == item_id:
+                            item_found = True
+                            item_to_delete = f
+                        else:
+                            new_files.append(f)
+                    entry["files"] = new_files
+                    remaining_items.append(entry)
                 else:
-                    try:
-                        if os.path.exists(meta_path):
-                            os.remove(meta_path)
-                    except Exception:
-                        pass
+                    remaining_items.append(entry)
 
-                    # 3. Remove directory if left empty (and not storage root itself)
-                    if os.path.abspath(current_dir) != os.path.abspath(root):
-                        try:
-                            if os.path.exists(current_dir) and not os.listdir(current_dir):
-                                os.rmdir(current_dir)
-                        except Exception:
-                            pass
+        if not item_found:
+            continue
 
-                return True
+        file_path = item_to_delete.get("file_path") if item_to_delete else None
+        if file_path and _is_inside_storage(file_path, root) and os.path.isfile(file_path):
+            if not _safe_remove_path(file_path):
+                return "locked"
 
-    return False
+        has_files_left = False
+        for r in remaining_items:
+            if isinstance(r, dict) and "files" in r:
+                if len(r["files"]) > 0:
+                    has_files_left = True
+                    break
+            else:
+                has_files_left = True
+                break
+
+        if remaining_items and has_files_left:
+            try:
+                _atomic_write_json(meta_path, remaining_items)
+            except Exception:
+                return "locked"
+        else:
+            try:
+                if os.path.exists(meta_path):
+                    os.remove(meta_path)
+            except Exception:
+                return "locked"
+
+            if os.path.abspath(current_dir) != os.path.abspath(root):
+                try:
+                    if os.path.exists(current_dir) and not os.listdir(current_dir):
+                        os.rmdir(current_dir)
+                except OSError:
+                    pass
+
+        return "deleted"
+
+    return "not_found"
 
 
 def get_storage_stats() -> Dict[str, Any]:
@@ -556,13 +594,17 @@ def get_storage_stats() -> Dict[str, Any]:
     if os.path.exists(root):
         for dirpath, _, filenames in os.walk(root):
             for f in filenames:
-                if f != INDEX_FILE_NAME and not f.startswith("."):
-                    fp = os.path.join(dirpath, f)
-                    try:
-                        total_bytes += os.path.getsize(fp)
-                        total_files += 1
-                    except Exception:
-                        pass
+                if f == INDEX_FILE_NAME or f.startswith("."):
+                    continue
+                # Partial downloads and temp files are not library content.
+                if f.endswith((".part", ".ytdl", ".tmp")):
+                    continue
+                fp = os.path.join(dirpath, f)
+                try:
+                    total_bytes += os.path.getsize(fp)
+                    total_files += 1
+                except Exception:
+                    pass
 
     return {
         "storage_root": os.path.abspath(root),

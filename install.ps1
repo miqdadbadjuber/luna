@@ -22,7 +22,16 @@ Set-Location $lunaDir
 
 if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
     Write-Host "Installing uv..."
-    Invoke-RestMethod https://astral.sh/uv/install.ps1 | Invoke-Expression
+    # Download first, then run: piping into Invoke-Expression cannot be checksummed and
+    # hides a network failure. Pin UV_VERSION and verify a hash for full reproducibility.
+    $uvInstaller = Join-Path $env:TEMP "uv-install.ps1"
+    try {
+        Invoke-RestMethod https://astral.sh/uv/install.ps1 -OutFile $uvInstaller -ErrorAction Stop
+        powershell -NoProfile -ExecutionPolicy Bypass -File $uvInstaller
+        if ($LASTEXITCODE -ne 0) { throw "The uv installer failed (exit $LASTEXITCODE)." }
+    } finally {
+        if (Test-Path $uvInstaller) { Remove-Item $uvInstaller -Force -ErrorAction SilentlyContinue }
+    }
     $env:Path = "$env:USERPROFILE\.local\bin;$env:Path"
 }
 

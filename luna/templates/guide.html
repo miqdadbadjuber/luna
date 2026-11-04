@@ -379,13 +379,24 @@
 
   </style>
   <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/lucide@0.469.0"></script>
 </head>
 
 <body class="min-h-screen text-zinc-100 selection:bg-white/20 selection:text-white bg-[#09090b]">
 
   <!-- Main Content Container (No Top Navbar as requested) -->
   <main class="max-w-3xl w-full mx-auto px-4 sm:px-6 pt-20 sm:pt-24 pb-16 space-y-8">
+
+    <!-- Back to Studio -->
+    <a href="/"
+      class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/[0.06] border border-white/[0.08] transition w-fit">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+        stroke-linecap="round" stroke-linejoin="round">
+        <path d="M19 12H5" />
+        <path d="M12 19l-7-7 7-7" />
+      </svg>
+      <span>Back to Studio</span>
+    </a>
 
     <!-- Hero Section -->
     <section class="space-y-3">
@@ -1068,7 +1079,7 @@
             </svg>
           </div>
           <p class="text-xs text-zinc-400 mt-2 hidden leading-relaxed">
-            Create a key in your provider's dashboard, then enter the key, base URL and model in Settings.</code> in the file <code class="text-white font-mono bg-white/[0.08] px-1 rounded">.env</code>.
+            Create a key in your provider's dashboard, then enter the key, base URL and model in Settings or in the <code class="text-white font-mono bg-white/[0.08] px-1 rounded">.env</code> file.
           </p>
         </div>
 
@@ -1087,6 +1098,14 @@
       </div>
 
     </section>
+
+    <footer class="mt-10 pt-6 border-t border-white/[0.06] text-[11px] leading-relaxed text-zinc-500">
+      <p>
+        Luna &copy; 2026 Miqdad. Free software under the
+        <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener noreferrer" class="text-zinc-300 hover:text-white underline underline-offset-2">GNU AGPL v3 or later</a>,
+        with no warranty. The Luna name and logo are not covered by the license.
+      </p>
+    </footer>
 
   </main>
 

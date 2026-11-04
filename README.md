@@ -4,7 +4,7 @@ A local web app for downloading video and audio from YouTube, Instagram, and Tik
 
 ## Requirements
 
-- Python 3.10 or newer, which the installer provides.
+- Python 3.12 or newer, which the installer provides.
 - FFmpeg and FFprobe for merging streams, audio extraction, and clip rendering. The installer adds them if they are missing.
 - Internet access for downloads and AI providers.
 - API keys are only required for AI Clip. Provider quotas and terms apply.
@@ -36,9 +36,9 @@ git clone https://github.com/miqdadbadjuber/luna; cd luna; powershell -Execution
 
 The installer sets up [uv](https://docs.astral.sh/uv/), Python 3.12, the dependencies, FFmpeg if it is missing, and a default `.env`, then opens Luna at [http://localhost:8000](http://localhost:8000). Nothing is installed system-wide except uv. Add your API keys in Settings, with no file to edit. Downloads need no keys. Start Luna again later with `./start.sh` or `start.bat`.
 
-To install by hand, create a Python 3.10+ virtual environment, run `pip install -r requirements.txt`, copy `.env.example` to `.env`, install FFmpeg and FFprobe, then run `python -m luna`. `npm run dev` does the same with auto-reload and `npm start` runs without it. Neither installs anything.
+To install by hand, create a Python 3.12+ virtual environment, run `pip install -r requirements.txt`, copy `.env.example` to `.env`, install FFmpeg and FFprobe, then run `python -m luna`. `npm run dev` and `npm start` only wrap those Python commands from `package.json`; npm is optional sugar, not a Node toolchain, and neither script installs anything.
 
-Media downloads need no API keys. AI Clip needs `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL` and `GROQ_API_KEY`. Settings saves them to `.env` and applies them to the next job. Never commit `.env` or `cookies.txt`.
+Media downloads need no API keys. AI Clip needs `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL` and `GROQ_API_KEY`. Settings saves them to `.env` and applies them to the next job. `GET /api/settings` masks saved keys, so they are not returned in plain text. Never commit `.env` or `cookies.txt`.
 
 Luna is intended for local use. Do not expose its port to a public network without adding authentication and deployment security controls.
 
@@ -69,7 +69,7 @@ docker compose up -d --build                                      # production m
 docker compose -f compose.yaml -f compose.dev.yaml up --build     # development, reloads on save
 ```
 
-Inside a container, the Settings folder picker and the Open Folder button cannot reach your desktop. Open `media-vault/` on the host instead. Media Vault stays at that path, and changing the storage folder in Settings does not survive a restart.
+Inside a container, the Settings folder picker and the Open Folder button cannot reach your desktop. Open `media-vault/` on the host instead. Media Vault stays at that path: changing the storage folder in Settings has no effect inside the container, because Compose fixes `MEDIA_STORAGE_DIR` to the mounted volume, and the new value is lost on restart.
 
 ## Production
 
@@ -89,9 +89,16 @@ Temporary downloads go to `output/`. Media Vault uses `MEDIA_STORAGE_DIR` when s
 
 ## License
 
-Luna's original code outside `luna/clipper/` is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). It permits noncommercial use and modifications under its terms; commercial use is not permitted. This makes Luna source-available, not Open Source under the Open Source Definition.
+Luna is free software under the [GNU Affero General Public License, version 3 or later](LICENSE) (AGPL-3.0-or-later). Copyright (C) 2026 Miqdad.
 
-The `luna/clipper/` component is based on [AI-Youtube-Shorts-Generator](https://github.com/Anil-matcha/AI-Youtube-Shorts-Generator) and remains under its upstream MIT License, included at `luna/clipper/LICENSE`. The MIT license permits commercial use of that component and cannot be withdrawn by Luna's license. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for scope and attribution details.
+You may run, study, modify, redistribute, and even sell copies. Two conditions matter:
+
+- **Share the source.** If you distribute a modified version, or let other people use one over a network, you must offer them the complete corresponding source under the same license. The network clause is what keeps a hosted copy from being closed.
+- **Keep the notices.** You must keep the copyright and license notices, and say what you changed. The AGPL does not grant trademark rights: the Luna name and logo stay with the project, so you cannot present a modified copy as the original project.
+
+`luna/clipper/` is based on [AI-Youtube-Shorts-Generator](https://github.com/Anil-matcha/AI-Youtube-Shorts-Generator) and stays under its upstream MIT License, included at [`luna/clipper/LICENSE`](luna/clipper/LICENSE). MIT is compatible with the AGPL: the combined work ships under AGPL-3.0-or-later and the MIT notices are preserved. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the full attribution and [CONTRIBUTING.md](CONTRIBUTING.md) if you want to send changes.
+
+A commercial license without the AGPL conditions is available on request through the repository issue tracker.
 
 ## Tests
 

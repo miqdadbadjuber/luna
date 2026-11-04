@@ -14,12 +14,26 @@ class TestFrontendVaultUI(unittest.TestCase):
         self.assertEqual(self.response.status_code, 200)
         self.assertIn("text/html", self.response.headers.get("content-type", ""))
 
+    def test_provider_dropdown_markup_exists(self):
+        """All three settings dropdowns are custom menus, not native selects."""
+        html = self.response.text
+        for element_id in (
+            "llmProviderTrigger", "llmProviderMenu", "selectLlmProvider",
+            "transcribeTrigger", "transcribeMenu", "selectTranscribeProvider",
+            "openaiModelTrigger", "openaiModelMenu", "selectOpenaiModel", "openaiModelItems",
+        ):
+            self.assertIn(f'id="{element_id}"', html)
+        self.assertIn("function setLlmProvider", html)
+        self.assertIn("function syncLlmProviderUI", html)
+        self.assertIn("function selectTranscribe", html)
+        self.assertIn("function selectOpenaiModel", html)
+        self.assertIn("function toggleMenu", html)
+
     def test_navbar_tabs_exist(self):
-        """Check for tabBtnStudio, tabBtnVault, and vaultBadgeCount."""
+        """Check for tabBtnStudio and tabBtnVault."""
         html = self.response.text
         self.assertIn('id="tabBtnStudio"', html)
         self.assertIn('id="tabBtnVault"', html)
-        self.assertIn('id="vaultBadgeCount"', html)
         self.assertIn('id="mainTabsPill"', html)
         self.assertIn('class="t-tabs"', html)
         self.assertIn('class="t-tab', html)

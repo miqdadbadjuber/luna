@@ -52,12 +52,26 @@ class TestApiInfo(unittest.TestCase):
             self.assertEqual(res.status_code, 400, f"Expected 400 for SSRF attempt: {bad_url}")
 
     def test_jobs_pruning(self):
-        from luna.app import jobs, _prune_old_jobs
+        from luna.app import jobs, job_finished, _prune_old_jobs
         jobs.clear()
+        job_finished.clear()
         for i in range(60):
             jobs[f"job_{i}"] = {"id": f"job_{i}", "status": "completed"}
+            # Only jobs whose worker already returned may be evicted.
+            job_finished.add(f"job_{i}")
         _prune_old_jobs(50)
         self.assertLessEqual(len(jobs), 50)
+
+    def test_jobs_pruning_keeps_running_workers(self):
+        from luna.app import jobs, job_finished, _prune_old_jobs
+        jobs.clear()
+        job_finished.clear()
+        for i in range(60):
+            jobs[f"job_{i}"] = {"id": f"job_{i}", "status": "completed"}
+        # None of these are marked finished, so none may be evicted.
+        _prune_old_jobs(50)
+        self.assertEqual(len(jobs), 60)
+        jobs.clear()
 
     def test_frontend_format_duration_logic(self):
         res = self.client.get("/")

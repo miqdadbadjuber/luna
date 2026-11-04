@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# This file is part of Luna's clip pipeline. See luna/clipper/LICENSE and
+# THIRD_PARTY_NOTICES.md for the upstream notice.
+
 import os
 
 from dotenv import load_dotenv
@@ -7,35 +11,64 @@ load_dotenv(os.path.join(ROOT_DIR, ".env"))
 
 DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
 
+
+# Settings rewrites .env while the app is running, so these read os.getenv on
+# every call instead of freezing the values at import time.
+def gemini_model() -> str:
+    return os.getenv("GEMINI_MODEL", "").strip() or "gemini-3.5-flash"
+
+
+# Kept as groq_base_url()'s fallback: existing callers and tests still patch
+# this module-level name.
 GROQ_BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1").rstrip("/")
-GROQ_WHISPER_MODEL = os.getenv("GROQ_WHISPER_MODEL", "whisper-large-v3-turbo")
 
-LOCAL_WHISPER_MODEL = os.getenv("LOCAL_WHISPER_MODEL", "base")
-LOCAL_WHISPER_DEVICE = os.getenv("LOCAL_WHISPER_DEVICE", "auto")  # auto / cpu / cuda
-_raw_out = os.getenv("LOCAL_OUTPUT_DIR", "output").strip()
-if "=" in _raw_out or not _raw_out:
-    _raw_out = "output"
-LOCAL_OUTPUT_DIR = _raw_out
+
+def groq_base_url() -> str:
+    return (os.getenv("GROQ_BASE_URL", "").strip() or GROQ_BASE_URL).rstrip("/")
+
+
+def groq_whisper_model() -> str:
+    return os.getenv("GROQ_WHISPER_MODEL", "").strip() or "whisper-large-v3-turbo"
+
+
+def local_whisper_model() -> str:
+    return os.getenv("LOCAL_WHISPER_MODEL", "").strip() or "base"
+
+
+def local_whisper_device() -> str:
+    return os.getenv("LOCAL_WHISPER_DEVICE", "").strip() or "auto"  # auto / cpu / cuda
+
+
+def local_output_dir() -> str:
+    raw = os.getenv("LOCAL_OUTPUT_DIR", "output").strip()
+    if "=" in raw or not raw:
+        raw = "output"
+    return raw
 
 
 # VAD (Voice Activity Detection) settings for faster-whisper.
 # Disabled by default because VAD is too aggressive on mixed speech/music content.
-LOCAL_WHISPER_VAD_FILTER = os.getenv("LOCAL_WHISPER_VAD_FILTER", "false").strip().lower() == "true"
-_vad_params_env = os.getenv("LOCAL_WHISPER_VAD_PARAMETERS", "")
-if _vad_params_env:
+def local_whisper_vad_filter() -> bool:
+    return os.getenv("LOCAL_WHISPER_VAD_FILTER", "false").strip().lower() == "true"
+
+
+# Match faster-whisper defaults when VAD is enabled
+DEFAULT_WHISPER_VAD_PARAMETERS = {
+    "threshold": 0.5,
+    "min_speech_duration_ms": 250,
+    "max_speech_duration_s": float("inf"),
+    "min_silence_duration_ms": 2000,
+    "speech_pad_ms": 400,
+}
+
+
+def local_whisper_vad_parameters() -> dict:
+    raw = os.getenv("LOCAL_WHISPER_VAD_PARAMETERS", "").strip()
+    if not raw:
+        return dict(DEFAULT_WHISPER_VAD_PARAMETERS)
     import json
-    LOCAL_WHISPER_VAD_PARAMETERS = json.loads(_vad_params_env)
-else:
-    # Match faster-whisper defaults when VAD is enabled
-    LOCAL_WHISPER_VAD_PARAMETERS = {
-        "threshold": 0.5,
-        "min_speech_duration_ms": 250,
-        "max_speech_duration_s": float("inf"),
-        "min_silence_duration_ms": 2000,
-        "speech_pad_ms": 400,
-    }
+    return json.loads(raw)
 
 TRANSCRIBE_PROVIDER_LABELS = {
     "groq": "Groq Cloud Whisper",

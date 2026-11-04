@@ -13,8 +13,25 @@ from luna.vault_service import save_media_metadata, list_vault_items, delete_vau
 
 class TestEndToEndVault(unittest.TestCase):
     def setUp(self):
+        # Isolate the test from the user's real Media Vault: resolve the storage root
+        # to a throwaway directory instead of D:\Luna-Media (or output/).
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+        self._env_patcher = patch.dict(os.environ, {"MEDIA_STORAGE_DIR": self._tmpdir.name})
+        self._env_patcher.start()
+        self.addCleanup(self._env_patcher.stop)
+
         self.client = TestClient(app)
         self.storage_root = get_storage_root()
+
+        resolved_root = os.path.normcase(os.path.abspath(self.storage_root))
+        temp_root = os.path.normcase(os.path.abspath(self._tmpdir.name))
+        if resolved_root != temp_root and not resolved_root.startswith(temp_root + os.sep):
+            self.skipTest(
+                f"Storage root {self.storage_root!r} is outside the temporary directory "
+                f"{self._tmpdir.name!r}; refusing to write to the real Media Vault"
+            )
+
         self.test_clip_dir = os.path.join(self.storage_root, "01-AI-Clips", "2026-09-07_E2E_Test_Video")
         os.makedirs(self.test_clip_dir, exist_ok=True)
         
@@ -90,7 +107,6 @@ class TestEndToEndVault(unittest.TestCase):
         # Navbar tabs
         self.assertIn("tabBtnStudio", html)
         self.assertIn("tabBtnVault", html)
-        self.assertIn("vaultBadgeCount", html)
 
         # Vault main view
         self.assertIn("section-vault", html)

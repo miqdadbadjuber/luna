@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# This file is part of Luna's clip pipeline. See luna/clipper/LICENSE and
+# THIRD_PARTY_NOTICES.md for the upstream notice.
+
 """Local YouTube download via yt-dlp.
 
 Returns a local mp4 path so the rest of the local pipeline can read it
@@ -7,9 +11,9 @@ import os
 import re
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
-from .config import LOCAL_OUTPUT_DIR
+from .config import ROOT_DIR, local_output_dir
 
 
 def _import_ytdlp():
@@ -82,19 +86,59 @@ def _resolve_local_path(source: str) -> Optional[str]:
     return None
 
 
-def _existing_download(out_dir: str, video_id: str) -> Optional[str]:
-    """Return a cached download path if we already have this YouTube id."""
+def _existing_download(out_dir: str, video_id: str, fmt: str) -> Optional[str]:
+    """Return a cached download for this id at the requested height or higher.
+
+    The filename carries the height (``source_<id>_<height>p.ext``), so a
+    cached 1080p file must not be handed to a job that asked for 480p.
+    """
+    stem = f"source_{video_id}"
     for ext in (".mp4", ".mkv", ".webm"):
-        candidate = os.path.join(out_dir, f"source_{video_id}{ext}")
-        if os.path.exists(candidate):
-            return candidate
-    return None
+        exact = os.path.join(out_dir, f"{stem}_{fmt}p{ext}")
+        if os.path.exists(exact):
+            return exact
+
+    try:
+        requested = int(fmt)
+    except (TypeError, ValueError):
+        requested = 720
+
+    pattern = re.compile(rf"^{re.escape(stem)}_(\d+)p\.(?:mp4|mkv|webm)$", re.IGNORECASE)
+    best: Optional[Tuple[int, str]] = None
+    try:
+        names = os.listdir(out_dir)
+    except OSError:
+        return None
+    for name in names:
+        match = pattern.match(name)
+        if not match:
+            continue
+        height = int(match.group(1))
+        # any height at or above the request is safe to reuse; prefer the closest one
+        if height >= requested and (best is None or height < best[0]):
+            best = (height, os.path.join(out_dir, name))
+    return best[1] if best else None
 
 
 _LAST_DOWNLOAD_INFO: Dict = {}
 
 
+def reset_last_download_info() -> None:
+    """Forget the previous job's metadata.
+
+    Job dirs and the output folder are reused between runs, so the global would
+    otherwise leak the previous video's title into a local-file job.
+    """
+    global _LAST_DOWNLOAD_INFO
+    _LAST_DOWNLOAD_INFO = {}
+
+
 def get_last_download_info() -> Dict:
+    """Metadata for the most recent successful remote download of this job.
+
+    Always empty right after reset_last_download_info(); a job that reuses a
+    cached file or a local path leaves it empty because no fresh info exists.
+    """
     global _LAST_DOWNLOAD_INFO
     return dict(_LAST_DOWNLOAD_INFO)
 
@@ -105,34 +149,42 @@ def download_youtube_local(
     out_dir: Optional[str] = None,
     progress_hook: Optional[Callable] = None,
 ) -> str:
-    """Download a remote URL or return a local file path unchanged."""
+    """Download a remote URL or return a local file path unchanged.
+
+    Metadata is exposed through get_last_download_info() and is reset at the
+    start of every call, including the local-file early return, so it always
+    belongs to this job and never to the one before it.
+    """
+    reset_last_download_info()
     local_path = _resolve_local_path(video_url)
     if local_path:
         print(f"[download/local] using local file: {local_path}", flush=True)
         return local_path
 
     yt_dlp = _import_ytdlp()
-    out_dir = out_dir or LOCAL_OUTPUT_DIR
+    out_dir = out_dir or local_output_dir()
     if "=" in str(out_dir) or not str(out_dir).strip():
         out_dir = "output"
     os.makedirs(out_dir, exist_ok=True)
 
     video_id = _extract_youtube_video_id(video_url)
     if video_id:
-        cached = _existing_download(out_dir, video_id)
+        cached = _existing_download(out_dir, video_id, fmt)
         if cached:
             print(f"[download/local] reusing cached download: {cached}", flush=True)
             return cached
 
     print(f"[download/local] {video_url} @ {fmt}p -> {out_dir}/", flush=True)
-    cookie_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "cookies.txt")
+    cookie_file = os.path.join(ROOT_DIR, "cookies.txt")
     ydl_opts = {
         "format": _format_for(fmt),
-        "outtmpl": os.path.join(out_dir, "source_%(id)s.%(ext)s"),
+        "outtmpl": os.path.join(out_dir, f"source_%(id)s_{fmt}p.%(ext)s"),
         "merge_output_format": "mp4",
         "quiet": True,
         "no_warnings": True,
         "noprogress": False,
+        "noplaylist": True,
+        "playlist_items": "1",
         "socket_timeout": 15,
         "retries": 3,
         "fragment_retries": 3,
@@ -145,6 +197,12 @@ def download_youtube_local(
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(video_url, download=True)
+        # noplaylist should prevent this, but a bare playlist link can still slip through
+        if info.get("_type") == "playlist":
+            entries = [entry for entry in (info.get("entries") or []) if entry]
+            if not entries:
+                raise RuntimeError("Playlist URLs are not supported. Paste a single video link.")
+            info = entries[0]
         global _LAST_DOWNLOAD_INFO
         _LAST_DOWNLOAD_INFO = {
             "title": info.get("title") or "",
@@ -152,7 +210,14 @@ def download_youtube_local(
             "uploader": info.get("uploader") or "",
             "duration": info.get("duration") or 0,
         }
-        path = ydl.prepare_filename(info)
+        # prepare_filename can disagree with where yt-dlp actually wrote the
+        # merged file; trust requested_downloads when it points at a real file.
+        requested = info.get("requested_downloads") or []
+        path = ""
+        if requested and isinstance(requested[0], dict):
+            path = str(requested[0].get("filepath") or "")
+        if not path or not os.path.exists(path):
+            path = ydl.prepare_filename(info)
         # merge_output_format may rename the extension after merge
         if not os.path.exists(path):
             stem, _ = os.path.splitext(path)

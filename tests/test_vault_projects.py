@@ -125,9 +125,10 @@ class TestVaultProjects(unittest.TestCase):
                 }
             ], f)
 
-        # Rename using virtual ID proj_leg_995082 (as requested in screenshot 1406)
+        # Rename using the deterministic virtual ID the API hands out for this folder.
+        virtual_id = vault_service._generate_folder_project_id(legacy_dir)
         rename_resp = self.client.patch(
-            "/api/vault/project/proj_leg_995082/rename",
+            f"/api/vault/project/{virtual_id}/rename",
             json={"new_name": "Project 1"},
         )
         self.assertEqual(rename_resp.status_code, 200)

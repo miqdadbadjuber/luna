@@ -215,9 +215,9 @@ class TestVaultService(unittest.TestCase):
         self.assertEqual(items[0]["id"], "keep_2")
 
     def test_delete_vault_item_not_found(self):
-        """Verify delete_vault_item returns False when item id does not exist."""
+        """Verify delete_vault_item reports not_found when the id does not exist."""
         result = vault_service.delete_vault_item("non_existent_id")
-        self.assertFalse(result)
+        self.assertEqual(result, "not_found")
 
     def test_delete_vault_item_does_not_remove_file_outside_storage(self):
         outside_dir = tempfile.mkdtemp()
@@ -231,7 +231,7 @@ class TestVaultService(unittest.TestCase):
             with open(os.path.join(item_dir, "meta.json"), "w", encoding="utf-8") as f:
                 json.dump([{"id": "unsafe", "file_path": outside_file}], f)
 
-            self.assertTrue(vault_service.delete_vault_item("unsafe"))
+            self.assertEqual(vault_service.delete_vault_item("unsafe"), "deleted")
             self.assertTrue(os.path.exists(outside_file))
         finally:
             shutil.rmtree(outside_dir, ignore_errors=True)

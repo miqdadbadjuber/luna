@@ -1,0 +1,26 @@
+Luna — Media & AI Shorts Studio
+Copyright (C) 2026 Miqdad
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+
+The full license text is in the LICENSE file. If you received this program
+without it, see <https://www.gnu.org/licenses/>.
+
+If you modify this program and let other people use it over a network, section
+13 of the license requires you to offer them the Corresponding Source of your
+version.
+
+Trademarks: the Luna name and logo are not licensed under the AGPL. Do not use
+them to promote a modified version, or in a way that suggests the original
+project endorses it.
+
+Third-party components and their licenses are listed in THIRD_PARTY_NOTICES.md.
+The clip pipeline in luna/clipper/ is distributed under the MIT License; its
+notice is preserved in luna/clipper/LICENSE.

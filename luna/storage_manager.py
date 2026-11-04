@@ -1,11 +1,29 @@
+# Copyright (C) 2026 Miqdad
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# This file is part of Luna. See LICENSE and NOTICE at the repository root.
+
 import datetime
 import os
 import re
-from typing import Optional, Union
+import tempfile
+import unicodedata
+from typing import Dict, Optional, Union
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_D_PATH = r"D:\Luna-Media" if os.name == "nt" else os.path.join(BASE_DIR, "output")
 FALLBACK_PATH = os.path.join(BASE_DIR, "output")
+
+# Resolving the root probes the disk, so cache it per (target, default, fallback).
+# Settings changes and storage migrations call invalidate_storage_root_cache().
+_ROOT_CACHE: Dict[tuple, str] = {}
+
+# Windows refuses these names (with or without an extension) in any directory.
+_RESERVED_NAMES = {
+    "CON", "PRN", "AUX", "NUL",
+    *(f"COM{i}" for i in range(1, 10)),
+    *(f"LPT{i}" for i in range(1, 10)),
+}
 
 CATEGORY_MAP = {
     "youtube_ai_clip": "01-AI-Clips",
@@ -43,24 +61,44 @@ def is_writable(path: str) -> bool:
     """Check if a directory path can be created and written to."""
     try:
         os.makedirs(path, exist_ok=True)
-        test_file = os.path.join(path, f".write_test_{os.getpid()}")
-        with open(test_file, "w", encoding="utf-8") as f:
-            f.write("test")
-        if os.path.exists(test_file):
-            os.remove(test_file)
+        # mkstemp gives every caller (threads included) its own file name; the old
+        # pid-based name let two threads delete each other's probe and report False.
+        fd, test_file = tempfile.mkstemp(prefix=".write_test_", dir=path)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write("test")
+        finally:
+            try:
+                os.remove(test_file)
+            except OSError:
+                pass
         return True
     except Exception:
         return False
 
 
+def invalidate_storage_root_cache() -> None:
+    """Forget the resolved root, e.g. after Settings changes MEDIA_STORAGE_DIR."""
+    _ROOT_CACHE.clear()
+
+
 def get_storage_root() -> str:
     """Return writable path: tries D:\\Luna-Media (or MEDIA_STORAGE_DIR), falls back to output/."""
     target_path = os.getenv("MEDIA_STORAGE_DIR") or DEFAULT_D_PATH
-    if is_writable(target_path):
-        return os.path.abspath(target_path)
+    key = (
+        os.path.abspath(target_path),
+        os.path.abspath(DEFAULT_D_PATH),
+        os.path.abspath(FALLBACK_PATH),
+    )
+    cached = _ROOT_CACHE.get(key)
+    if cached and os.path.isdir(cached):
+        return cached
 
-    os.makedirs(FALLBACK_PATH, exist_ok=True)
-    return os.path.abspath(FALLBACK_PATH)
+    resolved = os.path.abspath(target_path) if is_writable(target_path) else os.path.abspath(FALLBACK_PATH)
+    if resolved == os.path.abspath(FALLBACK_PATH):
+        os.makedirs(FALLBACK_PATH, exist_ok=True)
+    _ROOT_CACHE[key] = resolved
+    return resolved
 
 
 def get_category_folder(action: str) -> str:
@@ -88,14 +126,31 @@ def get_workspace_folder(action: str, workspace_name: str) -> str:
 
 
 def sanitize_name(name: str, max_length: int = 80) -> str:
-    """Remove invalid chars (\\/*?:\"<>|#), normalize whitespace, and cap length to avoid MAX_PATH issues."""
+    """Make a name safe for Windows/Linux folders and files.
+
+    Strips separators and reserved characters, removes control characters, normalises
+    unicode, refuses "." and "..", escapes Windows device names and drops trailing
+    dots/spaces. Returns "" for names that carry no usable characters.
+    """
     if not name:
         return ""
-    cleaned = re.sub(r'[\\/*?:"<>|#]', "", str(name))
+    cleaned = unicodedata.normalize("NFC", str(name))
+    cleaned = re.sub(r'[\x00-\x1f\x7f\\/*?:"<>|#]', "", cleaned)
     cleaned = " ".join(cleaned.split()).strip()
     if max_length and len(cleaned) > max_length:
-        cleaned = cleaned[:max_length].rstrip()
+        cleaned = cleaned[:max_length]
+    cleaned = cleaned.rstrip(" .")
+    if cleaned in ("", ".", ".."):
+        return ""
+    if cleaned.split(".")[0].upper() in _RESERVED_NAMES:
+        cleaned = f"_{cleaned}"
     return cleaned
+
+
+def category_root_paths() -> Dict[str, str]:
+    """Return {category_name: path} without creating anything on disk."""
+    root = get_storage_root()
+    return {name: os.path.join(root, name) for name in CATEGORY_MAP.values()}
 
 
 def format_media_filename(
@@ -115,7 +170,8 @@ def format_media_filename(
     clean_title = sanitize_name(title) or "media"
     clean_ext = ext.lstrip(".")
 
-    prefix_clean = prefix.strip("_").strip() if prefix else ""
+    # The prefix comes from the request (e.g. the chosen quality), so sanitize it too.
+    prefix_clean = sanitize_name(prefix.strip("_"), max_length=24) if prefix else ""
     prefix_part = f"{prefix_clean}_" if prefix_clean else ""
 
     return f"{date_str}_{prefix_part}{clean_title}.{clean_ext}"
@@ -137,6 +193,16 @@ def format_clip_folder(
     return f"{date_str}_{clean_title}"
 
 
+def _is_within(child: str, parent: str) -> bool:
+    """True when child is parent or lives under it (compare real paths)."""
+    try:
+        child_real = os.path.realpath(os.path.abspath(child))
+        parent_real = os.path.realpath(os.path.abspath(parent))
+        return os.path.commonpath([parent_real, child_real]) == parent_real
+    except ValueError:
+        return False
+
+
 def migrate_storage(old_root: str, new_root: str) -> dict:
     """Migrate media directories and metadata from old_root (and fallback output/) to new_root."""
     import shutil
@@ -146,6 +212,10 @@ def migrate_storage(old_root: str, new_root: str) -> dict:
 
     if not is_writable(new_root):
         raise ValueError(f"Destination directory '{new_root}' is not writable.")
+
+    # Moving a vault into its own subfolder (or the reverse) scatters it across two roots.
+    if _is_within(new_root, old_root) or _is_within(old_root, new_root):
+        raise ValueError("The new storage folder cannot be inside the current one, or the other way around.")
 
     sources_to_migrate = []
     if old_root != new_root and os.path.exists(old_root):
@@ -158,57 +228,49 @@ def migrate_storage(old_root: str, new_root: str) -> dict:
         return {"migrated_files": 0, "status": "same_directory"}
 
     migrated_count = 0
+    failed: list[str] = []
+
+    def _move_file(src_file: str, dst_file: str) -> None:
+        """Copy, verify, then delete the source. No source is ever deleted unverified."""
+        shutil.copy2(src_file, dst_file)
+        if not os.path.exists(dst_file) or os.path.getsize(dst_file) != os.path.getsize(src_file):
+            raise OSError(f"verification failed after copying {src_file}")
+        os.remove(src_file)
+
     for src_dir in sources_to_migrate:
         if not os.path.exists(src_dir) or src_dir == new_root:
             continue
-        for item in os.listdir(src_dir):
-            src_item = os.path.join(src_dir, item)
-            dst_item = os.path.join(new_root, item)
-            if os.path.isdir(src_item):
-                if not os.path.exists(dst_item):
-                    try:
-                        shutil.move(src_item, dst_item)
-                        migrated_count += 1
-                    except Exception:
-                        pass
-                else:
-                    for root_dir, dirs, files in os.walk(src_item):
-                        rel = os.path.relpath(root_dir, src_item)
-                        target_sub = os.path.join(dst_item, rel)
-                        os.makedirs(target_sub, exist_ok=True)
-                        for f in files:
-                            s_f = os.path.join(root_dir, f)
-                            d_f = os.path.join(target_sub, f)
-                            try:
-                                if not os.path.exists(d_f):
-                                    shutil.move(s_f, d_f)
-                                    migrated_count += 1
-                                else:
-                                    shutil.copy2(s_f, d_f)
-                                    try:
-                                        os.remove(s_f)
-                                    except Exception:
-                                        pass
-                                    migrated_count += 1
-                            except Exception:
-                                pass
-                    try:
-                        shutil.rmtree(src_item, ignore_errors=True)
-                    except Exception:
-                        pass
-            elif os.path.isfile(src_item) and item.endswith((".json", ".mp4", ".mp3", ".webm", ".mkv", ".jpg", ".png")):
+        for root_dir, _dirs, files in os.walk(src_dir):
+            rel = os.path.relpath(root_dir, src_dir)
+            target_dir = new_root if rel == "." else os.path.join(new_root, rel)
+            os.makedirs(target_dir, exist_ok=True)
+            for f in files:
+                if f.endswith((".part", ".ytdl", ".tmp")):
+                    continue
+                s_f = os.path.join(root_dir, f)
+                d_f = os.path.join(target_dir, f)
+                if not os.path.isfile(s_f):
+                    continue
                 try:
-                    if not os.path.exists(dst_item):
-                        shutil.move(src_item, dst_item)
-                        migrated_count += 1
-                    else:
-                        shutil.copy2(src_item, dst_item)
-                        try:
-                            os.remove(src_item)
-                        except Exception:
-                            pass
-                        migrated_count += 1
-                except Exception:
-                    pass
+                    if os.path.exists(d_f):
+                        if os.path.getsize(d_f) == os.path.getsize(s_f):
+                            os.remove(s_f)
+                        else:
+                            # Keep the source so a name collision cannot destroy media.
+                            failed.append(f"{s_f} (destination already exists)")
+                        continue
+                    _move_file(s_f, d_f)
+                    migrated_count += 1
+                except Exception as e:
+                    failed.append(f"{s_f}: {e}")
 
-    return {"migrated_files": migrated_count, "status": "success"}
+        # Prune the source tree only where it is now empty.
+        for root_dir, _dirs, _files in os.walk(src_dir, topdown=False):
+            try:
+                if not os.listdir(root_dir):
+                    os.rmdir(root_dir)
+            except OSError:
+                pass
+
+    status = "success" if not failed else "partial"
+    return {"migrated_files": migrated_count, "failed": failed[:20], "status": status}

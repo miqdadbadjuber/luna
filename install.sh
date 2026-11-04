@@ -23,7 +23,17 @@ cd "$LUNA_DIR"
 
 if ! command -v uv >/dev/null 2>&1; then
     echo "Installing uv..."
-    curl -LsSf https://astral.sh/uv/install.sh | sh
+    # Download first, then execute: `curl | sh` runs an empty script when curl fails
+    # and cannot report a clear error. Pin UV_VERSION and verify a checksum for a
+    # fully reproducible install.
+    UV_INSTALLER="$(mktemp)"
+    if ! curl -fsSL https://astral.sh/uv/install.sh -o "$UV_INSTALLER"; then
+        echo "Could not download the uv installer from astral.sh." >&2
+        rm -f "$UV_INSTALLER"
+        exit 1
+    fi
+    sh "$UV_INSTALLER"
+    rm -f "$UV_INSTALLER"
     PATH="$HOME/.local/bin:$PATH"
     export PATH
 fi

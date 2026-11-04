@@ -1,8 +1,12 @@
+# SPDX-License-Identifier: MIT
+# This file is part of Luna's clip pipeline. See luna/clipper/LICENSE and
+# THIRD_PARTY_NOTICES.md for the upstream notice.
+
 """End-to-end orchestrator: yt-dlp, transcription, LLM ranking, then ffmpeg/opencv rendering."""
 from typing import Callable, Dict, List, Optional
 
 from .clipper import crop_highlights_local
-from .downloader import download_youtube_local, get_last_download_info
+from .downloader import download_youtube_local, get_last_download_info, reset_last_download_info
 from .highlights import get_highlights
 from .llm import call_llm
 from .transcriber import transcribe_local
@@ -20,6 +24,10 @@ def generate_shorts(
     progress_hook: Optional[Callable] = None,
 ) -> Dict:
     """Run the full pipeline and return a structured result."""
+    # downloader keeps the metadata as a process global: clear it before the
+    # download so a reused local file or cached download cannot inherit the
+    # previous job's title
+    reset_last_download_info()
     source_path = download_youtube_local(
         youtube_url, fmt=download_format, out_dir=out_dir, progress_hook=progress_hook
     )
