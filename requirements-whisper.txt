@@ -1,2 +1,2 @@
 # Only for LOCAL_TRANSCRIBE_PROVIDER=whisper
-faster-whisper>=1.0.0
+faster-whisper>=1.2.1
