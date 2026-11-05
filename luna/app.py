@@ -35,6 +35,7 @@ import requests
 import yt_dlp
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
@@ -136,6 +137,15 @@ app = FastAPI(
     title="Luna: Multi-Platform Media & AI Shorts Web Studio",
     lifespan=_lifespan,
 )
+
+
+def allowed_hosts() -> List[str]:
+    """Host headers Luna answers to. Anything else is rejected, which blocks DNS rebinding."""
+    extra = [h.strip() for h in os.getenv("LUNA_ALLOWED_HOSTS", "").split(",") if h.strip()]
+    return ["localhost", "127.0.0.1", "[::1]", *extra]
+
+
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts())
 
 storage_root = get_storage_root()
 os.makedirs(storage_root, exist_ok=True)
@@ -243,8 +253,9 @@ def external_url_problem(url: str) -> Optional[str]:
     if not hostname:
         return "That link has no host name."
     hostname_lower = hostname.lower().strip("[]")
-    if hostname_lower in ("localhost", "0.0.0.0"):
-        return "That address is not allowed."
+    # yt-dlp would fetch any URL it is given, so only hand it the sites Luna supports.
+    if detect_platform(url) == "unknown":
+        return "Only YouTube, TikTok and Instagram links are supported."
     try:
         port = parsed.port or (443 if parsed.scheme == "https" else 80)
     except ValueError:
@@ -394,14 +405,24 @@ def get_ytdl_base_opts(extra_opts=None):
     return opts
 
 
+_PLATFORM_DOMAINS = {
+    "youtube.com": "youtube",
+    "youtu.be": "youtube",
+    "tiktok.com": "tiktok",
+    "instagram.com": "instagram",
+    "instagr.am": "instagram",
+}
+
+
 def detect_platform(url: str) -> str:
-    url_lower = url.lower()
-    if "tiktok.com" in url_lower:
-        return "tiktok"
-    if "instagram.com" in url_lower or "instagr.am" in url_lower:
-        return "instagram"
-    if "youtube.com" in url_lower or "youtu.be" in url_lower:
-        return "youtube"
+    """Platform from the URL's host name, so "evil.example/?youtube.com" stays unknown."""
+    try:
+        host = (urllib.parse.urlparse(url.strip()).hostname or "").lower()
+    except ValueError:
+        return "unknown"
+    for domain, platform in _PLATFORM_DOMAINS.items():
+        if host == domain or host.endswith("." + domain):
+            return platform
     return "unknown"
 
 
@@ -2121,7 +2142,7 @@ class SettingsUpdateRequest(BaseModel):
 
 
 class OpenAIModelsRequest(BaseModel):
-    api_key: str
+    api_key: str = ""
     base_url: Optional[str] = None
 
 
@@ -2335,9 +2356,12 @@ def _write_text_compat(path: str, text: str) -> None:
 
 @app.post("/api/settings/openai-models")
 async def api_openai_models(req: OpenAIModelsRequest):
-    # The key must come with the request, so a saved key is never sent to a URL given here.
     key = req.api_key.strip()
     base_url = (req.base_url or "").strip().rstrip("/") or DEFAULT_OPENAI_BASE_URL
+    # Without a typed key, fall back to the saved one, but only for the saved base URL,
+    # so a request can never send the saved key to an address it chose.
+    if not key and base_url == openai_base_url().rstrip("/"):
+        key = os.getenv("OPENAI_API_KEY", "").strip()
     if not key or not base_url.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="API key and an http(s) base URL are required")
     try:
@@ -2367,6 +2391,9 @@ async def api_test_key(req: TestKeyRequest):
         base_url = (req.base_url or "").strip().rstrip("/") or DEFAULT_OPENAI_BASE_URL
         if not base_url.startswith(("http://", "https://")):
             return {"valid": False, "message": "Base URL must start with http(s)://"}
+        # Same rule as the model list: the saved key only goes to the saved base URL.
+        if not (req.api_key or "").strip() and base_url != openai_base_url().rstrip("/"):
+            return {"valid": False, "message": "Enter the key to test it against this base URL"}
         try:
             resp = await asyncio.to_thread(
                 requests.get,
