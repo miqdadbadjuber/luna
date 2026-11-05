@@ -1423,7 +1423,7 @@ def _worker_process(job_id: str, req: ProcessRequest):
                         tot_c = int(parts[2])
                         pct = 68.0 + (done_c / max(tot_c, 1)) * 27.0
                         _set_progress(round(pct, 1))
-                        jobs[job_id]["stage_detail"] = f"Rendering clip {done_c}/{tot_c} (AMD AMF)"
+                        jobs[job_id]["stage_detail"] = f"Rendering clip {done_c}/{tot_c}"
                     jobs[job_id]["stage"] = "rendering"
                     jobs[job_id]["download_speed"] = ""
                     jobs[job_id]["download_eta"] = ""
