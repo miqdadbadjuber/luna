@@ -456,7 +456,7 @@ def _transcribe_local_groq(
         if audio_size > GROQ_FREE_TIER_MAX_BYTES:
             raise RuntimeError(
                 f"Extracted audio ({audio_size / 1024 / 1024:.1f} MB) still exceeds "
-                f"batas upload Groq free tier (25 MB). Videonya kemungkinan terlalu panjang "
+                f"the Groq free-tier upload limit (25 MB). The video may be too long "
                 f"for cloud transcription — set LOCAL_TRANSCRIBE_PROVIDER=whisper in "
                 f".env for local transcription, or use a shorter video."
             )
