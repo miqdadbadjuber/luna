@@ -1,0 +1,13 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    ignore:
+      # yt-dlp is a floor on purpose and is picked up fresh on every install.
+      - dependency-name: yt-dlp
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

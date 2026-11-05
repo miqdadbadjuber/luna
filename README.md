@@ -73,7 +73,7 @@ Inside a container, the Settings folder picker and the Open Folder button cannot
 
 ## Production
 
-Luna has no authentication, and its API can read settings, overwrite API keys and move files. Keep it on `127.0.0.1`, or put an authenticating proxy in front of it before exposing it. Run a single process, because job state is held in memory.
+Luna has no authentication, and its API can read settings, overwrite API keys and move files. Keep it on `127.0.0.1`, or put an authenticating proxy in front of it before exposing it. Luna only answers requests addressed to `localhost` or `127.0.0.1`; add the proxy's host name to `LUNA_ALLOWED_HOSTS` in `.env`. Run a single process, because job state is held in memory.
 
 - Without Docker: `./start.sh`, `start.bat` or `npm start`.
 - With Docker: pushing a `v*` tag publishes `ghcr.io/miqdadbadjuber/luna`. Run it with `LUNA_IMAGE=ghcr.io/miqdadbadjuber/luna:<tag> docker compose up -d --no-build`, after creating the host files above. The image is built for amd64 only.
