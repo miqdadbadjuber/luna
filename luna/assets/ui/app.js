@@ -3297,6 +3297,103 @@ function toggleSecret(inputId, iconId) {
 }
 
 let currentStorageDir = '';
+const providerKeyUi = {
+  openai: { configured: false, editing: true, validated: false, hint: '' },
+  gemini: { configured: false, editing: true, validated: false, hint: '' },
+  groq: { configured: false, editing: true, validated: false, hint: '' }
+};
+const providerKeyFields = { openai: 'inputOpenai', gemini: 'inputGemini', groq: 'inputGroq' };
+const providerKeyPlaceholders = { openai: 'Enter your API key...', gemini: 'Enter your Gemini API key...', groq: 'Enter your Groq API key...' };
+
+function updateProviderKeyUI(provider) {
+  const state = providerKeyUi[provider];
+  const input = document.getElementById(providerKeyFields[provider]);
+  if (!state || !input) return;
+  const locked = state.configured && !state.editing;
+  input.disabled = locked;
+  input.placeholder = locked ? `Key saved ····${state.hint}` : providerKeyPlaceholders[provider];
+  input.parentElement?.querySelector('button[title="Show / Hide"]')?.classList.toggle('hidden', locked);
+  document.getElementById(`change${provider[0].toUpperCase()}${provider.slice(1)}Key`)?.classList.toggle('hidden', !state.configured || state.editing);
+  const hasSecondaryAction = state.configured || state.validated;
+  const showActionDot = provider === 'openai'
+    ? hasSecondaryAction
+    : ((state.configured && !state.editing) || state.validated);
+  document.getElementById(`${provider}KeyActionDot`)?.classList.toggle('hidden', !showActionDot);
+  const saveButton = document.getElementById(`save${provider[0].toUpperCase()}${provider.slice(1)}Key`);
+  if (saveButton) {
+    saveButton.classList.toggle('hidden', !state.editing || !state.validated);
+    saveButton.disabled = !state.validated;
+    saveButton.classList.toggle('text-emerald-400/50', !state.validated);
+    saveButton.classList.toggle('text-emerald-400', state.validated);
+  }
+  document.getElementById(`cancel${provider[0].toUpperCase()}${provider.slice(1)}Key`)?.classList.toggle('hidden', !state.editing || !state.configured);
+  const stateLabel = document.getElementById(`${provider}KeyState`);
+  if (stateLabel) stateLabel.textContent = locked ? 'API key is saved. Use Test Connection to check it, or Change Key to replace it.' : (state.configured ? 'Enter a replacement key. The current key stays active until you save.' : 'No API key saved yet. Test the key, then save it.');
+}
+
+function beginKeyChange(provider) {
+  const state = providerKeyUi[provider];
+  if (!state) return;
+  state.editing = true;
+  state.validated = false;
+  const input = document.getElementById(providerKeyFields[provider]);
+  if (input) input.value = '';
+  const statusId = { openai: 'statusOpenai', gemini: 'statusGemini', groq: 'statusGroq' }[provider];
+  const status = document.getElementById(statusId);
+  if (status) status.textContent = '';
+  updateProviderKeyUI(provider);
+  input?.focus();
+}
+
+function cancelKeyChange(provider) {
+  const state = providerKeyUi[provider];
+  if (!state || !state.configured) return;
+  state.editing = false;
+  state.validated = false;
+  const input = document.getElementById(providerKeyFields[provider]);
+  if (input) input.value = '';
+  updateProviderKeyUI(provider);
+  const status = document.getElementById(`${provider === 'openai' ? 'statusOpenai' : provider === 'gemini' ? 'statusGemini' : 'statusGroq'}`);
+  if (status) status.textContent = '';
+}
+
+function providerKeyInputChanged(provider) {
+  const state = providerKeyUi[provider];
+  if (!state?.editing) return;
+  state.validated = false;
+  const statusId = { openai: 'statusOpenai', gemini: 'statusGemini', groq: 'statusGroq' }[provider];
+  const status = document.getElementById(statusId);
+  if (status) status.textContent = '';
+  updateProviderKeyUI(provider);
+}
+
+async function saveProviderKey(provider) {
+  const state = providerKeyUi[provider];
+  const input = document.getElementById(providerKeyFields[provider]);
+  if (!state?.editing || !state.validated || !input?.value.trim()) return;
+  const field = { openai: 'openai_api_key', gemini: 'gemini_api_key', groq: 'groq_api_key' }[provider];
+  const payload = { [field]: input.value.trim() };
+  if (provider === 'openai') {
+    payload.openai_base_url = document.getElementById('inputOpenaiBase')?.value.trim();
+    payload.openai_model = document.getElementById('inputOpenaiModel')?.value.trim();
+  }
+  try {
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Could not save API key');
+    state.configured = true;
+    state.editing = false;
+    state.validated = false;
+    showToast(`${provider.toUpperCase()} API key saved`);
+    await loadSettingsData();
+  } catch (err) {
+    showToast(err.message || 'Could not save API key', true);
+  }
+}
 
 // ---- Logo dropdowns (clip provider, transcription provider, model) ----
 // Every dropdown keeps its real value in a hidden input, so the settings save path
@@ -3563,11 +3660,12 @@ async function loadSettingsData() {
     // Secrets come back masked, never as the key itself. Show the hint as a
     // placeholder and leave the field empty, so saving cannot overwrite the key.
     const inputOpenai = document.getElementById('inputOpenai');
-    if (inputOpenai) {
-      inputOpenai.value = '';
-      inputOpenai.placeholder = data.has_openai_api_key ? `Saved: ${data.openai_api_key}` : 'sk-...';
-    }
-    window.hasSavedOpenaiKey = !!data.has_openai_api_key;
+    providerKeyUi.openai.configured = Boolean(data.has_openai_api_key);
+    providerKeyUi.openai.hint = String(data.openai_api_key || '').slice(-4);
+    providerKeyUi.openai.editing = !providerKeyUi.openai.configured;
+    providerKeyUi.openai.validated = false;
+    if (inputOpenai) inputOpenai.value = '';
+    updateProviderKeyUI('openai');
     loadOpenaiModels();
 
     const inputGemini = document.getElementById('inputGemini');
@@ -3575,15 +3673,19 @@ async function loadSettingsData() {
     const inputGroq = document.getElementById('inputGroq');
     const labelGroqModel = document.getElementById('labelGroqModel');
     const inputStorage = document.getElementById('inputStorage');
-    if (inputGemini) {
-      inputGemini.value = '';
-      inputGemini.placeholder = data.has_gemini_api_key ? `Saved: ${data.gemini_api_key}` : 'AIza...';
-    }
+    providerKeyUi.gemini.configured = Boolean(data.has_gemini_api_key);
+    providerKeyUi.gemini.hint = String(data.gemini_api_key || '').slice(-4);
+    providerKeyUi.gemini.editing = !providerKeyUi.gemini.configured;
+    providerKeyUi.gemini.validated = false;
+    if (inputGemini) inputGemini.value = '';
+    updateProviderKeyUI('gemini');
     if (labelGeminiModel && data.gemini_model) labelGeminiModel.innerText = data.gemini_model;
-    if (inputGroq) {
-      inputGroq.value = '';
-      inputGroq.placeholder = data.has_groq_api_key ? `Saved: ${data.groq_api_key}` : 'gsk_...';
-    }
+    providerKeyUi.groq.configured = Boolean(data.has_groq_api_key);
+    providerKeyUi.groq.hint = String(data.groq_api_key || '').slice(-4);
+    providerKeyUi.groq.editing = !providerKeyUi.groq.configured;
+    providerKeyUi.groq.validated = false;
+    if (inputGroq) inputGroq.value = '';
+    updateProviderKeyUI('groq');
     if (labelGroqModel && data.groq_model) labelGroqModel.innerText = data.groq_model;
     if (inputStorage && data.storage_dir) {
       inputStorage.value = data.storage_dir;
@@ -3629,7 +3731,7 @@ async function loadSettingsData() {
         chkStorage.setAttribute('data-lucide', s.storage ? 'check' : 'x');
         chkStorage.className = s.storage ? 'w-4 h-4 text-emerald-400' : 'w-4 h-4 text-red-400';
       }
-      if (statusStorageAccess) statusStorageAccess.innerText = s.storage ? 'Ready Tulis' : 'Akses Ditolak';
+      if (statusStorageAccess) statusStorageAccess.innerText = s.storage ? 'Writable' : 'Access denied';
 
       // Cookies
       const chkCookies = document.getElementById('chkCookies');
@@ -3659,9 +3761,6 @@ async function loadSettingsData() {
 
 async function saveSettings() {
   const storageInput = document.getElementById('inputStorage');
-  const geminiInput = document.getElementById('inputGemini');
-  const groqInput = document.getElementById('inputGroq');
-
   if (!storageInput || !storageInput.value.trim()) {
     triggerInputError('wrapStorage', 'errStorage', 'Storage directory is required.');
     return;
@@ -3673,11 +3772,8 @@ async function saveSettings() {
     migrate_files: isPathChanged,
     llm_provider: document.getElementById('selectLlmProvider')?.value,
     transcribe_provider: document.getElementById('selectTranscribeProvider')?.value,
-    openai_api_key: document.getElementById('inputOpenai')?.value.trim(),
     openai_base_url: document.getElementById('inputOpenaiBase')?.value.trim(),
     openai_model: document.getElementById('inputOpenaiModel')?.value.trim(),
-    gemini_api_key: geminiInput ? geminiInput.value.trim() : undefined,
-    groq_api_key: groqInput ? groqInput.value.trim() : undefined
   };
 
   try {
@@ -3759,7 +3855,7 @@ window.loadOpenaiModels = async function () {
   renderOpenaiModelItems(current ? [current] : []);
 
   // With no typed key the server uses the saved one, for the saved base URL only.
-  if (apiKey || window.hasSavedOpenaiKey) {
+  if (apiKey || providerKeyUi.openai.configured) {
     status.innerText = 'Loading models...';
     try {
       const res = await fetch('/api/settings/openai-models', {
@@ -3777,7 +3873,9 @@ window.loadOpenaiModels = async function () {
       status.innerText = 'Could not load models';
     }
   } else {
-    status.innerText = 'Add an API key to list models';
+    status.innerText = providerKeyUi.openai.configured
+      ? 'Saved key is hidden; change it to refresh models'
+      : 'Add an API key to list models';
   }
 
   const names = current && !models.includes(current) ? [current, ...models] : models;
@@ -3792,11 +3890,18 @@ async function testApiKey(provider, wrapId, inputId, statusElId, btn) {
   const inputEl = document.getElementById(inputId);
   const statusEl = document.getElementById(statusElId);
   const icon = btn ? btn.querySelector('i') : null;
+  const state = providerKeyUi[provider];
+  const candidateKey = inputEl?.value.trim() || '';
 
-  if (!inputEl || !inputEl.value.trim()) {
+  if (!inputEl || !state || (state.editing && !candidateKey) || (!state.editing && !state.configured)) {
     triggerInputError(wrapId, wrapId.replace('wrap', 'err'), `Key ${provider} cannot be empty.`);
     if (statusEl) statusEl.innerHTML = '';
     return;
+  }
+
+  if (state.editing) {
+    state.validated = false;
+    updateProviderKeyUI(provider);
   }
 
   if (icon) icon.classList.add('animate-pulse', 'text-amber-400');
@@ -3808,7 +3913,7 @@ async function testApiKey(provider, wrapId, inputId, statusElId, btn) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         provider: provider.toLowerCase(),
-        api_key: inputEl.value.trim(),
+        api_key: state.editing ? candidateKey : '',
         base_url: provider === 'openai' ? document.getElementById('inputOpenaiBase')?.value.trim() : undefined
       })
     });
@@ -3816,9 +3921,16 @@ async function testApiKey(provider, wrapId, inputId, statusElId, btn) {
     if (icon) icon.classList.remove('animate-pulse', 'text-amber-400');
 
     if (res.ok && data.valid) {
-      if (statusEl) statusEl.innerHTML = '<span class="text-emerald-400">✓ Valid and saved to .env</span>';
+      if (state.editing) {
+        state.validated = true;
+        updateProviderKeyUI(provider);
+        if (statusEl) statusEl.innerHTML = '<span class="text-emerald-400">✓ Connection valid · click Save Key to apply</span>';
+        showToast(`${provider.toUpperCase()} key verified. Save it to apply.`);
+      } else {
+        if (statusEl) statusEl.innerHTML = '<span class="text-emerald-400">✓ Saved key connection is valid</span>';
+        showToast(`${provider.toUpperCase()} saved key connection is valid`);
+      }
       if (provider === 'openai') loadOpenaiModels();
-      showToast(`${provider.toUpperCase()} API connection validated and saved to .env`);
     } else {
       const errMsg = data.message || 'Invalid key';
       if (statusEl) statusEl.innerHTML = `<span class="text-red-400">✗ ${errMsg}</span>`;
@@ -3890,7 +4002,7 @@ async function runSystemCheck(btn) {
       chkStorage.setAttribute('data-lucide', data.storage ? 'check' : 'x');
       chkStorage.className = data.storage ? 'w-4 h-4 text-emerald-400' : 'w-4 h-4 text-red-400';
     }
-    if (statusStorageAccess) statusStorageAccess.innerText = data.storage ? 'Ready Tulis (RW OK)' : 'Akses Ditolak';
+    if (statusStorageAccess) statusStorageAccess.innerText = data.storage ? 'Read/write ready' : 'Access denied';
 
     lucide.createIcons();
     showToast('Dependency check complete: all utilities are ready');
@@ -6227,7 +6339,7 @@ function formatSavedDate(ts) {
   if (!ts) return '';
   try {
     const d = new Date(ts * 1000);
-    return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+    return d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
   } catch (e) {
     return '';
   }

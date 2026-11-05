@@ -105,9 +105,14 @@ class TestOpenAICompatible(unittest.TestCase):
 
             good = client.post("/api/settings/test-key", json={
                 "provider": "openai", "api_key": "good-key", "base_url": self.base_url})
-            self.assertTrue(good.json()["saved"])
+            self.assertTrue(good.json()["valid"])
+            self.assertFalse(good.json().get("saved", False))
 
-            saved = client.post("/api/settings", json={"openai_model": "new-model"})
+            saved = client.post("/api/settings", json={
+                "openai_api_key": "good-key",
+                "openai_base_url": self.base_url,
+                "openai_model": "new-model",
+            })
             self.assertEqual(saved.status_code, 200)
             with open(os.path.join(tmp, ".env"), encoding="utf-8") as f:
                 content = f.read()
@@ -198,6 +203,18 @@ class TestOpenAICompatible(unittest.TestCase):
             res = TestClient(app).post("/api/settings/openai-models", json={"api_key": " ", "base_url": self.base_url})
         self.assertEqual(res.status_code, 400)
         self.assertEqual(self.server.requests, [])
+
+    def test_key_test_never_sends_the_saved_key_to_another_url(self):
+        env = {"OPENAI_API_KEY": "good-key", "OPENAI_BASE_URL": "https://api.example.test/v1"}
+        with patch.dict(os.environ, env):
+            res = TestClient(app).post("/api/settings/test-key", json={"provider": "openai", "base_url": self.base_url})
+        self.assertFalse(res.json()["valid"])
+        self.assertEqual(self.server.requests, [])
+
+    def test_key_test_uses_the_saved_key_for_the_saved_url(self):
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "good-key", "OPENAI_BASE_URL": self.base_url}):
+            res = TestClient(app).post("/api/settings/test-key", json={"provider": "openai", "base_url": self.base_url})
+        self.assertTrue(res.json()["valid"])
 
     def test_model_list_uses_the_saved_key_for_the_saved_url(self):
         with patch.dict(os.environ, {"OPENAI_API_KEY": "good-key", "OPENAI_BASE_URL": self.base_url}):

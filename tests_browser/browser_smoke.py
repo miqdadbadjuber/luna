@@ -105,15 +105,16 @@ class BrowserSmokeTest(unittest.TestCase):
 
     def test_settings_save_writes_env(self):
         self._open()
-        # Opening the tab reloads settings and clears the key fields, so fill after it lands.
+        # Opening the tab reloads settings into the form, so change it after that lands.
         with self.page.expect_response(lambda r: r.url.endswith("/api/settings") and r.request.method == "GET"):
             self.page.click("#btnNavSettings")
         self.page.wait_for_timeout(300)
-        self.page.fill("#inputGroq", "gsk-smoke")
+        self.page.click("#transcribeTrigger")
+        self.page.click("#transcribeMenu [data-value='gemini']")
         self.page.click("#btnSaveHeader")
         expect(self.page.locator("#toastMessage")).to_contain_text("Settings saved")
         with open(os.path.join(self.tmp.name, ".env"), encoding="utf-8") as f:
-            self.assertIn("GROQ_API_KEY=gsk-smoke", f.read())
+            self.assertIn("LOCAL_TRANSCRIBE_PROVIDER=gemini", f.read())
         self.assertEqual(self.errors, [])
 
     def test_a_completed_job_shows_its_result(self):

@@ -2268,7 +2268,7 @@ class OpenAIModelsRequest(BaseModel):
 
 class TestKeyRequest(BaseModel):
     provider: str
-    api_key: str
+    api_key: Optional[str] = None
     base_url: Optional[str] = None
 
 
@@ -2499,14 +2499,21 @@ async def api_openai_models(req: OpenAIModelsRequest):
 @app.post("/api/settings/test-key")
 async def api_test_key(req: TestKeyRequest):
     provider = req.provider.lower()
-    key = req.api_key.strip()
+    env_key = {"openai": "OPENAI_API_KEY", "gemini": "GEMINI_API_KEY", "groq": "GROQ_API_KEY"}.get(provider)
+    if not env_key:
+        return {"valid": False, "message": "Unknown provider"}
+    # An empty request means test the configured key without returning it to the browser.
+    key = (req.api_key or "").strip() or os.getenv(env_key, "").strip()
     if not key:
-        raise HTTPException(status_code=400, detail="API key cannot be empty")
+        return {"valid": False, "message": "No API key is configured"}
 
     if provider == "openai":
         base_url = (req.base_url or "").strip().rstrip("/") or DEFAULT_OPENAI_BASE_URL
         if not base_url.startswith(("http://", "https://")):
             return {"valid": False, "message": "Base URL must start with http(s)://"}
+        # Same rule as the model list: the saved key only goes to the saved base URL.
+        if not (req.api_key or "").strip() and base_url != openai_base_url().rstrip("/"):
+            return {"valid": False, "message": "Enter the key to test it against this base URL"}
         try:
             resp = await asyncio.to_thread(
                 requests.get,
@@ -2515,8 +2522,7 @@ async def api_test_key(req: TestKeyRequest):
                 timeout=8,
             )
             if resp.status_code == 200:
-                _update_env_file({"OPENAI_API_KEY": key, "OPENAI_BASE_URL": base_url})
-                return {"valid": True, "message": "200 OK", "saved": True}
+                return {"valid": True, "message": "200 OK"}
             return {"valid": False, "message": f"{resp.status_code} Error"}
         except Exception as e:
             return {"valid": False, "message": str(e)[:40]}
@@ -2531,8 +2537,7 @@ async def api_test_key(req: TestKeyRequest):
                 timeout=8,
             )
             if resp.status_code == 200:
-                _update_env_file({"GEMINI_API_KEY": key})
-                return {"valid": True, "message": "200 OK", "saved": True}
+                return {"valid": True, "message": "200 OK"}
             else:
                 return {"valid": False, "message": f"{resp.status_code} Error"}
         except Exception as e:
@@ -2547,8 +2552,7 @@ async def api_test_key(req: TestKeyRequest):
                 timeout=8,
             )
             if resp.status_code == 200:
-                _update_env_file({"GROQ_API_KEY": key})
-                return {"valid": True, "message": "200 OK", "saved": True}
+                return {"valid": True, "message": "200 OK"}
             else:
                 return {"valid": False, "message": f"{resp.status_code} Error"}
         except Exception as e:
