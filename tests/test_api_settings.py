@@ -5,7 +5,7 @@ from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 from luna.app import app
 
-class TestApiSettingsAutoSave(unittest.TestCase):
+class TestApiSettings(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app)
         # The settings endpoints rewrite .env, so point them away from the developer's real file.
@@ -20,7 +20,7 @@ class TestApiSettingsAutoSave(unittest.TestCase):
         self.addCleanup(environ.stop)
 
     @patch("requests.get")
-    def test_groq_key_test_auto_saves_to_env(self, mock_get):
+    def test_groq_key_test_does_not_save_until_settings_are_saved(self, mock_get):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_get.return_value = mock_resp
@@ -33,9 +33,14 @@ class TestApiSettingsAutoSave(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         data = res.json()
         self.assertTrue(data.get("valid"))
-        self.assertTrue(data.get("saved"))
+        self.assertFalse(data.get("saved", False))
 
-        # Verify in memory os.environ
+        # Testing validates the candidate without replacing the configured key.
+        self.assertNotEqual(os.environ.get("GROQ_API_KEY"), new_test_key)
+        saved = self.client.post("/api/settings", json={"groq_api_key": new_test_key})
+        self.assertEqual(saved.status_code, 200)
+
+        # Verify in memory os.environ after explicit save.
         self.assertEqual(os.environ.get("GROQ_API_KEY"), new_test_key)
         from luna.clipper.config import require_groq_key
         self.assertEqual(require_groq_key(), new_test_key)
