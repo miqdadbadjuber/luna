@@ -86,6 +86,7 @@ Temporary downloads go to `output/`. Media Vault uses `MEDIA_STORAGE_DIR` when s
 
 - Site changes or access restrictions can affect `yt-dlp` downloads.
 - Cookies are optional and sensitive. Do not share or commit exported cookie files.
+- You are responsible for having the rights to the videos you download, cut and publish. The platforms' terms and copyright apply regardless of Luna's license.
 
 ## License
 
