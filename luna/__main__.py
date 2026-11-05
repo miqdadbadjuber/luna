@@ -5,8 +5,8 @@
 
 """Development entry point (python -m luna) with auto-reload.
 
-For daily use prefer start.sh / start.bat: the reloader restarts the process, and
-job state lives in memory, so a reload drops in-flight jobs.
+For daily use prefer start.sh / start.bat: the reloader restarts the process, and a
+reload stops in-flight jobs. They come back as failed and can be retried.
 """
 import os
 
