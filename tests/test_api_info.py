@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
+from tests import page_source
 from luna.app import app
 
 class TestApiInfo(unittest.TestCase):
@@ -85,7 +86,7 @@ class TestApiInfo(unittest.TestCase):
     def test_frontend_format_duration_logic(self):
         res = self.client.get("/")
         self.assertEqual(res.status_code, 200)
-        html = res.text
+        html = page_source(self.client)
         self.assertIn("formatDuration", html)
         self.assertIn("previewBullet", html)
         self.assertIn("previewDuration", html)

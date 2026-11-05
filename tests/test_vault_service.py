@@ -6,7 +6,6 @@ import time
 import unittest
 from unittest.mock import patch
 
-from luna import storage_manager
 from luna import vault_service
 
 

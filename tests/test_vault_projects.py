@@ -7,7 +7,6 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from luna import storage_manager
 from luna import vault_service
 from luna.app import app, jobs
 

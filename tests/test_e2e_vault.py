@@ -6,9 +6,10 @@ import unittest
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 
+from tests import page_source
 from luna.app import app
-from luna.storage_manager import get_storage_root, get_category_folder
-from luna.vault_service import save_media_metadata, list_vault_items, delete_vault_item, get_storage_stats
+from luna.storage_manager import get_storage_root
+from luna.vault_service import save_media_metadata
 
 
 class TestEndToEndVault(unittest.TestCase):
@@ -48,8 +49,8 @@ class TestEndToEndVault(unittest.TestCase):
             "action": "youtube_ai_clip",
             "filename": "clip_01_virality-95.mp4",
             "file_path": self.test_file_path,
-            "video_url": f"/media-vault/01-AI-Clips/2026-09-07_E2E_Test_Video/clip_01_virality-95.mp4",
-            "download_url": f"/media-vault/01-AI-Clips/2026-09-07_E2E_Test_Video/clip_01_virality-95.mp4",
+            "video_url": "/media-vault/01-AI-Clips/2026-09-07_E2E_Test_Video/clip_01_virality-95.mp4",
+            "download_url": "/media-vault/01-AI-Clips/2026-09-07_E2E_Test_Video/clip_01_virality-95.mp4",
             "duration": 42,
             "filesize_bytes": os.path.getsize(self.test_file_path),
             "virality_score": 95,
@@ -102,7 +103,7 @@ class TestEndToEndVault(unittest.TestCase):
     def test_html_template_renders_and_contains_all_vault_components(self):
         res = self.client.get("/")
         self.assertEqual(res.status_code, 200)
-        html = res.text
+        html = page_source(self.client)
 
         # Navbar tabs
         self.assertIn("tabBtnStudio", html)

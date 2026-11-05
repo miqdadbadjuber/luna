@@ -118,7 +118,6 @@ def _sample_face_centers(
     # same fallback the tracker already uses when the file cannot be opened:
     # a missing cv2 or Haar cascade must not abort the clip, the static center
     # crop still runs. The caller expects crop ORIGINS, not centres, so convert here.
-    static_center = (src_w // 2, src_h // 2)
     static_origin = (
         max(0, (src_w - crop_w) // 2),
         max(0, (src_h - crop_h) // 2),
