@@ -53,3 +53,6 @@ node_modules/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Clip evaluation runs hold downloaded videos and rendered clips.
+/eval/runs/
