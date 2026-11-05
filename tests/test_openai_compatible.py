@@ -105,9 +105,14 @@ class TestOpenAICompatible(unittest.TestCase):
 
             good = client.post("/api/settings/test-key", json={
                 "provider": "openai", "api_key": "good-key", "base_url": self.base_url})
-            self.assertTrue(good.json()["saved"])
+            self.assertTrue(good.json()["valid"])
+            self.assertFalse(good.json().get("saved", False))
 
-            saved = client.post("/api/settings", json={"openai_model": "new-model"})
+            saved = client.post("/api/settings", json={
+                "openai_api_key": "good-key",
+                "openai_base_url": self.base_url,
+                "openai_model": "new-model",
+            })
             self.assertEqual(saved.status_code, 200)
             with open(os.path.join(tmp, ".env"), encoding="utf-8") as f:
                 content = f.read()
