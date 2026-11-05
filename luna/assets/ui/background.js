@@ -29,7 +29,6 @@ window.resumeUnicornStudio = function () {
             scene.enable();
           }
         });
-        window.dispatchEvent(new Event('resize'));
       }
     }
   } catch (e) {

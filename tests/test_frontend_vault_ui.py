@@ -37,6 +37,12 @@ class TestFrontendVaultUI(unittest.TestCase):
         res = self.client.get("/guide", follow_redirects=False)
         self.assertEqual((res.status_code, res.headers["location"]), (307, "/#guide"))
 
+    def test_job_confirmation_states_rights_and_privacy(self):
+        html = self.response.text
+        self.assertIn('id="wsModalUsageNotice"', html)
+        self.assertIn("rights to use", html)
+        self.assertIn("providers chosen in Settings", html)
+
     def test_failed_job_can_be_dismissed(self):
         """A failed job must keep a working close control and a calm badge."""
         html = self.source

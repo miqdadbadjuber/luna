@@ -1,0 +1,4 @@
+{
+  "pass_rate": {"complete_thought": 0.8, "stands_alone": 0.7, "caption_true": 0.9, "would_post": 0.5},
+  "score_gap": 5
+}

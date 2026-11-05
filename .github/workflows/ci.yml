@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version-file: .python-version
@@ -48,7 +48,7 @@ jobs:
     env:
       LUNA_NO_START: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install on macOS or Linux
         if: runner.os != 'Windows'
         run: ./install.sh
@@ -70,7 +70,7 @@ jobs:
     env:
       DEV: -f compose.yaml -f compose.dev.yaml
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Prepare host files
         run: |
           cp .env.example .env
