@@ -4315,14 +4315,16 @@ function getProjectMeter(proj) {
   if (act.includes('clip') || act.includes('trim')) {
     return { signal: 3, tone: '#a1a1aa', label: 'Video Trimmer' };
   }
-  if (plat.includes('youtube') || act.includes('video')) {
-    return { signal: 3, tone: '#ef4444', label: 'YouTube' };
+  // Match the platform before the action: "type_tt_video" contains "video", which
+  // used to label TikTok workspaces as YouTube.
+  if (plat.includes('tiktok')) {
+    return { signal: 3, tone: '#a1a1aa', label: 'TikTok' };
   }
   if (plat.includes('instagram') || act.includes('reels')) {
     return { signal: 3, tone: '#ec4899', label: 'Instagram Reels' };
   }
-  if (plat.includes('tiktok')) {
-    return { signal: 3, tone: '#a1a1aa', label: 'TikTok Clean' };
+  if (plat.includes('youtube')) {
+    return { signal: 3, tone: '#ef4444', label: 'YouTube' };
   }
   if (act.includes('mp3') || plat.includes('audio')) {
     return { signal: 3, tone: '#f59e0b', label: 'Audio MP3' };
