@@ -479,7 +479,6 @@ const SUB_FEATURES = {
   youtube: [
     { id: 'type_yt_ai_clip', label: 'AI Short Clips', desc: 'Virality Score & Subtitles', icon: 'clapperboard', btnText: 'Generate', drawer: 'ai-clip' },
     { id: 'type_yt_video', label: 'Full HD Video', desc: '1080p / 720p / 480p MP4', icon: 'film', btnText: 'Download', drawer: 'quality' },
-    { id: 'type_yt_short', label: 'YouTube Shorts', desc: 'Direct vertical 1080p', icon: 'zap', btnText: 'Download', drawer: null },
     { id: 'type_yt_mp3', label: 'Audio MP3', desc: '320kbps High Quality', icon: 'music', btnText: 'Download', drawer: null },
     { id: 'type_yt_clip', label: 'Video Trimmer', desc: 'Manually trim video duration', icon: 'scissors', btnText: 'Download', drawer: 'trimmer' }
   ],
@@ -1829,7 +1828,6 @@ function getPillHtml(status) {
 function getPipelineLabel(act) {
   if (act === 'type_yt_ai_clip' || act === 'ai_clip') return 'AI Shorts 9:16 Virality';
   if (act === 'type_yt_video') return `YouTube Full Video (${selectedQuality}p)`;
-  if (act === 'type_yt_short') return 'YouTube Shorts Clean';
   if (act === 'type_yt_mp3' || act === 'type_tt_mp3') return 'Audio MP3 320kbps';
   if (act === 'type_yt_clip') return 'Manual Video Trimmer';
   if (act === 'type_ig_reels') return 'Instagram Reels Full HD';
@@ -2873,7 +2871,7 @@ function renderOpusResults(data) {
       setTimeout(() => initAudioEvents(fileId), 20);
     } else {
       const fileId = `studio-vid-${idx}`;
-      const isPortraitDefault = currentPlatform === 'tiktok' || currentPlatform === 'instagram' || currentActionType === 'type_yt_ai_clip' || currentActionType === 'type_yt_short';
+      const isPortraitDefault = currentPlatform === 'tiktok' || currentPlatform === 'instagram' || currentActionType === 'type_yt_ai_clip';
       const itemMeta = ratioMetaFromValue(item.aspect_ratio) || ratioMetaFromFilename(item.filename) || {
         label: isPortraitDefault ? '9:16 Portrait' : '16:9 Landscape',
         kind: isPortraitDefault ? 'portrait' : 'landscape',
