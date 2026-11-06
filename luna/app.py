@@ -47,6 +47,9 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 # Ensure ffmpeg in PATH
 os.environ["PATH"] += os.pathsep + r"C:\ffmpeg\bin"
+# The start scripts run .venv/bin/python without activating the venv, so deno from
+# requirements.txt (yt-dlp solves YouTube's JS challenge with it) is not on PATH otherwise.
+os.environ["PATH"] = os.path.dirname(sys.executable) + os.pathsep + os.environ["PATH"]
 
 from .ffmpeg_setup import ensure_ffmpeg
 
