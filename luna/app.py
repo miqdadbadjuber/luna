@@ -659,14 +659,14 @@ def download_youtube_video(url: str, output_dir: str, quality: str = "1080", pro
 
 def download_instagram_reels(url: str, output_dir: str, progress_hook: Optional[Callable] = None) -> str:
     opts = {
-        "format": "bestvideo+bestaudio/best",
+        # "bestvideo" only considers video-only streams, so Instagram's separate
+        # low-res DASH video won over the full-quality progressive MP4. bv* also
+        # accepts combined streams, which keeps the original resolution.
+        "format": "bv*+ba/b",
         "outtmpl": os.path.join(output_dir, "reels.%(ext)s"),
         "merge_output_format": "mp4",
         "noplaylist": True,
         "quiet": True,
-        "http_headers": {
-            "User-Agent": "Instagram 219.0.0.12.117 Android (28/9; 411dpi; 1080x2226; Xiaomi; Mi A2; jasmine_sprout; qcom; en_US; 302733750)"
-        }
     }
     if progress_hook:
         opts["progress_hooks"] = [progress_hook]
