@@ -599,6 +599,9 @@ def create_progress_hook(job_id: str, finished_pct: Optional[float] = None):
                     speed_str = f"{speed:.0f} B/s"
 
             eta = d.get("eta")
+            # yt-dlp omits "eta" for some streams; derive it so the card still shows one.
+            if eta is None and speed and total and total > downloaded:
+                eta = (total - downloaded) / speed
             eta_str = ""
             if eta is not None:
                 mins, secs = divmod(int(eta), 60)

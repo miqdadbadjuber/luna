@@ -5958,6 +5958,7 @@ window.updateVaultFilterCounters = function () {
   let squareCount = 0;
   allCards.forEach(c => {
     const type = c.getAttribute('data-media-type');
+    if (type === 'audio') return;  // audio is not a video orientation
     if (type === 'portrait') portraitCount++;
     else if (type === 'square') squareCount++;
     else landscapeCount++;
@@ -6073,7 +6074,7 @@ function renderProjectFiles(proj) {
     const card = document.createElement('div');
     card.id = `vault-card-${file.id}`;
     card.className = 'rounded-2xl bg-[#171717] border border-white/[0.08] shadow-[0_4px_20px_-2px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col justify-between group';
-    card.setAttribute('data-media-type', mediaMeta.kind);
+    card.setAttribute('data-media-type', isAud ? 'audio' : mediaMeta.kind);
 
     let mediaPreviewHtml = '';
     if (isAud) {
@@ -6081,11 +6082,6 @@ function renderProjectFiles(proj) {
       mediaPreviewHtml = `
         <div class="audio-card-showcase relative bg-[#121212] border-b border-white/[0.06] p-5 flex flex-col items-center justify-center overflow-hidden select-none">
           <div class="absolute inset-0 bg-radial from-white/[0.07] via-transparent to-transparent pointer-events-none"></div>
-
-          <div class="absolute top-2.5 right-2.5 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/[0.04] border border-white/10 text-[10px] font-mono text-zinc-400">
-            <span class="w-1.5 h-1.5 rounded-full bg-white"></span>
-            <span>320 KBPS MP3</span>
-          </div>
 
           <!-- Vinyl Disc Graphic -->
           <div class="relative my-2 flex items-center justify-center">
