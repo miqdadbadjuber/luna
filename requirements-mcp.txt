@@ -1,0 +1,2 @@
+# Optional: the MCP server in luna/mcp_server.py, for driving Luna from an AI agent.
+mcp==2.3.0

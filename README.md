@@ -52,6 +52,16 @@ tests/           unittest suite
 
 Python code reloads on save with `python -m luna`. `luna/templates/*.html` are read on every request, so refresh the browser. Set `MEDIA_STORAGE_DIR=media-vault` in `.env` to keep test downloads apart from your real library. `.python-version` pins the version CI uses (3.12).
 
+## AI agents (MCP)
+
+`luna/mcp_server.py` lets an MCP client such as Claude Code start clip jobs, follow them and collect the clips. Install `requirements-mcp.txt`, then register it:
+
+```bash
+claude mcp add luna -e LUNA_URL=http://127.0.0.1:8000 -- /path/to/luna/.venv/bin/python /path/to/luna/luna/mcp_server.py
+```
+
+See [MCP.md](MCP.md) for the tools, running Luna on another machine and a simulated session.
+
 ## Docker
 
 Docker replaces the local Python and FFmpeg install. It needs these host files first, because Compose would otherwise create the missing mounts itself, as root-owned directories:
