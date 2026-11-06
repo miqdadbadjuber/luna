@@ -56,3 +56,6 @@ desktop.ini
 
 # Clip evaluation runs hold downloaded videos and rendered clips.
 /eval/runs/
+
+# docs
+/issue/
