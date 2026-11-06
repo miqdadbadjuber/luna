@@ -57,7 +57,9 @@ def generate_shorts(
 
     shorts = crop_highlights_local(
         source_path, top, aspect_ratio=aspect_ratio, out_dir=out_dir, use_face_detect=use_face_detect, on_progress=_on_clip_progress,
-        transcript_segments=transcript["segments"],
+        # Subtitles are burned into the clip by the renderer. They were causing good
+        # videos to fail, so the pipeline does not pass cues at all for now.
+        transcript_segments=[],
     )
 
     # A job with no clips must fail visibly instead of reporting success with an empty result.
