@@ -50,6 +50,13 @@ class TestFrontendVaultUI(unittest.TestCase):
         self.assertNotIn('Failed <span class="animate-spin', html)
         self.assertIn("The download was interrupted", html)
 
+    def test_ratio_labels_cover_every_supported_ratio(self):
+        """3:4 and 1:1 must be labelled as themselves, not as 9:16 / 16:9."""
+        for label in ("16:9 Landscape", "9:16 Portrait", "3:4 Portrait", "1:1 Square"):
+            self.assertIn(label, self.source)
+        self.assertIn("filterCountSquare", self.source)
+        self.assertIn("ratioMetaFromSize", self.source)
+
     def test_navbar_tabs_exist(self):
         """Check for tabBtnStudio and tabBtnVault."""
         html = self.source

@@ -2874,6 +2874,12 @@ function renderOpusResults(data) {
     } else {
       const fileId = `studio-vid-${idx}`;
       const isPortraitDefault = currentPlatform === 'tiktok' || currentPlatform === 'instagram' || currentActionType === 'type_yt_ai_clip' || currentActionType === 'type_yt_short';
+      const itemMeta = ratioMetaFromValue(item.aspect_ratio) || ratioMetaFromFilename(item.filename) || {
+        label: isPortraitDefault ? '9:16 Portrait' : '16:9 Landscape',
+        kind: isPortraitDefault ? 'portrait' : 'landscape',
+        icon: isPortraitDefault ? 'smartphone' : 'tv',
+      };
+      const itemIsWide = itemMeta.kind === 'landscape';
 
       const captionBox = item.caption ? `
         <div class="mt-2.5">
@@ -2895,14 +2901,14 @@ function renderOpusResults(data) {
       ` : '';
 
       if (isSingle) {
-        card.className = `t-rec-card single-result-card flex flex-col justify-between w-full ${isPortraitDefault ? 'max-w-md' : 'max-w-3xl'} mx-auto shadow-2xl`;
+        card.className = `t-rec-card single-result-card flex flex-col justify-between w-full ${itemIsWide ? 'max-w-3xl' : 'max-w-md'} mx-auto shadow-2xl`;
         card.innerHTML = `
-          <div class="video-preview-wrapper relative bg-[#09090b] w-full overflow-hidden border-b border-white/[0.06] flex items-center justify-center ${isPortraitDefault ? 'aspect-[4/5] max-h-[580px]' : 'aspect-video max-h-[520px]'}" data-file-id="${fileId}">
+          <div class="video-preview-wrapper relative bg-[#09090b] w-full overflow-hidden border-b border-white/[0.06] flex items-center justify-center ${ratioAspectClass(itemMeta)} ${itemIsWide ? 'max-h-[520px]' : 'max-h-[580px]'}" style="aspect-ratio: ${ratioAspectStyle(itemMeta)}" data-file-id="${fileId}">
             <div class="ambient-glow absolute inset-0 opacity-15 pointer-events-none filter blur-2xl scale-125 bg-gradient-to-t from-white/10 via-white/5 to-transparent"></div>
 
             <div class="ratio-pill absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-[11px] font-mono text-zinc-300 pointer-events-none">
-              <i data-lucide="${isPortraitDefault ? 'smartphone' : 'tv'}" class="w-3.5 h-3.5 ${isPortraitDefault ? 'text-white' : 'text-zinc-400'}"></i>
-              <span class="ratio-text">${isPortraitDefault ? '9:16 Portrait' : '16:9 Landscape'}</span>
+              <i data-lucide="${itemMeta.icon}" class="w-3.5 h-3.5 ${itemIsWide ? 'text-zinc-400' : 'text-white'}"></i>
+              <span class="ratio-text">${itemMeta.label}</span>
             </div>
 
             <media-theme-sutro style="width:100%; height:100%;" data-player-size="large">
@@ -2941,12 +2947,12 @@ function renderOpusResults(data) {
       } else {
         card.className = 't-rec-card flex flex-col justify-between';
         card.innerHTML = `
-          <div class="video-preview-wrapper relative bg-[#09090b] w-full overflow-hidden border-b border-white/[0.06] flex items-center justify-center ${isPortraitDefault ? 'aspect-[4/5] max-h-[460px]' : 'aspect-video'}" data-file-id="${fileId}">
+          <div class="video-preview-wrapper relative bg-[#09090b] w-full overflow-hidden border-b border-white/[0.06] flex items-center justify-center ${ratioAspectClass(itemMeta)} ${itemIsWide ? 'max-h-[460px]' : ''}" style="aspect-ratio: ${ratioAspectStyle(itemMeta)}" data-file-id="${fileId}">
             <div class="ambient-glow absolute inset-0 opacity-15 pointer-events-none filter blur-2xl scale-125 bg-gradient-to-t from-white/10 via-white/5 to-transparent"></div>
 
             <div class="ratio-pill absolute top-2.5 left-2.5 z-20 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-[10px] font-mono text-zinc-300 pointer-events-none">
-              <i data-lucide="${isPortraitDefault ? 'smartphone' : 'tv'}" class="w-3 h-3 ${isPortraitDefault ? 'text-white' : 'text-zinc-400'}"></i>
-              <span class="ratio-text">${isPortraitDefault ? '9:16 Portrait' : '16:9 Landscape'}</span>
+              <i data-lucide="${itemMeta.icon}" class="w-3 h-3 ${itemIsWide ? 'text-zinc-400' : 'text-white'}"></i>
+              <span class="ratio-text">${itemMeta.label}</span>
             </div>
 
             <media-theme-sutro style="width:100%; height:100%;" data-player-size="mini">
@@ -4641,48 +4647,96 @@ window.initAudioEvents = function (fileId) {
   };
 };
 
+// A workspace can hold 16:9, 9:16, 3:4, 4:3 and 1:1 files side by side, so the pill
+// has to describe the real ratio instead of "portrait or not".
+const VAULT_RATIOS = [
+  { ratio: 16 / 9, label: '16:9 Landscape', kind: 'landscape', icon: 'tv' },
+  { ratio: 4 / 3, label: '4:3 Landscape', kind: 'landscape', icon: 'tv' },
+  { ratio: 9 / 16, label: '9:16 Portrait', kind: 'portrait', icon: 'smartphone' },
+  { ratio: 3 / 4, label: '3:4 Portrait', kind: 'portrait', icon: 'smartphone' },
+  { ratio: 1, label: '1:1 Square', kind: 'square', icon: 'square' },
+];
+
+function ratioMetaFromSize(width, height) {
+  if (!width || !height) return null;
+  const actual = width / height;
+  let best = null;
+  for (const item of VAULT_RATIOS) {
+    const diff = Math.abs(actual - item.ratio) / item.ratio;
+    if (diff <= 0.06 && (!best || diff < best.diff)) best = { ...item, diff };
+  }
+  if (best) return best;
+  const kind = actual > 1.05 ? 'landscape' : (actual < 0.95 ? 'portrait' : 'square');
+  return {
+    label: `${width}:${height}`,
+    kind,
+    icon: kind === 'portrait' ? 'smartphone' : (kind === 'square' ? 'square' : 'tv'),
+  };
+}
+
+function ratioMetaFromValue(value) {
+  if (!value) return null;
+  const match = String(value).match(/(\d{1,4})\s*[:x×]\s*(\d{1,4})/i);
+  return match ? ratioMetaFromSize(Number(match[1]), Number(match[2])) : null;
+}
+
+function ratioMetaFromFilename(name) {
+  const match = /_(\d{1,2})x(\d{1,2})(?:\.[a-z0-9]+)?$/i.exec(name || '');
+  return match ? ratioMetaFromSize(Number(match[1]), Number(match[2])) : null;
+}
+
+function ratioAspectClass(meta) {
+  if (!meta) return 'aspect-video';
+  if (meta.kind === 'square') return 'aspect-square';
+  if (meta.kind === 'portrait') return meta.label.indexOf('3:4') === 0 ? 'aspect-[3/4]' : 'aspect-[9/16]';
+  return 'aspect-video';
+}
+
+// The class above is cosmetic; the inline style keeps the box correct even if the
+// utility for that ratio has not been generated yet.
+function ratioAspectStyle(meta) {
+  if (!meta) return '16 / 9';
+  if (meta.kind === 'square') return '1 / 1';
+  if (meta.kind === 'portrait') return meta.label.indexOf('3:4') === 0 ? '3 / 4' : '9 / 16';
+  return '16 / 9';
+}
+
 window.handleVaultVideoMetadata = function (videoEl, fileId) {
   if (!videoEl || !videoEl.videoWidth || !videoEl.videoHeight) return;
   const wrapper = videoEl.closest('.video-preview-wrapper');
   if (!wrapper) return;
   const card = wrapper.closest('.t-rec-card') || wrapper.closest('[data-media-type]') || wrapper.parentElement;
-  const isPortrait = videoEl.videoHeight > videoEl.videoWidth;
-  const ratioPill = wrapper.querySelector('.ratio-pill');
+  const meta = ratioMetaFromSize(videoEl.videoWidth, videoEl.videoHeight);
   const ratioText = wrapper.querySelector('.ratio-text');
   const icon = wrapper.querySelector('.ratio-pill [data-lucide]');
-
   const isSingleCard = card && card.classList.contains('single-result-card');
+  const isWide = !meta || meta.kind === 'landscape';
 
-  if (isPortrait) {
-    wrapper.classList.remove('aspect-video', 'aspect-[4/5]');
-    if (isSingleCard) {
-      wrapper.classList.remove('max-h-[460px]', 'max-h-[520px]');
-      wrapper.classList.add('aspect-[9/16]', 'max-h-[580px]');
-      card.classList.remove('max-w-3xl');
-      card.classList.add('max-w-md');
-    } else {
-      wrapper.classList.add('aspect-[9/16]', 'max-h-[500px]');
-    }
-    if (card) card.setAttribute('data-media-type', 'portrait');
-    if (ratioText) ratioText.innerText = '9:16 Portrait';
-    if (icon) {
-      icon.setAttribute('data-lucide', 'smartphone');
-      icon.className = 'w-3 h-3 text-white';
-    }
-  } else {
-    wrapper.classList.remove('aspect-[9/16]', 'aspect-[4/5]', 'max-h-[460px]', 'max-h-[500px]', 'max-h-[580px]');
-    wrapper.classList.add('aspect-video');
-    if (isSingleCard) {
+  wrapper.classList.remove('aspect-video', 'aspect-[4/5]', 'aspect-[9/16]', 'aspect-[3/4]', 'aspect-square');
+  wrapper.classList.add(ratioAspectClass(meta));
+  wrapper.style.aspectRatio = ratioAspectStyle(meta);
+
+  if (isSingleCard) {
+    wrapper.classList.remove('max-h-[460px]', 'max-h-[500px]', 'max-h-[520px]', 'max-h-[580px]');
+    if (isWide) {
       wrapper.classList.add('max-h-[520px]');
       card.classList.remove('max-w-md');
       card.classList.add('max-w-3xl');
+    } else {
+      wrapper.classList.add('max-h-[580px]');
+      card.classList.remove('max-w-3xl');
+      card.classList.add('max-w-md');
     }
-    if (card) card.setAttribute('data-media-type', 'landscape');
-    if (ratioText) ratioText.innerText = '16:9 Landscape';
-    if (icon) {
-      icon.setAttribute('data-lucide', 'tv');
-      icon.className = 'w-3 h-3 text-zinc-400';
-    }
+  } else {
+    wrapper.classList.remove('max-h-[500px]', 'max-h-[520px]', 'max-h-[580px]');
+    wrapper.classList.add(isWide ? 'max-h-[520px]' : 'max-h-[500px]');
+  }
+
+  if (card) card.setAttribute('data-media-type', meta ? meta.kind : 'landscape');
+  if (ratioText) ratioText.innerText = meta ? meta.label : 'Video';
+  if (icon && meta) {
+    icon.setAttribute('data-lucide', meta.icon);
+    icon.className = isWide ? 'w-3 h-3 text-zinc-400' : 'w-3 h-3 text-white';
   }
   lucide.createIcons();
   if (typeof updateVaultFilterCounters === 'function') {
@@ -5903,17 +5957,21 @@ window.updateVaultFilterCounters = function () {
   const allCards = grid.querySelectorAll('[data-media-type]');
   let landscapeCount = 0;
   let portraitCount = 0;
+  let squareCount = 0;
   allCards.forEach(c => {
     const type = c.getAttribute('data-media-type');
     if (type === 'portrait') portraitCount++;
+    else if (type === 'square') squareCount++;
     else landscapeCount++;
   });
   const cAll = document.getElementById('filterCountAll');
   const cLand = document.getElementById('filterCountLandscape');
   const cPort = document.getElementById('filterCountPortrait');
+  const cSquare = document.getElementById('filterCountSquare');
   if (cAll) cAll.innerText = allCards.length;
   if (cLand) cLand.innerText = landscapeCount;
   if (cPort) cPort.innerText = portraitCount;
+  if (cSquare) cSquare.innerText = squareCount;
 
   requestAnimationFrame(() => {
     setVaultMediaFilter(window.currentVaultMediaFilter || 'all', false);
@@ -6000,8 +6058,14 @@ function renderProjectFiles(proj) {
 
   files.forEach(file => {
     const isAud = file.type === 'audio' || (file.filename || '').endsWith('.mp3');
-    const isPort = isPortraitWorkspace || (file.quality && file.quality.includes('vertical')) ||
+    const storedRatio = ratioMetaFromValue(file.aspect_ratio) || ratioMetaFromFilename(file.filename);
+    const guessPortrait = isPortraitWorkspace || (file.quality && file.quality.includes('vertical')) ||
       (file.filename && (file.filename.includes('Reels') || file.filename.includes('Shorts')));
+    const mediaMeta = storedRatio || {
+      label: guessPortrait ? '9:16 Portrait' : '16:9 Landscape',
+      kind: guessPortrait ? 'portrait' : 'landscape',
+      icon: guessPortrait ? 'smartphone' : 'tv',
+    };
     const fSize = formatBytes(file.file_size);
     const rawMediaUrl = file.url || (file.relative_path ? `/media-vault/${file.relative_path.replace(/\\/g, '/')}` : '#');
     const mediaUrl = rawMediaUrl !== '#' ? encodeURI(rawMediaUrl) : '#';
@@ -6011,7 +6075,7 @@ function renderProjectFiles(proj) {
     const card = document.createElement('div');
     card.id = `vault-card-${file.id}`;
     card.className = 'rounded-2xl bg-[#171717] border border-white/[0.08] shadow-[0_4px_20px_-2px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col justify-between group';
-    card.setAttribute('data-media-type', isPort ? 'portrait' : 'landscape');
+    card.setAttribute('data-media-type', mediaMeta.kind);
 
     let mediaPreviewHtml = '';
     if (isAud) {
@@ -6086,12 +6150,12 @@ function renderProjectFiles(proj) {
       `;
     } else {
       mediaPreviewHtml = `
-        <div class="video-preview-wrapper relative bg-[#09090b] w-full overflow-hidden border-b border-white/[0.06] flex items-center justify-center ${isPort ? 'aspect-[9/16] max-h-[500px]' : 'aspect-video'}" data-file-id="${file.id}">
+        <div class="video-preview-wrapper relative bg-[#09090b] w-full overflow-hidden border-b border-white/[0.06] flex items-center justify-center ${ratioAspectClass(mediaMeta)} ${mediaMeta.kind === 'landscape' ? 'max-h-[520px]' : 'max-h-[500px]'}" style="aspect-ratio: ${ratioAspectStyle(mediaMeta)}" data-file-id="${file.id}">
           <div class="ambient-glow absolute inset-0 opacity-15 pointer-events-none filter blur-2xl scale-125 bg-gradient-to-t from-white/10 via-white/5 to-transparent"></div>
 
           <div class="ratio-pill absolute top-2.5 left-2.5 z-20 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-[10px] font-mono text-zinc-300 pointer-events-none">
-            <i data-lucide="${isPort ? 'smartphone' : 'tv'}" class="w-3 h-3 ${isPort ? 'text-white' : 'text-zinc-400'}"></i>
-            <span class="ratio-text">${isPort ? '9:16 Portrait' : '16:9 Landscape'}</span>
+            <i data-lucide="${mediaMeta.icon}" class="w-3 h-3 ${mediaMeta.kind === 'landscape' ? 'text-zinc-400' : 'text-white'}"></i>
+            <span class="ratio-text">${mediaMeta.label}</span>
           </div>
 
           <media-theme-sutro style="width:100%; height:100%;" data-player-size="medium">

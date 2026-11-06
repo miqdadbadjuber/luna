@@ -1597,7 +1597,15 @@ def _worker_process(job_id: str, req: ProcessRequest):
                     action=action,
                     platform="youtube",
                     source_title=filename,
-                    files_to_save=[{"file_path": file_path, "title": filename, "type": "video", "quality": req.quality}],
+                    files_to_save=[{
+                        "file_path": file_path,
+                        "title": filename,
+                        "type": "video",
+                        "quality": req.quality,
+                        # Persisted so the workspace can label each file with the ratio
+                        # it was rendered at without guessing from the pixels.
+                        "aspect_ratio": req.aspect_ratio,
+                    }],
                 )
                 if saved_proj:
                     jobs[job_id]["project_id"] = saved_proj.get("project_id")
