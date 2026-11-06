@@ -473,10 +473,23 @@ def _run_ffmpeg(cmd: List[str], timeout_sec: float, cancel_event: Optional[threa
         raise RuntimeError(f"ffmpeg failed (exit {proc.returncode}): {tail or 'no stderr output'}")
 
 
+# YouTube serves DASH fragments one request at a time by default. Measured on this
+# machine: ~0.5 MB/s that way, 30-48 MB/s for a plain ranged request. Parallel
+# fragments plus explicit retries recover most of that gap.
+YTDLP_DOWNLOAD_TUNING = {
+    "socket_timeout": 15,
+    "retries": 5,
+    "fragment_retries": 5,
+    "concurrent_fragment_downloads": 8,
+    "http_chunk_size": 10 * 1024 * 1024,
+}
+
+
 def get_ytdl_base_opts(extra_opts=None):
     opts = {
         "quiet": True,
         "no_warnings": True,
+        **YTDLP_DOWNLOAD_TUNING,
     }
     cookie_file = os.path.join(BASE_DIR, "cookies.txt")
     if os.path.exists(cookie_file) and os.path.getsize(cookie_file) > 0:
@@ -547,7 +560,7 @@ def _path_is_inside(path: str, roots: List[str]) -> bool:
 
 
 # Progress hook factory for yt-dlp & streaming downloads
-def create_progress_hook(job_id: str):
+def create_progress_hook(job_id: str, finished_pct: Optional[float] = None):
     def hook(d: dict):
         if job_id not in jobs:
             return
@@ -605,7 +618,10 @@ def create_progress_hook(job_id: str):
             jobs[job_id]["download_speed"] = ""
             jobs[job_id]["download_eta"] = ""
             jobs[job_id]["download_frags"] = ""
-            if jobs.get(job_id, {}).get("action") in ("type_yt_ai_clip", "type_ig_ai_clip", "ai_clip"):
+            if finished_pct is not None:
+                # A job that still has to re-encode is not done when bytes stop.
+                jobs[job_id]["progress"] = finished_pct
+            elif jobs.get(job_id, {}).get("action") in ("type_yt_ai_clip", "type_ig_ai_clip", "ai_clip"):
                 jobs[job_id]["progress"] = 25.0
             else:
                 jobs[job_id]["progress"] = 100.0
@@ -1372,7 +1388,13 @@ def _worker_process(job_id: str, req: ProcessRequest):
     if ws_name == ".." or "/" in ws_name or "\\" in ws_name:
         ws_name = "Workspace 01"
 
-    progress_hook = create_progress_hook(job_id)
+    # A full video that also has to be re-encoded is not 100% done when the bytes
+    # stop arriving; park the counter at 70 so the bar does not sit at 100 while
+    # ffmpeg still works.
+    needs_conversion = action == "type_yt_video" and (
+        req.aspect_ratio != "original" or (req.fps and req.fps != "auto")
+    )
+    progress_hook = create_progress_hook(job_id, finished_pct=70.0 if needs_conversion else None)
     jobs[job_id]["progress"] = 0.0
     jobs[job_id]["download_speed"] = ""
     jobs[job_id]["download_eta"] = ""
@@ -1542,8 +1564,12 @@ def _worker_process(job_id: str, req: ProcessRequest):
             if jobs.get(job_id, {}).get("cancelled"):
                 return
 
-            if action == "type_yt_video" and (req.aspect_ratio != "original" or (req.fps and req.fps != "auto")):
+            if needs_conversion:
                 jobs[job_id]["stage"] = "rendering"
+                jobs[job_id]["stage_detail"] = f"Re-encoding to {req.aspect_ratio} ({req.fps or 'auto'} FPS)"
+                jobs[job_id]["progress"] = 70.0
+                jobs[job_id]["download_speed"] = ""
+                jobs[job_id]["download_eta"] = ""
                 jobs[job_id]["logs"].append(f"Converting video to {req.aspect_ratio} aspect ratio ({req.fps or 'auto'} FPS)...")
                 try:
                     file_path = format_video_target(file_path, ratio=req.aspect_ratio, fps=req.fps or "auto", cancel_event=cancel_event)
