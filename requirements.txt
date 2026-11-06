@@ -8,6 +8,10 @@ requests==2.34.2
 google-genai==2.34.0
 openai==3.45.0
 yt-dlp>=2026.10.26
+# YouTube formats need its JS challenge solved: the solver scripts plus a JS runtime.
+# Without them yt-dlp reports "No video formats found".
+yt-dlp-ejs==0.8.0
+deno==2.9.8
 # YouTube subtitle listing for the transcript check; imported lazily where needed.
 youtube-transcript-api==1.2.4
 opencv-python-headless==5.0.0.93
