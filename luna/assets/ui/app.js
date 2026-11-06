@@ -4846,11 +4846,18 @@ window.compactSutroPlayers = function () {
           cursor: pointer !important;
           pointer-events: auto !important;
         }
+        /* One time display only, and always the one that carries the duration.
+           The theme ships <media-time-display> and <media-time-display showduration>
+           and hides one per breakpoint; picking the duration variant keeps
+           "current / total" visible on every card size (and H:MM:SS for long videos). */
         media-time-display {
-          display: inline-flex !important;
-          visibility: visible !important;
-          opacity: 1 !important;
           flex-shrink: 0 !important;
+        }
+        media-time-display:not([showduration]) {
+          display: none !important;
+        }
+        media-time-display[showduration] {
+          display: inline-flex !important;
         }
         media-time-range {
           display: block !important;
