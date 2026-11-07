@@ -119,3 +119,12 @@ Install test dependencies and run the suite:
 pip install -r requirements-dev.txt
 python -m unittest discover -v
 ```
+
+## Maintainers
+
+<table align="center">
+  <tr>
+    <td align="center"><a href="https://github.com/miqdadbadjuber"><img src="https://github.com/miqdadbadjuber.png?size=100" width="80" alt="miqdadbadjuber" /><br />@miqdadbadjuber</a></td>
+    <td align="center"><a href="https://github.com/fajarhide"><img src="https://github.com/fajarhide.png?size=100" width="80" alt="fajarhide" /><br />@fajarhide</a></td>
+  </tr>
+</table>
