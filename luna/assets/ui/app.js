@@ -683,6 +683,20 @@ function detectUrlPlatform(url) {
 }
 
 let debounceTimer = null;
+let lastUnavailableUrl = '';
+function showUnavailablePreview(message, url) {
+  previewTitle.innerText = 'Link unavailable';
+  previewDuration.innerText = '';
+  previewDuration.classList.add('hidden');
+  if (previewBullet) previewBullet.classList.add('hidden');
+  if (previewThumb) previewThumb.classList.add('hidden');
+  videoInfoCard.classList.remove('hidden');
+  if (url !== lastUnavailableUrl) {
+    lastUnavailableUrl = url;
+    showToast(message, true);
+  }
+}
+
 function fetchVideoInfo(url, delay = 150) {
   clearTimeout(debounceTimer);
   if (!url || !url.startsWith('http')) {
@@ -690,15 +704,19 @@ function fetchVideoInfo(url, delay = 150) {
     return;
   }
   debounceTimer = setTimeout(async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
     try {
       const res = await fetch('/api/info', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
+        body: JSON.stringify({ url }),
+        signal: controller.signal
       });
       if (res.ok) {
         const data = await res.json();
         if (data.title && data.title !== 'Media Item') {
+          lastUnavailableUrl = '';
           latestVideoTitle = { url, title: data.title };
           previewTitle.innerText = data.title;
           const durText = formatDuration(data.duration);
@@ -718,10 +736,17 @@ function fetchVideoInfo(url, delay = 150) {
             previewThumb.classList.remove('hidden');
           }
           videoInfoCard.classList.remove('hidden');
+        } else if (data.warning) {
+          showUnavailablePreview(data.warning, url);
         }
       }
     } catch (e) {
-      console.log(e);
+      showUnavailablePreview(
+        'Could not read this link. Check the URL, or copy a fresh link from the app.',
+        url
+      );
+    } finally {
+      clearTimeout(timeout);
     }
   }, delay);
 }

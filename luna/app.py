@@ -387,6 +387,8 @@ def friendly_error_message(exc: BaseException) -> str:
         return "YouTube asked this request to sign in. Upload cookies in Settings, then try again."
     if "private video" in text or "video unavailable" in text or "this video is unavailable" in text:
         return "This video is private, deleted, or blocked in your region."
+    if "empty media response" in text:
+        return "This link cannot be read anymore. Instagram and TikTok links expire, so copy a fresh link and try again."
     if "http error 404" in text or "not found" in text:
         return "The video could not be found. Check the link and try again."
     if "http error 403" in text or "forbidden" in text:
@@ -1129,12 +1131,23 @@ async def api_info(req: InfoRequest):
                 "thumbnail": fast_thumb,
                 "platform": platform,
             }
+        detail = str(e)
+        lowered = detail.lower()
+        if "empty media response" in lowered or "login" in lowered or "cookies" in lowered:
+            # Instagram/TikTok links are short-lived; an empty response usually means
+            # the signed URL expired, not that the app is broken.
+            warning = (
+                "This link cannot be read anymore. Instagram and TikTok links expire, "
+                "so copy a fresh link from the app and try again."
+            )
+        else:
+            warning = friendly_error_message(e)
         return {
             "title": "Media Item",
             "duration": fast_duration,
             "thumbnail": fast_thumb,
             "platform": platform,
-            "warning": str(e)
+            "warning": warning
         }
 
 
