@@ -27,6 +27,11 @@ def _import_ytdlp():
     return yt_dlp
 
 
+# Prefer H.264 at the chosen height. Unsorted, yt-dlp picks AV1: on an 80-minute video that
+# was 290 MB against 132 MB, and face-tracked renders from it took up to 21% longer.
+YOUTUBE_FORMAT_SORT = ["res", "vcodec:h264"]
+
+
 def _format_for(fmt: str) -> str:
     """Map our '720' / '1080' shorthand to a fast yt-dlp format selector."""
     try:
@@ -178,10 +183,11 @@ def download_youtube_local(
     cookie_file = os.path.join(ROOT_DIR, "cookies.txt")
     ydl_opts = {
         "format": _format_for(fmt),
+        "format_sort": YOUTUBE_FORMAT_SORT,
         "outtmpl": os.path.join(out_dir, f"source_%(id)s_{fmt}p.%(ext)s"),
         "merge_output_format": "mp4",
+        # Warnings stay on: they are the only sign that the JS challenge failed and YouTube throttled the download.
         "quiet": True,
-        "no_warnings": True,
         "noprogress": False,
         "noplaylist": True,
         "playlist_items": "1",
