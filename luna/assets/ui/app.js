@@ -156,6 +156,17 @@ function renderTrimSegments() {
   requestAnimationFrame(() => {
     alignExtraTrimSegments();
   });
+
+  // The ratio/sub-feature labels change width, which shifts row 0 and used to leave
+  // the extra rows stuck at the old offset. Re-align whenever a toolbar control resizes.
+  if (!window.__trimAlignObserver && typeof ResizeObserver === 'function') {
+    const observer = new ResizeObserver(() => alignExtraTrimSegments());
+    const container = document.getElementById('mainInputCapsuleContainer');
+    const controls = container ? container.querySelectorAll('.pill-control') : [];
+    controls.forEach((el) => observer.observe(el));
+    if (container) observer.observe(container);
+    window.__trimAlignObserver = observer;
+  }
 }
 
 function alignExtraTrimSegments() {
@@ -465,6 +476,7 @@ function selectTrimRatioFromMenu(r, label) {
   });
 
   closeDropdownSmoothly('trimRatioMenu', 'trimRatioChevron', 'trimRatioDropdownBtn', 80);
+  requestAnimationFrame(alignExtraTrimSegments);
 }
 var currentLang = 'id';
 
@@ -1229,6 +1241,7 @@ function selectVideoRatioFromMenu(r, label) {
   });
 
   closeDropdownSmoothly('videoRatioMenu', 'videoRatioChevron', 'videoRatioDropdownBtn', 80);
+  requestAnimationFrame(alignExtraTrimSegments);
 }
 
 // Video FPS Dropdown Handlers
