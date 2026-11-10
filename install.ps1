@@ -8,14 +8,32 @@ if ($PSScriptRoot -and (Test-Path (Join-Path $PSScriptRoot "luna/app.py"))) {
 } else {
     # Run through `irm | iex`, so there is no checkout yet.
     $lunaDir = if ($env:LUNA_DIR) { $env:LUNA_DIR } else { Join-Path $env:USERPROFILE "Luna" }
-    if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw "git is required to download Luna." }
+    $ref = if ($env:LUNA_REF) { $env:LUNA_REF } else { "main" }
     if (Test-Path (Join-Path $lunaDir ".git")) {
         git -C $lunaDir pull --ff-only
+        if ($LASTEXITCODE -ne 0) { throw "Could not update Luna in $lunaDir." }
+    } elseif ((Get-Command git -ErrorAction SilentlyContinue) -and -not (Test-Path (Join-Path $lunaDir "luna/app.py"))) {
+        git clone --branch $ref $repoUrl $lunaDir
+        if ($LASTEXITCODE -ne 0) {
+            throw "Could not download Luna from $repoUrl. If the repository is private, clone it yourself and run .\install.ps1 there."
+        }
     } else {
-        git clone $repoUrl $lunaDir
-    }
-    if ($LASTEXITCODE -ne 0) {
-        throw "Could not download Luna from $repoUrl. If the repository is private, clone it yourself and run .\install.ps1 there."
+        # No git: unpack the source archive over $lunaDir. .env, .venv and media are not in it, so they survive.
+        # shortcut: files removed upstream stay behind on an update, switch to git if that ever matters.
+        Write-Host "Downloading Luna..."
+        $zip = Join-Path $env:TEMP "luna-src.zip"
+        $tmp = Join-Path $env:TEMP "luna-src"
+        try {
+            Invoke-WebRequest "$repoUrl/archive/$ref.zip" -OutFile $zip -UseBasicParsing -ErrorAction Stop
+            if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
+            Expand-Archive $zip -DestinationPath $tmp
+            New-Item -ItemType Directory -Force $lunaDir | Out-Null
+            Copy-Item (Join-Path (Get-ChildItem $tmp | Select-Object -First 1).FullName "*") $lunaDir -Recurse -Force
+        } catch {
+            throw "Could not download Luna from $repoUrl. $($_.Exception.Message)"
+        } finally {
+            Remove-Item $zip, $tmp -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
 }
 Set-Location $lunaDir

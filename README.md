@@ -25,16 +25,16 @@ A local web app for downloading video and audio from YouTube, Instagram, and Tik
 macOS and Linux:
 
 ```bash
-git clone https://github.com/miqdadbadjuber/luna && cd luna && ./install.sh
+curl -fsSL https://raw.githubusercontent.com/miqdadbadjuber/luna/main/install.sh | sh
 ```
 
 Windows PowerShell:
 
 ```powershell
-git clone https://github.com/miqdadbadjuber/luna; cd luna; powershell -ExecutionPolicy Bypass -File .\install.ps1
+irm https://raw.githubusercontent.com/miqdadbadjuber/luna/main/install.ps1 | iex
 ```
 
-The installer sets up [uv](https://docs.astral.sh/uv/), Python 3.12, the dependencies, FFmpeg if it is missing, and a default `.env`, then opens Luna at [http://localhost:8000](http://localhost:8000). Nothing is installed system-wide except uv. Add your API keys in Settings, with no file to edit. Downloads need no keys. Start Luna again later with `./start.sh` or `start.bat`.
+Git is not needed. The installer puts Luna in `~/Luna` (`%USERPROFILE%\Luna` on Windows), then sets up [uv](https://docs.astral.sh/uv/), Python 3.12, the dependencies, FFmpeg if it is missing, and a default `.env`, then opens Luna at [http://localhost:8000](http://localhost:8000). Nothing is installed system-wide except uv. Add your API keys in Settings, with no file to edit. Downloads need no keys. Start Luna again later with `./start.sh` or `start.bat`. Run the same line again to update. From a clone, run `./install.sh` or `.\install.ps1` in it instead.
 
 To install by hand, create a Python 3.12+ virtual environment, run `pip install -r requirements.txt`, copy `.env.example` to `.env`, install FFmpeg and FFprobe, then run `python -m luna`. `npm run dev` and `npm start` only wrap those Python commands from `package.json`; npm is optional sugar, not a Node toolchain, and neither script installs anything.
 
