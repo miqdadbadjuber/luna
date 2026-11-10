@@ -50,6 +50,8 @@ os.environ["PATH"] += os.pathsep + r"C:\ffmpeg\bin"
 # The start scripts run .venv/bin/python without activating the venv, so deno from
 # requirements.txt (yt-dlp solves YouTube's JS challenge with it) is not on PATH otherwise.
 os.environ["PATH"] = os.path.dirname(sys.executable) + os.pathsep + os.environ["PATH"]
+if not shutil.which("deno"):
+    print("[setup] deno not found: YouTube downloads will fail or be throttled. Run the installer again.", flush=True)
 
 from .ffmpeg_setup import ensure_ffmpeg
 
@@ -63,6 +65,7 @@ from .clipper.config import (
     transcribe_provider,
     transcribe_provider_label,
 )
+from .clipper.downloader import YOUTUBE_FORMAT_SORT
 from .clipper.highlights import clean_caption
 from .storage_manager import (
     CATEGORY_MAP,
@@ -489,8 +492,9 @@ YTDLP_DOWNLOAD_TUNING = {
 
 def get_ytdl_base_opts(extra_opts=None):
     opts = {
+        # Warnings stay on: they are the only sign that the JS challenge failed and YouTube throttled the download.
         "quiet": True,
-        "no_warnings": True,
+        "format_sort": YOUTUBE_FORMAT_SORT,
         **YTDLP_DOWNLOAD_TUNING,
     }
     cookie_file = os.path.join(BASE_DIR, "cookies.txt")
@@ -2253,6 +2257,7 @@ def _system_status_sync() -> Dict[str, Any]:
         "ffmpeg": has_ffmpeg,
         "ffmpeg_version": ffmpeg_ver,
         "ytdlp": ytdlp_ver,
+        "js_runtime": bool(shutil.which("deno")),
         "opencv": has_opencv,
         "opencv_version": opencv_ver,
         "storage": storage_writable,
@@ -2364,6 +2369,7 @@ async def api_get_settings():
         "status": {
             "ffmpeg": has_ffmpeg,
             "ytdlp": ytdlp_ver,
+            "js_runtime": bool(shutil.which("deno")),
             "opencv": has_opencv,
             "storage": is_writable(curr_storage),
             "cookies": {

@@ -64,6 +64,8 @@ jobs:
           for i in $(seq 1 60); do curl -fsS -o /dev/null http://127.0.0.1:8000/ && break; sleep 2; done
           curl -fsS -X POST http://127.0.0.1:8000/api/settings/check-system | tee status.json
           grep -q '"ffmpeg":true' status.json
+          # yt-dlp needs deno for YouTube; a venv started without activation must still find it
+          grep -q '"js_runtime":true' status.json
 
   docker:
     runs-on: ubuntu-latest
