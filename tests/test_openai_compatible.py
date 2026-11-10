@@ -132,7 +132,7 @@ class TestOpenAICompatible(unittest.TestCase):
 
         with patch("luna.clipper.highlights.time.sleep") as sleep:
             with self.assertRaisesRegex(RuntimeError, "provider down"):
-                call_highlight_api("text", {}, 60.0, 1, llm_fn=failing_llm)
+                call_highlight_api("prompt", llm_fn=failing_llm)
         self.assertEqual(sleep.call_count, 2)
 
     def test_gemini_is_used_when_selected_or_when_it_is_the_only_key(self):
