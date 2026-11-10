@@ -45,19 +45,43 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    # The one-line install a new user runs: no checkout, no git, the script read from a pipe.
+    # The repo is private, so the source archive of this commit is served locally in place of GitHub's.
     env:
       LUNA_NO_START: "1"
+      LUNA_DIR: ${{ github.workspace }}/Luna
+      LUNA_REPO_URL: http://127.0.0.1:8765
+      LUNA_REF: ci
     steps:
       - uses: actions/checkout@v7
-      - name: Install on macOS or Linux
+        with:
+          path: src
+      - name: Serve the source archive
+        shell: bash
+        run: |
+          mkdir -p srv/archive
+          git -C src archive --prefix=luna-ci/ -o ../srv/archive/ci.tar.gz HEAD
+          git -C src archive --prefix=luna-ci/ -o ../srv/archive/ci.zip HEAD
+          python -m http.server 8765 -d srv > /dev/null 2>&1 &
+          sleep 2
+      - name: Install on macOS or Linux, without git
         if: runner.os != 'Windows'
-        run: ./install.sh
-      - name: Install on Windows
+        run: |
+          mkdir "$RUNNER_TEMP/nogit"
+          for f in /usr/bin/* /bin/*; do [ "$(basename "$f")" = git ] || ln -sf "$f" "$RUNNER_TEMP/nogit/"; done
+          cd "$RUNNER_TEMP"
+          env PATH="$RUNNER_TEMP/nogit" sh -c '! command -v git && sh' < "$GITHUB_WORKSPACE/src/install.sh"
+      - name: Install on Windows, without git
         if: runner.os == 'Windows'
         shell: pwsh
-        run: .\install.ps1
+        run: |
+          $env:Path = ($env:Path -split ';' | Where-Object { $_ -and -not (Test-Path (Join-Path $_ 'git.exe')) }) -join ';'
+          if (Get-Command git -ErrorAction SilentlyContinue) { throw "git is still on PATH" }
+          Set-Location $env:RUNNER_TEMP
+          Get-Content "$env:GITHUB_WORKSPACE\src\install.ps1" -Raw | Invoke-Expression
       - name: Start and check the server
         shell: bash
+        working-directory: Luna
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then PY=.venv/Scripts/python.exe; else PY=.venv/bin/python; fi
           "$PY" -m uvicorn luna.app:app --host 127.0.0.1 --port 8000 &

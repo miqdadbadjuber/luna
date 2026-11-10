@@ -10,13 +10,28 @@ if [ -f "$SCRIPT_DIR/luna/app.py" ] && [ -f "$SCRIPT_DIR/requirements.txt" ]; th
 else
     # Run through `curl | sh`, so there is no checkout yet.
     LUNA_DIR="${LUNA_DIR:-$HOME/Luna}"
-    command -v git >/dev/null 2>&1 || { echo "git is required to download Luna." >&2; exit 1; }
+    REF="${LUNA_REF:-main}"
     if [ -d "$LUNA_DIR/.git" ]; then
         git -C "$LUNA_DIR" pull --ff-only
-    elif ! git clone "$REPO_URL" "$LUNA_DIR"; then
-        echo "Could not download Luna from $REPO_URL." >&2
-        echo "If the repository is private, clone it yourself and run ./install.sh there." >&2
-        exit 1
+    elif command -v git >/dev/null 2>&1 && [ ! -e "$LUNA_DIR/luna/app.py" ]; then
+        if ! git clone --branch "$REF" "$REPO_URL" "$LUNA_DIR"; then
+            echo "Could not download Luna from $REPO_URL." >&2
+            echo "If the repository is private, clone it yourself and run ./install.sh there." >&2
+            exit 1
+        fi
+    else
+        # No git: unpack the source archive over $LUNA_DIR. .env, .venv and media are not in it, so they survive.
+        # shortcut: files removed upstream stay behind on an update, switch to git if that ever matters.
+        echo "Downloading Luna..."
+        mkdir -p "$LUNA_DIR"
+        ARCHIVE="$(mktemp)"
+        if ! curl -fsSL "$REPO_URL/archive/$REF.tar.gz" -o "$ARCHIVE" \
+            || ! tar -xzf "$ARCHIVE" -C "$LUNA_DIR" --strip-components=1; then
+            echo "Could not download Luna from $REPO_URL." >&2
+            rm -f "$ARCHIVE"
+            exit 1
+        fi
+        rm -f "$ARCHIVE"
     fi
 fi
 cd "$LUNA_DIR"
