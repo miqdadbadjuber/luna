@@ -757,7 +757,7 @@ function attachGlidingListener(menu) {
   let indicator = menu.querySelector('.gliding-menu-indicator');
   if (!indicator) {
     indicator = document.createElement('span');
-    indicator.className = 'gliding-menu-indicator pointer-events-none absolute left-[3px] right-[3px] rounded-[6px] bg-white/[0.08] border border-white/[0.10] z-[1]';
+    indicator.className = 'gliding-menu-indicator pointer-events-none absolute left-[3px] right-[3px] rounded-[6px] bg-white/[0.08] z-[1]';
     indicator.style.opacity = '0';
     indicator.style.transition = 'top 220ms cubic-bezier(0.23,1,0.32,1), height 220ms cubic-bezier(0.23,1,0.32,1), opacity 150ms ease';
     menu.insertBefore(indicator, menu.firstChild);
@@ -921,7 +921,7 @@ function switchPlatform(plat, manualSwitch = false) {
 function populateSubFeatureMenu(plat) {
   const menu = document.getElementById('subFeatureMenu');
   if (!menu) return;
-  menu.innerHTML = '<span class="gliding-menu-indicator pointer-events-none absolute left-[3px] right-[3px] rounded-[6px] bg-white/[0.08] border border-white/[0.10] z-[1]" style="opacity: 0; transition: top 220ms cubic-bezier(0.23,1,0.32,1), height 220ms cubic-bezier(0.23,1,0.32,1), opacity 150ms ease;"></span>';
+  menu.innerHTML = '<span class="gliding-menu-indicator pointer-events-none absolute left-[3px] right-[3px] rounded-[6px] bg-white/[0.08] z-[1]" style="opacity: 0; transition: top 220ms cubic-bezier(0.23,1,0.32,1), height 220ms cubic-bezier(0.23,1,0.32,1), opacity 150ms ease;"></span>';
   const list = SUB_FEATURES[plat] || [];
 
   list.forEach(item => {
