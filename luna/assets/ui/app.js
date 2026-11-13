@@ -4388,11 +4388,11 @@ function renderVaultGallery() {
         if (emptyTitle) emptyTitle.innerText = 'Not found';
         if (emptyDesc) emptyDesc.innerText = `No projects match the search "${currentVaultSearch}".`;
       } else if (currentVaultFilter !== 'all') {
-        if (emptyTitle) emptyTitle.innerText = 'Kategori Empty';
+        if (emptyTitle) emptyTitle.innerText = 'Empty Category';
         if (emptyDesc) emptyDesc.innerText = 'No projects match this filter yet.';
       } else {
-        if (emptyTitle) emptyTitle.innerText = 'No media in the vault yet';
-        if (emptyDesc) emptyDesc.innerText = 'Downloaded media and generated AI clips will appear here, ready to play.';
+        if (emptyTitle) emptyTitle.innerText = 'Empty Vault';
+        if (emptyDesc) emptyDesc.innerText = 'No projects in the vault yet.';
       }
     }
     return;
