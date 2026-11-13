@@ -79,6 +79,86 @@ document.addEventListener('visibilitychange', function () {
 }();
 
 // Guide Script Functions
+const GUIDE_DOCS_ORDER = [
+  {
+    id: 'workflow',
+    label: 'Workflow',
+    title: 'Understand the Luna workflow',
+    subtitle: 'See how media moves from a source URL to ready-to-use videos, audio, and clips. Click any step to view technical details.',
+  },
+  {
+    id: 'modes',
+    label: 'Features & Modes',
+    title: 'Features & Modes',
+    subtitle: 'Compare the four download, trimming, and AI clipping modes to pick what fits your content.',
+  },
+  {
+    id: 'setup',
+    label: 'Setup & Requirements',
+    title: 'Setup & Requirements',
+    subtitle: 'What Luna sets up automatically via install.ps1, install.sh, or Docker, and what is optional.',
+  },
+  {
+    id: 'vault',
+    label: 'Media Vault',
+    title: 'Media Vault',
+    subtitle: 'Luna organizes outputs into structured category folders, customizable anytime from Move Folder in Settings.',
+  },
+  {
+    id: 'faq',
+    label: 'FAQ',
+    title: 'FAQ & Troubleshooting',
+    subtitle: 'Quick answers to common setup, download, and configuration questions.',
+  },
+];
+
+function updateGuidePager(tabId) {
+  const idx = GUIDE_DOCS_ORDER.findIndex(item => item.id === tabId);
+  const currentItem = GUIDE_DOCS_ORDER[idx] || GUIDE_DOCS_ORDER[0];
+  const breadcrumb = document.getElementById('guideBreadcrumbCurrent');
+  const titleEl = document.getElementById('guidePageTitle');
+  const subtitleEl = document.getElementById('guidePageSubtitle');
+
+  if (breadcrumb && currentItem) {
+    breadcrumb.textContent = currentItem.label;
+  }
+  if (titleEl && currentItem) {
+    titleEl.textContent = currentItem.title;
+  }
+  if (subtitleEl && currentItem) {
+    subtitleEl.textContent = currentItem.subtitle;
+  }
+
+  const prevBtn = document.getElementById('guidePrevBtn');
+  const prevTitle = document.getElementById('guidePrevTitle');
+  const nextBtn = document.getElementById('guideNextBtn');
+  const nextTitle = document.getElementById('guideNextTitle');
+
+  if (prevBtn && prevTitle) {
+    const prev = idx > 0 ? GUIDE_DOCS_ORDER[idx - 1] : null;
+    if (prev) {
+      prevBtn.classList.remove('invisible', 'pointer-events-none');
+      prevBtn.dataset.targetTab = prev.id;
+      prevTitle.textContent = prev.label;
+    } else {
+      prevBtn.classList.add('invisible', 'pointer-events-none');
+      prevBtn.dataset.targetTab = '';
+    }
+  }
+
+  if (nextBtn && nextTitle) {
+    const next = idx >= 0 && idx < GUIDE_DOCS_ORDER.length - 1 ? GUIDE_DOCS_ORDER[idx + 1] : null;
+    if (next) {
+      nextBtn.classList.remove('invisible', 'pointer-events-none');
+      nextBtn.dataset.targetTab = next.id;
+      nextTitle.textContent = next.label;
+    } else {
+      nextBtn.classList.add('invisible', 'pointer-events-none');
+      nextBtn.dataset.targetTab = '';
+    }
+  }
+}
+
 function updateGuidePill(tab, immediate = false) {
   const pill = document.getElementById('tabsPill');
   if (!pill || !tab) return;
@@ -94,28 +174,50 @@ function updateGuidePill(tab, immediate = false) {
   }
 }
 
-function switchGuideTab(tabId, btn) {
+function switchGuideTab(tabId, btn, shouldScroll = false) {
   const bar = document.getElementById('guideTabsBar');
+  let targetBtn = btn;
   if (bar) {
-    bar.querySelectorAll('.t-tab').forEach(b => {
-      const isSelected = (b === btn);
+    if (!targetBtn || !bar.contains(targetBtn)) {
+      targetBtn = bar.querySelector(`[data-guide-tab="${tabId}"]`);
+    }
+    bar.querySelectorAll('[data-guide-tab]').forEach(b => {
+      const isSelected = (b === targetBtn) || b.dataset.guideTab === tabId;
       b.setAttribute('aria-selected', isSelected ? 'true' : 'false');
       b.classList.toggle('active', isSelected);
     });
   }
-  updateGuidePill(btn, false);
+  updateGuidePill(targetBtn, false);
 
   document.querySelectorAll('.guide-tab-pane').forEach(p => p.classList.add('hidden'));
   const activePane = document.getElementById(`tab-${tabId}`);
   if (activePane) {
     activePane.classList.remove('hidden');
   }
+  updateGuidePager(tabId);
+  if (shouldScroll) {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+}
+
+function stepGuideTab(direction) {
+  const btn = direction < 0
+    ? document.getElementById('guidePrevBtn')
+    : document.getElementById('guideNextBtn');
+  const nextId = btn && btn.dataset ? btn.dataset.targetTab : '';
+  if (nextId) {
+    switchGuideTab(nextId, null, true);
+  }
 }
 
 function initGuidePill() {
-  const activeBtn = document.querySelector('#guideTabsBar .t-tab[aria-selected="true"]') || document.querySelector('#guideTabsBar .t-tab');
+  const activeBtn = document.querySelector('#guideTabsBar [aria-selected="true"]')
+    || document.querySelector('#guideTabsBar [data-guide-tab]');
   if (activeBtn) {
     updateGuidePill(activeBtn, true);
+    if (activeBtn.dataset && activeBtn.dataset.guideTab) {
+      updateGuidePager(activeBtn.dataset.guideTab);
+    }
   }
 }
 

@@ -1218,58 +1218,66 @@
 
     </section>
 
-    <!-- Section 4: User Guide & Workflow (Integrated Guide Tab) -->
-    <section id="section-guide" class="mb-12 space-y-8 hidden max-w-3xl mx-auto">
-<!-- Hero Section -->
-    <section class="space-y-3">
-      <div class="flex items-center gap-2 text-xs font-semibold text-zinc-400">
-        <span class="text-white">Luna Media Engine</span>
-        <span>•</span>
-        <span>Documentation</span>
-        <span>•</span>
-        <span>User Guide</span>
-      </div>
-      <h1 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight leading-tight">
-        Understand the Luna workflow
-      </h1>
-      <p class="text-sm sm:text-base text-zinc-300 leading-relaxed max-w-2xl">
-        Learn how Luna downloads, trims, and reframes media on your machine—turning long videos into 9:16, 3:4, 1:1, or 16:9 clips.
-      </p>
+    <!-- Section 4: User Guide & Workflow (Docs Layout) -->
+    <section id="section-guide" class="mb-12 hidden">
+      <div class="flex flex-col md:flex-row gap-8 lg:gap-10 items-start">
 
-      <!-- Category Filter Tabs (Transitions.dev Sliding Tabs) -->
-      <div class="pt-3 flex justify-start overflow-x-auto pb-2">
-        <div class="t-tabs" role="tablist" id="guideTabsBar">
-          <span class="t-tabs-pill" id="tabsPill" aria-hidden="true"></span>
-          <button type="button" class="t-tab active" role="tab" aria-selected="true" onclick="switchGuideTab('workflow', this)">
-            Workflow
-          </button>
-          <button type="button" class="t-tab" role="tab" aria-selected="false" onclick="switchGuideTab('modes', this)">
-            Features &amp; Modes
-          </button>
-          <button type="button" class="t-tab" role="tab" aria-selected="false" onclick="switchGuideTab('setup', this)">
-            Setup &amp; Requirements
-          </button>
-          <button type="button" class="t-tab" role="tab" aria-selected="false" onclick="switchGuideTab('vault', this)">
-            Media Vault
-          </button>
-          <button type="button" class="t-tab" role="tab" aria-selected="false" onclick="switchGuideTab('faq', this)">
-            FAQ
-          </button>
-        </div>
-      </div>
-    </section>
+        <!-- Left Docs Sidebar -->
+        <aside class="w-full md:w-56 lg:w-60 shrink-0 md:sticky md:top-24 md:pr-4">
+          <div role="tablist" id="guideTabsBar" aria-label="Documentation sections" class="flex md:flex-col gap-1.5 md:gap-5 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
+            <div class="flex md:flex-col gap-1 shrink-0">
+              <span class="hidden md:block text-[12px] font-semibold text-white px-3 mb-1">
+                Overview
+              </span>
+              <button type="button" class="docs-nav-item active" role="tab" aria-selected="true" data-guide-tab="workflow" onclick="switchGuideTab('workflow', this)">
+                <span>Workflow</span>
+              </button>
+              <button type="button" class="docs-nav-item" role="tab" aria-selected="false" data-guide-tab="modes" onclick="switchGuideTab('modes', this)">
+                <span>Features &amp; Modes</span>
+              </button>
+            </div>
+
+            <div class="flex md:flex-col gap-1 shrink-0">
+              <span class="hidden md:block text-[12px] font-semibold text-white px-3 mb-1">
+                Configuration
+              </span>
+              <button type="button" class="docs-nav-item" role="tab" aria-selected="false" data-guide-tab="setup" onclick="switchGuideTab('setup', this)">
+                <span>Setup &amp; Requirements</span>
+              </button>
+              <button type="button" class="docs-nav-item" role="tab" aria-selected="false" data-guide-tab="vault" onclick="switchGuideTab('vault', this)">
+                <span>Media Vault</span>
+              </button>
+            </div>
+
+            <div class="flex md:flex-col gap-1 shrink-0">
+              <span class="hidden md:block text-[12px] font-semibold text-white px-3 mb-1">
+                Support
+              </span>
+              <button type="button" class="docs-nav-item" role="tab" aria-selected="false" data-guide-tab="faq" onclick="switchGuideTab('faq', this)">
+                <span>FAQ</span>
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        <!-- Right Docs Content -->
+        <div class="flex-1 min-w-0 w-full space-y-8">
+          <div class="space-y-2.5 pb-5 border-b border-white/[0.08]">
+            <div class="flex items-center gap-2 text-xs font-medium text-zinc-400">
+              <span class="text-zinc-300">Luna Docs</span>
+              <span class="text-zinc-600">/</span>
+              <span id="guideBreadcrumbCurrent" class="text-white">Workflow</span>
+            </div>
+            <h1 id="guidePageTitle" class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight leading-tight">
+              Understand the Luna workflow
+            </h1>
+            <p id="guidePageSubtitle" class="text-sm text-zinc-300 leading-relaxed max-w-2xl">
+              See how media moves from a source URL to ready-to-use videos, audio, and clips. Click any step to view technical details.
+            </p>
+          </div>
 
     <!-- Tab 1: Workflow -->
     <section id="tab-workflow" class="guide-tab-pane space-y-4">
-      
-      <div class="space-y-1">
-        <h2 class="text-lg font-bold text-white tracking-tight">
-          Workflow Map
-        </h2>
-        <p class="text-xs text-zinc-400 leading-relaxed">
-          See how media moves from a source URL to ready-to-use videos, audio, and clips. Click a row to view technical details:
-        </p>
-      </div>
 
       <!-- Task Rows Container -->
       <div class="flex w-full flex-col min-h-[196px] gap-2">
@@ -1588,15 +1596,6 @@
 
     <!-- Tab 2: Features and Operating Modes -->
     <section id="tab-modes" class="guide-tab-pane hidden space-y-6">
-      
-      <div class="space-y-1">
-        <h2 class="text-lg font-bold text-white tracking-tight">
-          Luna’s Four Main Modes
-        </h2>
-        <p class="text-xs text-zinc-400 leading-relaxed">
-          Choose the mode that best fits your content:
-        </p>
-      </div>
 
       <!-- High-Contrast Frameless Comparison Table -->
       <div class="overflow-x-auto border-b border-white/[0.08] pb-6">
@@ -1678,15 +1677,6 @@
 
     <!-- Tab 3: Setup & Requirements -->
     <section id="tab-setup" class="guide-tab-pane hidden space-y-6">
-      
-      <div class="space-y-1">
-        <h2 class="text-lg font-bold text-white tracking-tight">
-          System Configuration &amp; Requirements
-        </h2>
-        <p class="text-xs text-zinc-400 leading-relaxed">
-          What Luna sets up automatically via <code class="text-white font-mono">install.ps1</code>, <code class="text-white font-mono">install.sh</code>, or Docker—and what is optional:
-        </p>
-      </div>
 
       <!-- Item 1: FFmpeg & Deno -->
       <div class="space-y-1.5">
@@ -1777,15 +1767,6 @@
 
     <!-- Tab 4: Media Vault -->
     <section id="tab-vault" class="guide-tab-pane hidden space-y-6">
-      
-      <div class="space-y-1">
-        <h2 class="text-lg font-bold text-white tracking-tight">
-          Local Storage &amp; Media Vault
-        </h2>
-        <p class="text-xs text-zinc-400 leading-relaxed">
-          Luna organizes outputs into structured category folders (customizable and migratable anytime via <strong class="text-white">Move Folder</strong> in Settings):
-        </p>
-      </div>
 
       <!-- Visual Tree Hierarchy -->
       <div class="vault-box p-4 font-mono text-xs text-zinc-200 space-y-1.5 leading-relaxed">
@@ -1829,15 +1810,6 @@
 
     <!-- Tab 5: FAQ -->
     <section id="tab-faq" class="guide-tab-pane hidden space-y-6">
-      
-      <div class="space-y-1">
-        <h2 class="text-lg font-bold text-white tracking-tight">
-          FAQ &amp; Troubleshooting
-        </h2>
-        <p class="text-xs text-zinc-400 leading-relaxed">
-          Quick answers to common questions from new users:
-        </p>
-      </div>
 
       <!-- Interactive Accordion Items -->
       <div class="divide-y divide-white/[0.08] border-y border-white/[0.08]">
@@ -1905,6 +1877,25 @@
       </div>
 
     </section>
+
+          <!-- Docs Prev / Next Pagination -->
+          <div class="pt-5 border-t border-white/[0.08] flex items-center justify-between gap-4">
+            <button type="button" id="guidePrevBtn" onclick="stepGuideTab(-1)" class="docs-pager-btn invisible pointer-events-none">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+              <span id="guidePrevTitle">Workflow</span>
+            </button>
+            <button type="button" id="guideNextBtn" onclick="stepGuideTab(1)" class="docs-pager-btn">
+              <span id="guideNextTitle">Features &amp; Modes</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+            </button>
+          </div>
+
+        </div>
+      </div>
     </section>
 
   </main>
