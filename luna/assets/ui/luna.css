@@ -2459,6 +2459,258 @@ body.tab-settings [data-us-project] canvas {
   outline: none !important;
 }
 
+/* Guide Workflow Node Canvas */
+.guide-submode-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.guide-submode-btn {
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.04);
+  color: #a1a1aa;
+  font-size: 12px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: color 0.16s ease, background-color 0.16s ease;
+}
+
+.guide-submode-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.guide-submode-btn.active {
+  color: #ffffff;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.11);
+}
+
+.guide-flow-canvas {
+  position: relative;
+  background-color: #0b0b0b;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+  padding: 1.25rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.sl-stage {
+  position: relative;
+  width: max-content;
+  min-width: 100%;
+  margin: 0 auto;
+}
+
+.sl-head-row,
+.sl-lane-grid {
+  display: grid;
+  grid-template-columns: 28px repeat(var(--sl-cols, 3), minmax(145px, 1fr));
+}
+
+.sl-head-cell {
+  padding: 0 0.5rem 0.65rem;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #737373;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.sl-lane {
+  position: relative;
+  z-index: 2;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 2px;
+}
+
+.sl-lane-rail {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #737373;
+  padding: 0.5rem 0;
+  border-left: 1px dashed rgba(255, 255, 255, 0.09);
+}
+
+.sl-cell {
+  padding: 1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+  min-height: 110px;
+}
+
+.sl-cell.align-bottom {
+  justify-content: flex-end;
+}
+
+.sl-cell.align-top {
+  justify-content: flex-start;
+}
+
+.sl-cell + .sl-cell {
+  border-left: 1px dashed rgba(255, 255, 255, 0.09);
+}
+
+.sl-lane-gap {
+  height: 56px;
+}
+
+.sl-node-box {
+  position: relative;
+  z-index: 2;
+  background: #242424;
+  border: 0;
+  box-shadow: none !important;
+  outline: none !important;
+  border-radius: 8px;
+  padding: 0.5rem 0.78rem;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #f5f5f5;
+  white-space: nowrap;
+  cursor: pointer;
+  min-width: 104px;
+  text-align: center;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.sl-node-box:hover,
+.sl-node-box.active {
+  background: #303030;
+  color: #ffffff;
+  box-shadow: none !important;
+}
+
+.sl-node-pill {
+  position: relative;
+  z-index: 2;
+  background: #161616;
+  border: 0;
+  box-shadow: none !important;
+  outline: none !important;
+  border-radius: 9999px;
+  padding: 0.38rem 0.78rem;
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #d4d4d4;
+  white-space: nowrap;
+  cursor: pointer;
+  min-width: 98px;
+  text-align: center;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.sl-node-pill:hover,
+.sl-node-pill.active {
+  background: #242424;
+  color: #ffffff;
+  box-shadow: none !important;
+}
+
+.sl-node-box:focus,
+.sl-node-box:focus-visible,
+.sl-node-pill:focus,
+.sl-node-pill:focus-visible {
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.sl-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.sl-badges {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.sl-wire-badge {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  background: #161616;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  padding: 0.18rem 0.65rem;
+  font-size: 10px;
+  font-weight: 500;
+  color: #d4d4d4;
+  white-space: nowrap;
+}
+
+.guide-flow-steps {
+  display: flex;
+  flex-direction: column;
+  padding-top: 0.25rem;
+}
+
+.guide-flow-step-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.1rem 0 1.1rem 0.75rem;
+  border-left: 2px solid transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  transition: border-left-color 0.16s ease;
+}
+
+.guide-flow-step-item:last-child {
+  border-bottom: 0;
+}
+
+.guide-flow-step-item.active {
+  border-left-color: #d4d4d4;
+}
+
+.guide-flow-step-points {
+  margin-top: 0.45rem;
+  padding-left: 1rem;
+  list-style-type: disc;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.guide-flow-step-points li {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #a1a1aa;
+}
+
+.guide-flow-step-points strong {
+  color: #e4e4e7;
+  font-weight: 500;
+}
+
 /* Kill bright border glow and outline on click / focus */
 button:focus,
 button:focus-visible,

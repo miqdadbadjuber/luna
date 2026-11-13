@@ -1227,20 +1227,26 @@
           <div role="tablist" id="guideTabsBar" aria-label="Documentation sections" class="flex md:flex-col gap-1.5 md:gap-5 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
             <div class="flex md:flex-col gap-1 shrink-0">
               <span class="hidden md:block text-[12px] font-semibold text-white px-3 mb-1">
-                Overview
+                Workflow
               </span>
-              <button type="button" class="docs-nav-item active" role="tab" aria-selected="true" data-guide-tab="workflow" onclick="switchGuideTab('workflow', this)">
-                <span>Workflow</span>
+              <button type="button" class="docs-nav-item active" role="tab" aria-selected="true" data-guide-tab="wf-youtube" onclick="switchGuideTab('wf-youtube', this)">
+                <span>YouTube</span>
               </button>
-              <button type="button" class="docs-nav-item" role="tab" aria-selected="false" data-guide-tab="modes" onclick="switchGuideTab('modes', this)">
-                <span>Features &amp; Modes</span>
+              <button type="button" class="docs-nav-item" role="tab" aria-selected="false" data-guide-tab="wf-instagram" onclick="switchGuideTab('wf-instagram', this)">
+                <span>Instagram Reels</span>
+              </button>
+              <button type="button" class="docs-nav-item" role="tab" aria-selected="false" data-guide-tab="wf-tiktok" onclick="switchGuideTab('wf-tiktok', this)">
+                <span>TikTok</span>
               </button>
             </div>
 
             <div class="flex md:flex-col gap-1 shrink-0">
               <span class="hidden md:block text-[12px] font-semibold text-white px-3 mb-1">
-                Configuration
+                Documentation
               </span>
+              <button type="button" class="docs-nav-item" role="tab" aria-selected="false" data-guide-tab="modes" onclick="switchGuideTab('modes', this)">
+                <span>Features &amp; Modes</span>
+              </button>
               <button type="button" class="docs-nav-item" role="tab" aria-selected="false" data-guide-tab="setup" onclick="switchGuideTab('setup', this)">
                 <span>Setup &amp; Requirements</span>
               </button>
@@ -1266,332 +1272,54 @@
             <div class="flex items-center gap-2 text-xs font-medium text-zinc-400">
               <span class="text-zinc-300">Luna Docs</span>
               <span class="text-zinc-600">/</span>
-              <span id="guideBreadcrumbCurrent" class="text-white">Workflow</span>
+              <span id="guideBreadcrumbCurrent" class="text-white">YouTube</span>
             </div>
             <h1 id="guidePageTitle" class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight leading-tight">
-              Understand the Luna workflow
+              YouTube Workflow
             </h1>
             <p id="guidePageSubtitle" class="text-sm text-zinc-300 leading-relaxed max-w-2xl">
-              See how media moves from a source URL to ready-to-use videos, audio, and clips. Click any step to view technical details.
+              Select a YouTube mode below to trace every node from URL input to Media Vault output.
             </p>
           </div>
 
-    <!-- Tab 1: Workflow -->
-    <section id="tab-workflow" class="guide-tab-pane space-y-4">
-
-      <!-- Task Rows Container -->
-      <div class="flex w-full flex-col min-h-[196px] gap-2">
-
-        <!-- Row 1 (Open by default) -->
-        <div class="task-row is-open self-stretch overflow-hidden" data-row-key="step-1">
-          <button type="button" aria-expanded="true" onclick="toggleTaskRow(this)" class="flex h-11 w-full items-center gap-2.5 px-2.5 text-left cursor-pointer select-none">
-            <span class="flex size-6 shrink-0 items-center justify-center">
-              <span class="relative inline-flex shrink-0 items-center justify-center size-6">
-                <svg width="24" height="24" class="absolute inset-0">
-                  <circle cx="12" cy="12" r="10" fill="none" stroke="rgba(255, 255, 255, 0.14)" stroke-width="2" />
-                </svg>
-                <span class="relative text-[10.5px] font-semibold tabular-nums text-white">1</span>
-              </span>
-            </span>
-            <span class="min-w-0 flex-1 truncate text-[13px] font-medium text-white">
-              URL Input &amp; Real-Time Validation
-            </span>
-            <span class="text-[12.5px] text-zinc-400 tabular-nums">3 Platforms</span>
-            <span aria-hidden="true" class="ml-1.5 flex size-7 shrink-0 items-center justify-center rounded-full text-zinc-400">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="task-chevron">
-                <path d="M6 9l6 6 6-6" />
-              </svg>
-            </span>
-          </button>
-          <div class="task-row-details">
-            <div class="overflow-hidden">
-              <div class="mb-2.5 grid grid-cols-[24px_1fr] gap-2.5 px-2.5">
-                <span aria-hidden="true" class="mx-auto h-full w-px bg-white/10"></span>
-                <div class="flex flex-col gap-1.5 pb-1">
-                  <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Supported Platforms</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">YouTube, Instagram, TikTok</span>
-                  </div>
-                  <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">URL Format Validation</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">HTTP(S) &amp; Public Hosts</span>
-                  </div>
-                  <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Invalid Download Prevention</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Instant alert modal</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+    <!-- Tab 1A: YouTube Workflow -->
+    <section id="tab-wf-youtube" class="guide-tab-pane space-y-5">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="guide-submode-bar" role="tablist" aria-label="YouTube modes">
+          <button type="button" class="guide-submode-btn active" onclick="setWorkflowSubmode('youtube', 'ai_clip', this)">AI Short Clips</button>
+          <button type="button" class="guide-submode-btn" onclick="setWorkflowSubmode('youtube', 'video', this)">Full HD Video</button>
+          <button type="button" class="guide-submode-btn" onclick="setWorkflowSubmode('youtube', 'mp3', this)">Audio MP3</button>
+          <button type="button" class="guide-submode-btn" onclick="setWorkflowSubmode('youtube', 'trim', this)">Video Trimmer</button>
         </div>
-
-        <!-- Row 2 -->
-        <div class="task-row self-stretch overflow-hidden" data-row-key="step-2">
-          <button type="button" aria-expanded="false" onclick="toggleTaskRow(this)" class="flex h-11 w-full items-center gap-2.5 px-2.5 text-left cursor-pointer select-none">
-            <span class="flex size-6 shrink-0 items-center justify-center">
-              <span class="relative inline-flex shrink-0 items-center justify-center size-6">
-                <svg width="24" height="24" class="absolute inset-0">
-                  <circle cx="12" cy="12" r="10" fill="none" stroke="rgba(255, 255, 255, 0.14)" stroke-width="2" />
-                </svg>
-                <span class="relative text-[10.5px] font-semibold tabular-nums text-white">2</span>
-              </span>
-            </span>
-            <span class="min-w-0 flex-1 truncate text-[13px] font-medium text-white">
-              Workspace &amp; Output Settings
-            </span>
-            <span class="text-[12.5px] text-zinc-400 tabular-nums">Dedicated Folder</span>
-            <span aria-hidden="true" class="ml-1.5 flex size-7 shrink-0 items-center justify-center rounded-full text-zinc-400">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="task-chevron">
-                <path d="M6 9l6 6 6-6" />
-              </svg>
-            </span>
-          </button>
-          <div class="task-row-details">
-            <div class="overflow-hidden">
-              <div class="mb-2.5 grid grid-cols-[24px_1fr] gap-2.5 px-2.5">
-                <span aria-hidden="true" class="mx-auto h-full w-px bg-white/10"></span>
-                <div class="flex flex-col gap-1.5 pb-1">
-                  <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Target Aspect Ratio</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">9:16, 16:9, 1:1, or 3:4</span>
-                  </div>
-                  <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Target Clip Count</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">3, 5, or 7 clips</span>
-                  </div>
-                  <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Crop Mode</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Center Crop (default) / Face Track</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Row 3 -->
-        <div class="task-row self-stretch overflow-hidden" data-row-key="step-3">
-          <button type="button" aria-expanded="false" onclick="toggleTaskRow(this)" class="flex h-11 w-full items-center gap-2.5 px-2.5 text-left cursor-pointer select-none">
-            <span class="flex size-6 shrink-0 items-center justify-center">
-              <span class="relative inline-flex shrink-0 items-center justify-center size-6">
-                <svg width="24" height="24" class="absolute inset-0">
-                  <circle cx="12" cy="12" r="10" fill="none" stroke="rgba(255, 255, 255, 0.14)" stroke-width="2" />
-                </svg>
-                <span class="relative text-[10.5px] font-semibold tabular-nums text-white">3</span>
-              </span>
-            </span>
-            <span class="min-w-0 flex-1 truncate text-[13px] font-medium text-white">
-              Ingest high-resolution video (1080p stream)
-            </span>
-            <span class="text-[12.5px] text-zinc-400 tabular-nums">1080p Stream</span>
-            <span aria-hidden="true" class="ml-1.5 flex size-7 shrink-0 items-center justify-center rounded-full text-zinc-400">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="task-chevron">
-                <path d="M6 9l6 6 6-6" />
-              </svg>
-            </span>
-          </button>
-          <div class="task-row-details">
-            <div class="overflow-hidden">
-              <div class="mb-2.5 grid grid-cols-[24px_1fr] gap-2.5 px-2.5">
-                <span aria-hidden="true" class="mx-auto h-full w-px bg-white/10"></span>
-                <div class="flex flex-col gap-1.5 pb-1">
-                  <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Engine Downloader</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">yt-dlp + Deno JS runtime</span>
-                  </div>
-                  <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Merging Video and Audio</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">FFmpeg H.264 / AAC</span>
-                  </div>
-                  <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">YouTube Sign-in Checks</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Settings Upload / cookies.txt</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Row 4 -->
-        <div class="task-row self-stretch overflow-hidden" data-row-key="step-4">
-          <button type="button" aria-expanded="false" onclick="toggleTaskRow(this)" class="flex h-11 w-full items-center gap-2.5 px-2.5 text-left cursor-pointer select-none">
-            <span class="flex size-6 shrink-0 items-center justify-center">
-              <span class="relative inline-flex shrink-0 items-center justify-center size-6">
-                <svg width="24" height="24" class="absolute inset-0">
-                  <circle cx="12" cy="12" r="10" fill="none" stroke="rgba(255, 255, 255, 0.14)" stroke-width="2" />
-                </svg>
-                <span class="relative text-[10.5px] font-semibold tabular-nums text-white">4</span>
-              </span>
-            </span>
-            <span class="min-w-0 flex-1 truncate text-[13px] font-medium text-white">
-              Transcription (YouTube captions first, then AI)
-            </span>
-            <span class="text-[12.5px] text-zinc-400 tabular-nums">Per segment</span>
-            <span aria-hidden="true" class="ml-1.5 flex size-7 shrink-0 items-center justify-center rounded-full text-zinc-400">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="task-chevron">
-                <path d="M6 9l6 6 6-6" />
-              </svg>
-            </span>
-          </button>
-          <div class="task-row-details">
-            <div class="overflow-hidden">
-              <div class="mb-2.5 grid grid-cols-[24px_1fr] gap-2.5 px-2.5">
-                <span aria-hidden="true" class="mx-auto h-full w-px bg-white/10"></span>
-                <div class="flex flex-col gap-1.5 pb-1">
-                  <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Model Engine</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Groq Whisper, Gemini, or Faster-Whisper</span>
-                  </div>
-                  <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Timestamps</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Per segment (cached .srt)</span>
-                  </div>
-                  <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Language Support</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Indonesian and other languages</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Row 5 -->
-        <div class="task-row self-stretch overflow-hidden" data-row-key="step-5">
-          <button type="button" aria-expanded="false" onclick="toggleTaskRow(this)" class="flex h-11 w-full items-center gap-2.5 px-2.5 text-left cursor-pointer select-none">
-            <span class="flex size-6 shrink-0 items-center justify-center">
-              <span class="relative inline-flex shrink-0 items-center justify-center size-6">
-                <svg width="24" height="24" class="absolute inset-0">
-                  <circle cx="12" cy="12" r="10" fill="none" stroke="rgba(255, 255, 255, 0.14)" stroke-width="2" />
-                </svg>
-                <span class="relative text-[10.5px] font-semibold tabular-nums text-white">5</span>
-              </span>
-            </span>
-            <span class="min-w-0 flex-1 truncate text-[13px] font-medium text-white">
-              Virality &amp; Hook Scoring (AI)
-            </span>
-            <span class="text-[12.5px] text-zinc-400 tabular-nums">Score 0-100</span>
-            <span aria-hidden="true" class="ml-1.5 flex size-7 shrink-0 items-center justify-center rounded-full text-zinc-400">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="task-chevron">
-                <path d="M6 9l6 6 6-6" />
-              </svg>
-            </span>
-          </button>
-          <div class="task-row-details">
-            <div class="overflow-hidden">
-              <div class="mb-2.5 grid grid-cols-[24px_1fr] gap-2.5 px-2.5">
-                <span aria-hidden="true" class="mx-auto h-full w-px bg-white/10"></span>
-                <div class="flex flex-col gap-1.5 pb-1">
-                  <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Opening Hook</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Opening 3–5 Seconds</span>
-                  </div>
-                  <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Scoring Rubric</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Emotional Peak &amp; Retention</span>
-                  </div>
-                  <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Reason Given</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">AI Viral Justification</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Row 6 -->
-        <div class="task-row self-stretch overflow-hidden" data-row-key="step-6">
-          <button type="button" aria-expanded="false" onclick="toggleTaskRow(this)" class="flex h-11 w-full items-center gap-2.5 px-2.5 text-left cursor-pointer select-none">
-            <span class="flex size-6 shrink-0 items-center justify-center">
-              <span class="relative inline-flex shrink-0 items-center justify-center size-6">
-                <svg width="24" height="24" class="absolute inset-0">
-                  <circle cx="12" cy="12" r="10" fill="none" stroke="rgba(255, 255, 255, 0.14)" stroke-width="2" />
-                </svg>
-                <span class="relative text-[10.5px] font-semibold tabular-nums text-white">6</span>
-              </span>
-            </span>
-            <span class="min-w-0 flex-1 truncate text-[13px] font-medium text-white">
-              Auto Reframe &amp; Video Rendering
-            </span>
-            <span class="text-[12.5px] text-zinc-400 tabular-nums">Reframed MP4</span>
-            <span aria-hidden="true" class="ml-1.5 flex size-7 shrink-0 items-center justify-center rounded-full text-zinc-400">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="task-chevron">
-                <path d="M6 9l6 6 6-6" />
-              </svg>
-            </span>
-          </button>
-          <div class="task-row-details">
-            <div class="overflow-hidden">
-              <div class="mb-2.5 grid grid-cols-[24px_1fr] gap-2.5 px-2.5">
-                <span aria-hidden="true" class="mx-auto h-full w-px bg-white/10"></span>
-                <div class="flex flex-col gap-1.5 pb-1">
-                  <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Smart Framing</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Center Crop or OpenCV Face Track</span>
-                  </div>
-                  <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Job Controls</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Cancel, Retry &amp; Batch .ZIP</span>
-                  </div>
-                  <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Format Output Render</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">MP4, source or selected FPS</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Row 7 -->
-        <div class="task-row self-stretch overflow-hidden" data-row-key="step-7">
-          <button type="button" aria-expanded="false" onclick="toggleTaskRow(this)" class="flex h-11 w-full items-center gap-2.5 px-2.5 text-left cursor-pointer select-none">
-            <span class="flex size-6 shrink-0 items-center justify-center">
-              <span class="relative inline-flex shrink-0 items-center justify-center size-6">
-                <svg width="24" height="24" class="absolute inset-0">
-                  <circle cx="12" cy="12" r="10" fill="none" stroke="rgba(255, 255, 255, 0.14)" stroke-width="2" />
-                </svg>
-                <span class="relative text-[10.5px] font-semibold tabular-nums text-white">7</span>
-              </span>
-            </span>
-            <span class="min-w-0 flex-1 truncate text-[13px] font-medium text-white">
-              AI Clipper Canvas &amp; Media Vault
-            </span>
-            <span class="text-[12.5px] text-zinc-400 tabular-nums">Local folder</span>
-            <span aria-hidden="true" class="ml-1.5 flex size-7 shrink-0 items-center justify-center rounded-full text-zinc-400">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="task-chevron">
-                <path d="M6 9l6 6 6-6" />
-              </svg>
-            </span>
-          </button>
-          <div class="task-row-details">
-            <div class="overflow-hidden">
-              <div class="mb-2.5 grid grid-cols-[24px_1fr] gap-2.5 px-2.5">
-                <span aria-hidden="true" class="mx-auto h-full w-px bg-white/10"></span>
-                <div class="flex flex-col gap-1.5 pb-1">
-                  <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Interactive Visual Layout</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Node Graph Canvas</span>
-                  </div>
-                  <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Save Directory</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">D:\Luna-Media\01-AI-Clips (or output/)</span>
-                  </div>
-                  <div class="flex items-center justify-between">
-                    <span class="text-[12px] text-zinc-400">Quick File Actions</span>
-                    <span class="font-mono text-[11.5px] text-zinc-500 tabular-nums">Preview, Download, Open Folder</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
       </div>
 
+      <p id="wfYoutubeSummary" class="text-xs text-zinc-400 leading-relaxed"></p>
+
+      <div id="wfYoutubeCanvas" class="guide-flow-canvas"></div>
+      <div id="wfYoutubeSteps" class="guide-flow-steps"></div>
+    </section>
+
+    <!-- Tab 1B: Instagram Reels Workflow -->
+    <section id="tab-wf-instagram" class="guide-tab-pane hidden space-y-5">
+      <p id="wfInstagramSummary" class="text-xs text-zinc-400 leading-relaxed"></p>
+
+      <div id="wfInstagramCanvas" class="guide-flow-canvas"></div>
+      <div id="wfInstagramSteps" class="guide-flow-steps"></div>
+    </section>
+
+    <!-- Tab 1C: TikTok Workflow -->
+    <section id="tab-wf-tiktok" class="guide-tab-pane hidden space-y-5">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="guide-submode-bar" role="tablist" aria-label="TikTok modes">
+          <button type="button" class="guide-submode-btn active" onclick="setWorkflowSubmode('tiktok', 'video', this)">Video MP4</button>
+          <button type="button" class="guide-submode-btn" onclick="setWorkflowSubmode('tiktok', 'mp3', this)">Audio MP3</button>
+        </div>
+      </div>
+
+      <p id="wfTiktokSummary" class="text-xs text-zinc-400 leading-relaxed"></p>
+
+      <div id="wfTiktokCanvas" class="guide-flow-canvas"></div>
+      <div id="wfTiktokSteps" class="guide-flow-steps"></div>
     </section>
 
     <!-- Tab 2: Features and Operating Modes -->
@@ -1887,7 +1615,7 @@
               <span id="guidePrevTitle">Workflow</span>
             </button>
             <button type="button" id="guideNextBtn" onclick="stepGuideTab(1)" class="docs-pager-btn">
-              <span id="guideNextTitle">Features &amp; Modes</span>
+              <span id="guideNextTitle">Instagram Reels</span>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M9 18l6-6-6-6" />
               </svg>
