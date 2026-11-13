@@ -1323,16 +1323,17 @@
     </section>
 
     <!-- Tab 2: Features and Operating Modes -->
-    <section id="tab-modes" class="guide-tab-pane hidden space-y-6">
+    <section id="tab-modes" class="guide-tab-pane hidden space-y-8">
 
-      <!-- High-Contrast Frameless Comparison Table -->
+      <!-- Mode Comparison Table -->
       <div class="overflow-x-auto border-b border-white/[0.08] pb-6">
         <table class="w-full text-left text-xs">
           <thead>
-            <tr class="border-b border-white/[0.12] text-zinc-400 font-bold">
+            <tr class="border-b border-white/[0.12] text-white font-semibold">
               <th class="py-3 px-3">Operating Mode</th>
+              <th class="py-3 px-3">Platform</th>
               <th class="py-3 px-3">Output Options</th>
-              <th class="py-3 px-3">Estimated Time</th>
+              <th class="py-3 px-3">API Key</th>
               <th class="py-3 px-3">Use It For</th>
             </tr>
           </thead>
@@ -1340,62 +1341,72 @@
             <tr class="hover:bg-white/[0.02]">
               <td class="py-3.5 px-3">
                 <div class="font-semibold text-white">AI Short Clips</div>
-                <span class="text-xs text-zinc-500">Auto Virality Ranking</span>
+                <span class="text-[11px] text-zinc-400">Auto Virality Ranking</span>
               </td>
+              <td class="py-3.5 px-3 text-zinc-300">YouTube</td>
               <td class="py-3.5 px-3 font-mono text-zinc-200">9:16, 16:9, 1:1, 3:4</td>
-              <td class="py-3.5 px-3 font-mono text-zinc-400">2 to 4 min</td>
-              <td class="py-3.5 px-3 text-zinc-300">Turn long YouTube videos into ranked short clips with Center Crop or Face Track.</td>
+              <td class="py-3.5 px-3 text-zinc-300">Required (LLM + Speech fallback)</td>
+              <td class="py-3.5 px-3 text-zinc-400">Extract 3–7 ranked vertical or square clips with Center Crop or OpenCV Face Tracking.</td>
             </tr>
 
             <tr class="hover:bg-white/[0.02]">
               <td class="py-3.5 px-3">
                 <div class="font-semibold text-white">Video Trimmer</div>
-                <span class="text-xs text-zinc-500">Multi-Segment Trim (up to 20)</span>
+                <span class="text-[11px] text-zinc-400">Multi-Segment (1–20 ranges)</span>
               </td>
+              <td class="py-3.5 px-3 text-zinc-300">YouTube</td>
               <td class="py-3.5 px-3 font-mono text-zinc-200">Original, 9:16, 3:4, 1:1</td>
-              <td class="py-3.5 px-3 font-mono text-zinc-400">20 to 40 s</td>
-              <td class="py-3.5 px-3 text-zinc-300">Cut one or more exact timestamp ranges without using AI quota.</td>
+              <td class="py-3.5 px-3 text-zinc-300">Not needed</td>
+              <td class="py-3.5 px-3 text-zinc-400">Cut exact start/end timestamp ranges locally without using AI quota, bundled with batch .ZIP.</td>
             </tr>
 
             <tr class="hover:bg-white/[0.02]">
               <td class="py-3.5 px-3">
-                <div class="font-semibold text-white">Full Video / Reels / TikTok</div>
-                <span class="text-xs text-zinc-500">Full Download &amp; Format</span>
+                <div class="font-semibold text-white">Full Video / Reels / Clean TikTok</div>
+                <span class="text-[11px] text-zinc-400">Direct Download &amp; Format</span>
               </td>
+              <td class="py-3.5 px-3 text-zinc-300">YouTube, Reels, TikTok</td>
               <td class="py-3.5 px-3 font-mono text-zinc-200">1080p–480p, Ratio &amp; FPS</td>
-              <td class="py-3.5 px-3 font-mono text-zinc-400">15 to 60 s</td>
-              <td class="py-3.5 px-3 text-zinc-300">Save YouTube videos (with optional crop &amp; Auto/30/60 FPS), Reels, or clean TikTok videos.</td>
+              <td class="py-3.5 px-3 text-zinc-300">Not needed</td>
+              <td class="py-3.5 px-3 text-zinc-400">Save YouTube videos (with optional crop &amp; Auto/60/30 FPS), Instagram Reels, or watermark-free TikTok MP4s.</td>
             </tr>
 
             <tr class="hover:bg-white/[0.02]">
               <td class="py-3.5 px-3">
                 <div class="font-semibold text-white">Audio MP3</div>
-                <span class="text-xs text-zinc-500">320kbps High Quality</span>
+                <span class="text-[11px] text-zinc-400">320 kbps Stereo MP3</span>
               </td>
-              <td class="py-3.5 px-3 font-mono text-zinc-200">MP3 Audio File</td>
-              <td class="py-3.5 px-3 font-mono text-zinc-400">10 to 20 s</td>
-              <td class="py-3.5 px-3 text-zinc-300">Extract audio from YouTube or TikTok videos for podcasts, interviews, or soundtracks.</td>
+              <td class="py-3.5 px-3 text-zinc-300">YouTube, TikTok</td>
+              <td class="py-3.5 px-3 font-mono text-zinc-200">320 kbps .MP3</td>
+              <td class="py-3.5 px-3 text-zinc-300">Not needed</td>
+              <td class="py-3.5 px-3 text-zinc-400">Extract high-bitrate audio tracks directly for podcasts, voiceovers, interviews, or music.</td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <!-- Detail: AI Clipper Canvas Breakdown -->
-      <div class="space-y-3 pt-2">
-        <h3 class="text-sm font-bold text-white">
-          How to Read the AI Clipper Interactive Canvas
+      <!-- Detail: Studio & Clipper Controls -->
+      <div class="space-y-4">
+        <h3 class="text-sm font-semibold text-white">
+          Studio &amp; Clipper Canvas Controls
         </h3>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 text-xs text-zinc-300">
-          <div class="space-y-1">
-            <span class="font-semibold text-white block">Source Card (Left Side)</span>
+        <div class="divide-y divide-white/[0.07] border-t border-white/[0.07]">
+          <div class="py-3.5 grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 sm:gap-6 text-xs">
+            <span class="font-semibold text-white">Source Node (Left Side)</span>
             <p class="text-zinc-400 leading-relaxed">
-              Shows the ingested video title, channel/source name, original YouTube link, and total clip count at the start of the workspace diagram.
+              Displays the fetched video title, channel/author metadata, source URL, and clip count anchoring the left side of the Clipper Canvas workspace.
             </p>
           </div>
-          <div class="space-y-1">
-            <span class="font-semibold text-white block">Clip Cards (Right Side)</span>
+          <div class="py-3.5 grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 sm:gap-6 text-xs">
+            <span class="font-semibold text-white">Clip Cards (Right Side)</span>
             <p class="text-zinc-400 leading-relaxed">
-              Each card represents one rendered clip with its estimated viral score (0–100), timestamps, hook quote, and instant preview/download actions. You can also Cancel running jobs, Retry failed ones, or export everything as a .ZIP.
+              Each rendered clip appears as an interactive card showing its virality score (0–100), timestamps, hook rationale, inline video preview, single download, and full batch <code class="font-mono text-zinc-300">Download .ZIP</code> export.
+            </p>
+          </div>
+          <div class="py-3.5 grid grid-cols-[1fr] sm:grid-cols-[180px_1fr] gap-2 sm:gap-6 text-xs">
+            <span class="font-semibold text-white">Cancel &amp; Retry Failed</span>
+            <p class="text-zinc-400 leading-relaxed">
+              Running jobs can be cancelled mid-flight from the task tracker, and failed downloads or clips can be retried individually without re-running completed work.
             </p>
           </div>
         </div>
@@ -1406,89 +1417,98 @@
     <!-- Tab 3: Setup & Requirements -->
     <section id="tab-setup" class="guide-tab-pane hidden space-y-6">
 
-      <!-- Item 1: FFmpeg & Deno -->
-      <div class="space-y-1.5">
-        <div class="flex items-center justify-between text-xs">
-          <span class="font-semibold text-white">1. FFmpeg &amp; Deno Runtime (video rendering &amp; YouTube downloads)</span>
-          <span class="text-zinc-500 font-mono text-[11px]">installed automatically</span>
-        </div>
-        <div class="subpage-cmd-box" onclick="copySnippet('ffmpeg -version', this)">
-          <div class="subpage-cmd-left">
-            <span class="subpage-cmd-prompt">$</span>
-            <code class="subpage-cmd-code">ffmpeg -version</code>
+      <div class="divide-y divide-white/[0.08]">
+
+        <!-- Item 1: Installers & Runtimes -->
+        <div class="pb-6 space-y-2.5">
+          <div class="flex items-center justify-between gap-2 text-xs">
+            <span class="text-sm font-semibold text-white">1. FFmpeg, yt-dlp &amp; Deno Runtime</span>
+            <span class="text-zinc-400 font-mono text-[11px]">installed automatically</span>
           </div>
-          <button type="button" class="spell-copy-btn" aria-label="Copy">
-            <span class="spell-icon-copy">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-              </svg>
-            </span>
-            <span class="spell-icon-check">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-            </span>
-          </button>
-        </div>
-        <p class="text-xs text-zinc-400 leading-relaxed">
-          Bundled via <code class="text-white font-mono">static-ffmpeg</code> and <code class="text-white font-mono">deno</code> during setup, or downloaded on first start if FFmpeg is missing from PATH. You can verify every runtime dependency anytime under <strong class="text-white">Settings &rarr; System Status</strong>.
-        </p>
-      </div>
-
-      <!-- Item 2: API keys -->
-      <div class="space-y-1.5">
-        <div class="flex items-center justify-between text-xs">
-          <span class="font-semibold text-white">2. AI API Keys (required only for AI Short Clips)</span>
-          <span class="text-zinc-500 font-mono text-[11px]">Settings UI / .env</span>
-        </div>
-        <p class="text-xs text-zinc-400 leading-relaxed">
-          Standard downloads, audio MP3 extraction, and Video Trimmer work immediately with <strong class="text-white">no API key</strong>. For AI Short Clips, paste your keys in <strong class="text-white">Settings</strong> (includes <strong class="text-white">Test Connection</strong> and <strong class="text-white">Fetch Models</strong> for OpenAI-compatible providers). Clip ranking uses OpenAI-compatible models or Gemini; videos without YouTube captions are transcribed with Groq (default), Gemini, or local Faster-Whisper.
-        </p>
-        <p class="text-xs text-zinc-500 leading-relaxed">
-          Privacy note: downloads and video cropping run on your machine, while AI Short Clips send the transcript (and audio, unless using local Faster-Whisper) to the AI provider you configure.
-        </p>
-      </div>
-
-      <!-- Item 3: Cookies.txt -->
-      <div class="space-y-1.5">
-        <div class="flex items-center justify-between text-xs">
-          <span class="font-semibold text-white">3. YouTube Cookies (bypass bot checks &amp; age-restricted videos)</span>
-          <span class="text-zinc-500 font-mono text-[11px]">Settings upload / cookies.txt</span>
-        </div>
-        <p class="text-xs text-zinc-400 leading-relaxed">
-          Export YouTube cookies from your browser with <em>Get cookies.txt LOCALLY</em>, then upload the <code class="text-white font-mono">.txt</code> file directly inside <strong class="text-white">Settings</strong> (or place <code class="text-white font-mono">cookies.txt</code> in the Luna root directory).
-        </p>
-      </div>
-
-      <!-- Item 4: Optional Add-ons -->
-      <div class="space-y-1.5">
-        <div class="flex items-center justify-between text-xs">
-          <span class="font-semibold text-white">4. Optional: Local Faster-Whisper &amp; MCP Server</span>
-          <span class="text-zinc-500 font-mono text-[11px]">optional extras</span>
-        </div>
-        <div class="subpage-cmd-box" onclick="copySnippet('pip install -r requirements-whisper.txt', this)">
-          <div class="subpage-cmd-left">
-            <span class="subpage-cmd-prompt">$</span>
-            <code class="subpage-cmd-code">pip install -r requirements-whisper.txt</code>
+          <p class="text-xs text-zinc-400 leading-relaxed">
+            Running <code class="font-mono text-zinc-300">install.ps1</code> (Windows), <code class="font-mono text-zinc-300">install.sh</code> (macOS/Linux), or Docker sets up Python dependencies, <code class="font-mono text-zinc-300">static-ffmpeg</code>, <code class="font-mono text-zinc-300">yt-dlp</code>, and the <code class="font-mono text-zinc-300">deno</code> JavaScript runtime required for modern YouTube streams.
+          </p>
+          <div class="subpage-cmd-box" onclick="copySnippet('ffmpeg -version', this)">
+            <div class="subpage-cmd-left">
+              <span class="subpage-cmd-prompt">$</span>
+              <code class="subpage-cmd-code">ffmpeg -version</code>
+            </div>
+            <button type="button" class="spell-copy-btn" aria-label="Copy">
+              <span class="spell-icon-copy">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </span>
+              <span class="spell-icon-check">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+              </span>
+            </button>
           </div>
-          <button type="button" class="spell-copy-btn" aria-label="Copy">
-            <span class="spell-icon-copy">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-              </svg>
-            </span>
-            <span class="spell-icon-check">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-            </span>
-          </button>
+          <p class="text-xs text-zinc-400 leading-relaxed">
+            Verify runtime health anytime under Settings &rarr; System Status &rarr; Check (FFmpeg &amp; FFprobe, yt-dlp Engine, OpenCV Face Tracker, Media Directory Access, and Cookies YouTube).
+          </p>
         </div>
-        <p class="text-xs text-zinc-400 leading-relaxed">
-          <code class="text-white font-mono">faster-whisper</code> is excluded from default installs to keep setup lightweight. Install <code class="text-white font-mono">requirements-whisper.txt</code> in your <code class="text-white font-mono">.venv</code> if you choose Faster-Whisper Local in Settings, or <code class="text-white font-mono">requirements-mcp.txt</code> to run the MCP server.
-        </p>
+
+        <!-- Item 2: API keys -->
+        <div class="py-6 space-y-2">
+          <div class="flex items-center justify-between gap-2 text-xs">
+            <span class="text-sm font-semibold text-white">2. AI API Keys (AI Short Clips Only)</span>
+            <span class="text-zinc-400 font-mono text-[11px]">Settings / .env</span>
+          </div>
+          <p class="text-xs text-zinc-400 leading-relaxed">
+            Full HD Video, Video Trimmer, Instagram Reels, TikTok Clean, and Audio MP3 work immediately with zero API keys. For AI Short Clips, configure your provider in Settings (with Fetch Models and Test Connection):
+          </p>
+          <ul class="guide-flow-step-points">
+            <li><strong>Virality Ranking LLM:</strong> Supports OpenAI-compatible endpoints (OpenAI, OpenRouter, custom base URLs) or Google Gemini.</li>
+            <li><strong>Speech Transcription Fallback:</strong> Checks local <code class="font-mono text-zinc-300">.srt</code> cache and YouTube captions first; uses Groq Cloud Whisper, Gemini, or local Faster-Whisper only when captions are unavailable.</li>
+            <li><strong>Privacy Boundary:</strong> Video downloads and FFmpeg cuts run locally; AI Short Clips only send transcripts (and audio when cloud transcription is used) to your configured provider.</li>
+          </ul>
+        </div>
+
+        <!-- Item 3: Cookies.txt -->
+        <div class="py-6 space-y-2">
+          <div class="flex items-center justify-between gap-2 text-xs">
+            <span class="text-sm font-semibold text-white">3. YouTube Cookies (Bot &amp; Age-Restricted Bypass)</span>
+            <span class="text-zinc-400 font-mono text-[11px]">Settings upload / cookies.txt</span>
+          </div>
+          <p class="text-xs text-zinc-400 leading-relaxed">
+            If YouTube prompts sign-in verification or 403 throttling on restricted videos, export your browser cookies via <em>Get cookies.txt LOCALLY</em> and click Change next to Cookies YouTube in Settings (or place <code class="font-mono text-zinc-300">cookies.txt</code> in the Luna root folder).
+          </p>
+        </div>
+
+        <!-- Item 4: Optional Add-ons -->
+        <div class="pt-6 space-y-2.5">
+          <div class="flex items-center justify-between gap-2 text-xs">
+            <span class="text-sm font-semibold text-white">4. Optional Extras (Local Faster-Whisper &amp; MCP Server)</span>
+            <span class="text-zinc-400 font-mono text-[11px]">optional packages</span>
+          </div>
+          <div class="subpage-cmd-box" onclick="copySnippet('pip install -r requirements-whisper.txt', this)">
+            <div class="subpage-cmd-left">
+              <span class="subpage-cmd-prompt">$</span>
+              <code class="subpage-cmd-code">pip install -r requirements-whisper.txt</code>
+            </div>
+            <button type="button" class="spell-copy-btn" aria-label="Copy">
+              <span class="spell-icon-copy">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </span>
+              <span class="spell-icon-check">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+              </span>
+            </button>
+          </div>
+          <p class="text-xs text-zinc-400 leading-relaxed">
+            <code class="font-mono text-zinc-300">faster-whisper</code> is omitted from the default installer to keep downloads lightweight. Install <code class="font-mono text-zinc-300">requirements-whisper.txt</code> inside your <code class="font-mono text-zinc-300">.venv</code> to enable offline transcription, or <code class="font-mono text-zinc-300">requirements-mcp.txt</code> to expose Luna tools via <code class="font-mono text-zinc-300">luna/mcp_server.py</code>.
+          </p>
+        </div>
+
       </div>
 
     </section>
@@ -1497,11 +1517,11 @@
     <section id="tab-vault" class="guide-tab-pane hidden space-y-6">
 
       <!-- Visual Tree Hierarchy -->
-      <div class="vault-box p-4 font-mono text-xs text-zinc-200 space-y-1.5 leading-relaxed">
-        <div class="text-white font-bold">D:\Luna-Media\ <span class="text-zinc-500 font-normal">(or output\ fallback)</span></div>
-        <div class="pl-4 text-emerald-400 font-bold">├── 01-AI-Clips\ <span class="text-zinc-500 font-normal">// Rendered AI short clips</span></div>
-        <div class="pl-8 text-emerald-300 font-bold">│   └── {Workspace_Name}\</div>
-        <div class="pl-12 text-zinc-300">│       ├── meta.json <span class="text-zinc-500">// Scores, captions &amp; workspace index</span></div>
+      <div class="vault-box p-4 font-mono text-xs text-zinc-300 space-y-1.5 leading-relaxed">
+        <div class="text-zinc-300">D:\Luna-Media\ <span class="text-zinc-500">(or local output\ fallback)</span></div>
+        <div class="pl-4 text-zinc-300">├── 01-AI-Clips\ <span class="text-zinc-500">// Rendered AI Short Clips workspaces</span></div>
+        <div class="pl-8 text-zinc-300">│   └── {Workspace_Name}\</div>
+        <div class="pl-12 text-zinc-300">│       ├── meta.json <span class="text-zinc-500">// Scores, timestamps &amp; workspace index</span></div>
         <div class="pl-12 text-zinc-300">│       ├── short_00.mp4 <span class="text-zinc-500">// Generated clip #1</span></div>
         <div class="pl-12 text-zinc-300">│       └── short_01.mp4 <span class="text-zinc-500">// Generated clip #2</span></div>
         <div class="pl-4 text-zinc-300">├── 02-YouTube-Full\ <span class="text-zinc-500">// Full &amp; trimmed YouTube videos</span></div>
@@ -1510,26 +1530,33 @@
         <div class="pl-4 text-zinc-300">└── 05-Audio-MP3\ <span class="text-zinc-500">// 320 kbps MP3 audio</span></div>
       </div>
 
-      <!-- 3 Fitur Media Vault -->
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-5 pt-1 text-xs">
-        <div class="space-y-1 p-3 rounded-lg bg-white/[0.02] border border-white/[0.06]">
-          <div class="font-semibold text-white">Rename Workspace</div>
+      <!-- Vault Management Features (Cardless Docs Layout) -->
+      <div class="divide-y divide-white/[0.08] border-t border-white/[0.08]">
+        <div class="py-3.5 grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 sm:gap-6 text-xs">
+          <span class="font-semibold text-white">Rename Workspace</span>
           <p class="text-zinc-400 leading-relaxed">
-            Click the pencil button to rename a workspace. The folder on disk and the gallery update together.
+            Click the pencil icon on any workspace to update its display name in <code class="font-mono text-zinc-300">meta.json</code> and refresh the Media Vault gallery instantly without breaking file links.
           </p>
         </div>
 
-        <div class="space-y-1 p-3 rounded-lg bg-white/[0.02] border border-white/[0.06]">
-          <div class="font-semibold text-white">Open in Explorer</div>
+        <div class="py-3.5 grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 sm:gap-6 text-xs">
+          <span class="font-semibold text-white">Move Storage Folder</span>
           <p class="text-zinc-400 leading-relaxed">
-            Click the folder button to show the file in your file manager.
+            Change the active storage root anytime from Settings &rarr; Media Storage &rarr; Move Folder to relocate or migrate future downloads to another drive.
           </p>
         </div>
 
-        <div class="space-y-1 p-3 rounded-lg bg-white/[0.02] border border-white/[0.06]">
-          <div class="font-semibold text-white">Safe Deletion</div>
+        <div class="py-3.5 grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 sm:gap-6 text-xs">
+          <span class="font-semibold text-white">Open Folder &amp; Preview</span>
           <p class="text-zinc-400 leading-relaxed">
-            A confirmation dialog helps prevent accidental file deletion.
+            Play MP4 clips or 320 kbps MP3s directly inside Media Vault, download individual files or batch <code class="font-mono text-zinc-300">.ZIP</code> archives, or open the workspace folder straight in your OS file explorer.
+          </p>
+        </div>
+
+        <div class="py-3.5 grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 sm:gap-6 text-xs">
+          <span class="font-semibold text-white">Safe Deletion</span>
+          <p class="text-zinc-400 leading-relaxed">
+            Deleting a workspace opens a confirmation modal first, then safely clears only files inside the configured storage root directory.
           </p>
         </div>
       </div>
@@ -1550,7 +1577,7 @@
             </svg>
           </div>
           <p class="text-xs text-zinc-400 mt-2 hidden leading-relaxed">
-            Luna checks that the link uses <code class="text-white font-mono bg-white/[0.08] px-1 rounded">http://</code> or <code class="text-white font-mono bg-white/[0.08] px-1 rounded">https://</code>, resolves to a public host, and comes from YouTube, Instagram, or TikTok. Check the link and try again.
+            Luna checks that the link uses <code class="font-mono text-zinc-300">http://</code> or <code class="font-mono text-zinc-300">https://</code>, resolves to a public host, and comes from YouTube, Instagram, or TikTok. Check the link and try again.
           </p>
         </div>
 
@@ -1562,7 +1589,7 @@
             </svg>
           </div>
           <p class="text-xs text-zinc-400 mt-2 hidden leading-relaxed">
-            If the D: drive is unavailable (or on macOS/Linux), Luna automatically uses the <code class="text-emerald-300 font-mono bg-white/[0.08] px-1 rounded">output/</code> folder in your Luna directory. You can move and migrate files anytime using <strong class="text-white">Move Folder</strong> in Settings.
+            If the <code class="font-mono text-zinc-300">D:\</code> drive is unavailable (or on macOS/Linux/Docker), Luna automatically uses the local <code class="font-mono text-zinc-300">output/</code> folder. You can move and migrate files anytime using Move Folder in Settings.
           </p>
         </div>
 
@@ -1574,7 +1601,7 @@
             </svg>
           </div>
           <p class="text-xs text-zinc-400 mt-2 hidden leading-relaxed">
-            This happens when YouTube blocks an IP or requests account verification. Export your YouTube cookies with <em>Get cookies.txt LOCALLY</em> and upload the file directly in <strong class="text-white">Settings</strong> (or save it as <code class="text-purple-300 font-mono bg-white/[0.08] px-1 rounded">cookies.txt</code> in the Luna root folder).
+            This happens when YouTube blocks an IP or requests account verification. Export your YouTube cookies with <em>Get cookies.txt LOCALLY</em> and upload the file directly in Settings (or save it as <code class="font-mono text-zinc-300">cookies.txt</code> in the Luna root folder).
           </p>
         </div>
 
@@ -1586,7 +1613,7 @@
             </svg>
           </div>
           <p class="text-xs text-zinc-400 mt-2 hidden leading-relaxed">
-            Create a key in your provider's dashboard, enter the key and base URL in <strong class="text-white">Settings</strong>, click <strong class="text-white">Fetch Models</strong> to pick a chat model, and verify with <strong class="text-white">Test Connection</strong>. Keys are saved directly to <code class="text-white font-mono bg-white/[0.08] px-1 rounded">.env</code>.
+            Create a key in your provider's dashboard, enter the key and base URL in Settings, click Fetch Models to pick a chat model, and verify with Test Connection. Keys are saved directly to <code class="font-mono text-zinc-300">.env</code>.
           </p>
         </div>
 
@@ -1598,7 +1625,7 @@
             </svg>
           </div>
           <p class="text-xs text-zinc-400 mt-2 hidden leading-relaxed">
-            Select <strong class="text-white">Face Track</strong> for podcasts or interviews focused on one speaker so OpenCV keeps them centered. Leave the default <strong class="text-white">Center Crop</strong> for faster rendering on vlogs with multiple moving people or screen recordings.
+            Select Face Track for podcasts or interviews focused on one speaker so OpenCV keeps them centered. Leave the default Center Crop for faster rendering on vlogs with multiple moving people or screen recordings.
           </p>
         </div>
 

@@ -2386,8 +2386,8 @@ body.tab-settings [data-us-project] canvas {
 }
 
 .vault-box {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #0b0b0b;
+  border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 12px;
   overflow: hidden;
 }
@@ -2707,7 +2707,7 @@ body.tab-settings [data-us-project] canvas {
 }
 
 .guide-flow-step-points strong {
-  color: #e4e4e7;
+  color: #a1a1aa;
   font-weight: 500;
 }
 
