@@ -34,7 +34,31 @@ Windows PowerShell:
 irm https://raw.githubusercontent.com/miqdadbadjuber/luna/main/install.ps1 | iex
 ```
 
-Git is not needed. The installer puts Luna in `~/Luna` (`%USERPROFILE%\Luna` on Windows), then sets up [uv](https://docs.astral.sh/uv/), Python 3.12, the dependencies, FFmpeg if it is missing, and a default `.env`, then opens Luna at [http://localhost:8000](http://localhost:8000). If another app already uses port 8000, Luna takes the next free port and prints it; set `LUNA_PORT` to pin one. Nothing is installed system-wide except uv. Add your API keys in Settings, with no file to edit. Downloads need no keys. Start Luna again later with `./start.sh`. On Windows the installer adds a Luna shortcut to the Desktop and the Start Menu; from PowerShell, run `.\start.bat`. Run the same line again to update. From a clone, run `./install.sh` or `.\install.ps1` in it instead.
+Git is not needed. The installer puts Luna in `~/Luna` (`%USERPROFILE%\Luna` on Windows), then sets up [uv](https://docs.astral.sh/uv/), Python 3.12, the dependencies, FFmpeg if it is missing, and a default `.env`, then opens Luna at [http://localhost:8000](http://localhost:8000). If another app already uses port 8000, Luna takes the next free port and prints it; set `LUNA_PORT` to pin one. Nothing is installed system-wide except uv. Add your API keys in Settings, with no file to edit. Downloads need no keys.
+
+Start Luna again later with `./start.sh` on macOS and Linux. Run the same install line again to update.
+
+### Windows
+
+1. Install once with the PowerShell line above. It adds a **Luna** shortcut to the Desktop and the Start Menu.
+2. Start Luna later by double-clicking that shortcut. No terminal is needed.
+3. To update, run the install line again. Your `.env` and media are kept.
+
+If you cloned the repository with git, install inside the clone once. Windows PowerShell blocks `.ps1` files by default, so run it like this from the clone folder:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+After a `git pull`, run that command again when `requirements.txt` changed.
+
+| You see | What to do |
+| --- | --- |
+| `start.bat` is not recognized | PowerShell does not run files from the current folder. Type `.\start.bat`, or double-click the file. |
+| `Luna is not installed yet. Run install.ps1 first.` | This folder has no `.venv` yet. Run the install command above in the same folder. |
+| `running scripts is disabled on this system` | Use the `powershell -ExecutionPolicy Bypass -File .\install.ps1` form. |
+
+On macOS and Linux, run `./install.sh` in a clone instead.
 
 To install by hand, create a Python 3.12+ virtual environment, run `pip install -r requirements.txt`, copy `.env.example` to `.env`, install FFmpeg and FFprobe, then run `python -m luna`. `npm run dev` and `npm start` only wrap those Python commands from `package.json`; npm is optional sugar, not a Node toolchain, and neither script installs anything.
 
