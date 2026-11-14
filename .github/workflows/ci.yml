@@ -79,6 +79,10 @@ jobs:
           if (Get-Command git -ErrorAction SilentlyContinue) { throw "git is still on PATH" }
           Set-Location $env:RUNNER_TEMP
           Get-Content "$env:GITHUB_WORKSPACE\src\install.ps1" -Raw | Invoke-Expression
+          foreach ($dir in @([Environment]::GetFolderPath("Desktop"), [Environment]::GetFolderPath("Programs"))) {
+            $lnk = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $dir "Luna.lnk"))
+            if (-not (Test-Path $lnk.FullName) -or $lnk.TargetPath -ne (Join-Path $env:LUNA_DIR "start.bat")) { throw "Luna shortcut missing or wrong in $dir" }
+          }
       - name: Start and check the server
         shell: bash
         working-directory: Luna

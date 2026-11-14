@@ -66,5 +66,19 @@ Write-Host "Checking FFmpeg..."
 .venv\Scripts\python.exe -c "from luna.ffmpeg_setup import ensure_ffmpeg; ensure_ffmpeg()"
 if ($LASTEXITCODE -ne 0) { throw "Could not set up FFmpeg." }
 
-Write-Host "Luna is installed in $lunaDir. Start it again later with start.bat"
+# A Desktop and Start Menu shortcut, so starting Luna again needs no terminal.
+try {
+    $shell = New-Object -ComObject WScript.Shell
+    foreach ($dir in @([Environment]::GetFolderPath("Desktop"), [Environment]::GetFolderPath("Programs"))) {
+        if (-not $dir) { continue }
+        $lnk = $shell.CreateShortcut((Join-Path $dir "Luna.lnk"))
+        $lnk.TargetPath = Join-Path $lunaDir "start.bat"
+        $lnk.WorkingDirectory = $lunaDir
+        $lnk.Save()
+    }
+} catch {
+    Write-Warning "Could not create the Luna shortcut: $($_.Exception.Message)"
+}
+
+Write-Host "Luna is installed in $lunaDir. Start it again later from the Luna shortcut on the Desktop or in the Start Menu."
 if ($env:LUNA_NO_START -ne "1") { & .\start.bat }
