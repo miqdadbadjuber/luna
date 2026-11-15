@@ -2985,9 +2985,38 @@ function updateTabsPill(immediate = false) {
   }
 }
 
+let studioBgResumeTimer = null;
+
+function activateStudioBackground() {
+  const bgContainer = document.getElementById('studioBackgroundContainer');
+  const curtainsCanvas = document.getElementById('curtains-canvas');
+  if (bgContainer) {
+    bgContainer.classList.remove('is-hidden');
+    bgContainer.style.opacity = '1';
+    bgContainer.style.visibility = 'visible';
+    bgContainer.style.pointerEvents = 'none';
+    bgContainer.style.removeProperty('display');
+  }
+  if (curtainsCanvas) {
+    curtainsCanvas.style.opacity = '1';
+    curtainsCanvas.style.visibility = 'visible';
+    curtainsCanvas.style.pointerEvents = 'none';
+    curtainsCanvas.style.removeProperty('display');
+  }
+  if (typeof window.resumeUnicornStudio === 'function') {
+    window.resumeUnicornStudio();
+  }
+}
+
 function switchMainTab(tab) {
   try {
+    const previousTab = currentMainTab;
     currentMainTab = tab;
+    if (studioBgResumeTimer) {
+      clearTimeout(studioBgResumeTimer);
+      studioBgResumeTimer = null;
+    }
+
     document.body.classList.remove('tab-studio', 'tab-vault', 'tab-settings');
     document.body.classList.add('tab-' + tab);
     if (tab !== 'vault') {
@@ -3008,25 +3037,13 @@ function switchMainTab(tab) {
     // Running WebGL Background active ONLY in Studio
     const bgContainer = document.getElementById('studioBackgroundContainer');
     const curtainsCanvas = document.getElementById('curtains-canvas');
+    const shouldDeferStudioBg = tab === 'studio' && previousTab !== 'studio';
     if (tab === 'studio') {
       if (window.location.hash) {
         history.replaceState(null, '', window.location.pathname);
       }
-      if (bgContainer) {
-        bgContainer.classList.remove('is-hidden');
-        bgContainer.style.opacity = '1';
-        bgContainer.style.visibility = 'visible';
-        bgContainer.style.pointerEvents = 'none';
-        bgContainer.style.removeProperty('display');
-      }
-      if (curtainsCanvas) {
-        curtainsCanvas.style.opacity = '1';
-        curtainsCanvas.style.visibility = 'visible';
-        curtainsCanvas.style.pointerEvents = 'none';
-        curtainsCanvas.style.removeProperty('display');
-      }
-      if (typeof window.resumeUnicornStudio === 'function') {
-        window.resumeUnicornStudio();
+      if (!shouldDeferStudioBg) {
+        activateStudioBackground();
       }
     } else {
       if (bgContainer) {
@@ -3134,7 +3151,16 @@ function switchMainTab(tab) {
 
     updateTabsPill(false);
 
-    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+    if (shouldDeferStudioBg) {
+      studioBgResumeTimer = setTimeout(() => {
+        studioBgResumeTimer = null;
+        if (currentMainTab !== 'studio') return;
+        activateStudioBackground();
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+          window.lucide.createIcons();
+        }
+      }, 270);
+    } else if (window.lucide && typeof window.lucide.createIcons === 'function') {
       window.lucide.createIcons();
     }
   } catch (err) {

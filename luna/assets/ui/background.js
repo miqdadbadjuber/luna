@@ -1,4 +1,11 @@
 // Global WebGL Lifecycle Controllers to maximize GPU/CPU efficiency
+let __unicornLastViewport = { w: window.innerWidth, h: window.innerHeight };
+let __unicornNeedsResize = false;
+
+window.addEventListener('resize', function () {
+  __unicornNeedsResize = true;
+});
+
 window.pauseUnicornStudio = function () {
   try {
     if (window.__unicornScenes && Array.isArray(window.__unicornScenes)) {
@@ -19,16 +26,21 @@ window.resumeUnicornStudio = function () {
   try {
     if (typeof currentMainTab === 'undefined' || currentMainTab === 'studio') {
       if (!document.hidden && window.__unicornScenes && Array.isArray(window.__unicornScenes)) {
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const shouldResize = __unicornNeedsResize || vw !== __unicornLastViewport.w || vh !== __unicornLastViewport.h;
         window.__unicornScenes.forEach(function (scene) {
           if (scene && scene.curtain && typeof scene.curtain.enableDrawing === 'function') {
             scene.curtain.enableDrawing();
-            if (typeof scene.curtain.resize === 'function') {
+            if (shouldResize && typeof scene.curtain.resize === 'function') {
               scene.curtain.resize();
             }
           } else if (scene && typeof scene.enable === 'function') {
             scene.enable();
           }
         });
+        __unicornLastViewport = { w: vw, h: vh };
+        __unicornNeedsResize = false;
       }
     }
   } catch (e) {
