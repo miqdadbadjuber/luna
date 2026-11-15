@@ -246,6 +246,76 @@ class TestVaultService(unittest.TestCase):
         self.assertTrue(deleted)
         self.assertEqual(vault_service.list_vault_items(), [])
 
+    def test_rename_vault_item_preserves_extension_and_updates_project_metadata(self):
+        """Renaming a file stem locks its extension even if user enters another dot suffix."""
+        ws_dir = os.path.join(self.test_dir, "02-YouTube-Full", "Workspace_01")
+        os.makedirs(ws_dir, exist_ok=True)
+        orig_file = os.path.join(ws_dir, "Into You.mp3")
+        with open(orig_file, "wb") as f:
+            f.write(b"audio bytes")
+
+        vault_service.save_project_metadata(ws_dir, {
+            "project_id": "proj_abc123",
+            "workspace_name": "Workspace 01",
+            "files": [{
+                "id": "file_audio_1",
+                "title": "Into You.mp3",
+                "filename": "Into You.mp3",
+                "file_path": orig_file,
+                "url": "/media-vault/02-YouTube-Full/Workspace_01/Into You.mp3",
+            }],
+        })
+
+        # Trying a foreign extension keeps .mp3 locked at the end
+        res1 = vault_service.rename_vault_item("file_audio_1", "Remix.wav")
+        self.assertEqual(res1["status"], "renamed")
+        self.assertEqual(res1["item"]["filename"], "Remix.wav.mp3")
+        self.assertEqual(res1["item"]["title"], "Remix.wav.mp3")
+        self.assertFalse(os.path.exists(orig_file))
+        new_path_1 = os.path.join(ws_dir, "Remix.wav.mp3")
+        self.assertTrue(os.path.exists(new_path_1))
+        self.assertEqual(res1["item"]["file_path"], os.path.abspath(new_path_1))
+        self.assertEqual(res1["item"]["url"], "/media-vault/02-YouTube-Full/Workspace_01/Remix.wav.mp3")
+
+        # Passing the same extension avoids duplicating .mp3.mp3
+        res2 = vault_service.rename_vault_item("file_audio_1", "Final Track.MP3")
+        self.assertEqual(res2["status"], "renamed")
+        self.assertEqual(res2["item"]["filename"], "Final Track.mp3")
+        self.assertTrue(os.path.exists(os.path.join(ws_dir, "Final Track.mp3")))
+
+    def test_rename_vault_item_conflict_invalid_and_locked(self):
+        """Cover duplicate conflict, invalid names, missing id, and OS PermissionError."""
+        ws_dir = os.path.join(self.test_dir, "02-YouTube-Full", "Workspace_02")
+        os.makedirs(ws_dir, exist_ok=True)
+        file1 = os.path.join(ws_dir, "Clip One.mp4")
+        file2 = os.path.join(ws_dir, "Clip Two.mp4")
+        with open(file1, "wb") as f:
+            f.write(b"1")
+        with open(file2, "wb") as f:
+            f.write(b"2")
+
+        vault_service.save_project_metadata(ws_dir, {
+            "project_id": "proj_def456",
+            "workspace_name": "Workspace 02",
+            "files": [
+                {"id": "f1", "title": "Clip One.mp4", "filename": "Clip One.mp4", "file_path": file1},
+                {"id": "f2", "title": "Clip Two.mp4", "filename": "Clip Two.mp4", "file_path": file2},
+            ],
+        })
+
+        self.assertEqual(vault_service.rename_vault_item("f1", "Clip Two")["status"], "conflict")
+        self.assertEqual(vault_service.rename_vault_item("f1", ":::???")["status"], "invalid")
+        self.assertEqual(vault_service.rename_vault_item("f1", ".mp4")["status"], "invalid")
+        self.assertEqual(vault_service.rename_vault_item("nope", "Anything")["status"], "not_found")
+
+        with patch("luna.vault_service.os.rename", side_effect=PermissionError("locked")), \
+             patch("luna.vault_service.time.sleep"):
+            res = vault_service.rename_vault_item("f1", "Blocked Rename")
+        self.assertEqual(res["status"], "locked")
+        # Metadata must remain unchanged when rename fails
+        items = vault_service.list_vault_items()
+        self.assertEqual([i["filename"] for i in items if i["id"] == "f1"], ["Clip One.mp4"])
+
 
 if __name__ == "__main__":
     unittest.main()

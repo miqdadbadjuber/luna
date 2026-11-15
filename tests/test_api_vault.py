@@ -217,6 +217,45 @@ class TestApiVault(unittest.TestCase):
         self.assertEqual(len(vault_items), 1)
         self.assertEqual(vault_items[0]["id"], item["id"])
 
+    def test_rename_vault_item_api_preserves_extension_and_reports_errors(self):
+        """PATCH /api/vault/item/{item_id}/rename locks extension and returns clear errors."""
+        ws_dir = os.path.join(self.test_dir, "02-YouTube-Full", "WS_API")
+        os.makedirs(ws_dir, exist_ok=True)
+        vid1 = os.path.join(ws_dir, "Original.mp4")
+        vid2 = os.path.join(ws_dir, "Sibling.mp4")
+        with open(vid1, "wb") as f:
+            f.write(b"vid1 bytes")
+        with open(vid2, "wb") as f:
+            f.write(b"vid2 bytes")
+
+        vault_service.save_project_metadata(ws_dir, {
+            "project_id": "proj_api_1",
+            "workspace_name": "API WS",
+            "files": [
+                {"id": "api_f1", "title": "Original.mp4", "filename": "Original.mp4", "file_path": vid1},
+                {"id": "api_f2", "title": "Sibling.mp4", "filename": "Sibling.mp4", "file_path": vid2},
+            ],
+        })
+
+        res = self.client.patch("/api/vault/item/api_f1/rename", json={"new_name": "Updated Video"})
+        self.assertEqual(res.status_code, 200)
+        body = res.json()
+        self.assertEqual(body["status"], "renamed")
+        self.assertEqual(body["item"]["filename"], "Updated Video.mp4")
+        self.assertTrue(os.path.exists(os.path.join(ws_dir, "Updated Video.mp4")))
+
+        conflict = self.client.patch("/api/vault/item/api_f1/rename", json={"new_name": "Sibling"})
+        self.assertEqual(conflict.status_code, 409)
+
+        invalid = self.client.patch("/api/vault/item/api_f1/rename", json={"new_name": "???"})
+        self.assertEqual(invalid.status_code, 400)
+
+        empty = self.client.patch("/api/vault/item/api_f1/rename", json={"new_name": "   "})
+        self.assertEqual(empty.status_code, 422)
+
+        missing = self.client.patch("/api/vault/item/does_not_exist/rename", json={"new_name": "Anything"})
+        self.assertEqual(missing.status_code, 404)
+
 
 if __name__ == "__main__":
     unittest.main()

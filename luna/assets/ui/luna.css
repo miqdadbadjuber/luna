@@ -1622,6 +1622,32 @@ body.in-workspace main {
   color: #ffffff;
 }
 
+.luna-download-icon-link {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: #a3a3a3;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  transition: color 180ms ease;
+}
+
+.luna-download-icon-link svg {
+  width: 15px;
+  height: 15px;
+}
+
+.luna-download-icon-link:hover,
+.vault-file-card:hover .luna-download-icon-link {
+  color: #ffffff;
+}
+
 .luna-open-chevron {
   width: 12px;
   height: 12px;
@@ -1762,7 +1788,8 @@ body.in-workspace main {
   height: 12px;
 }
 
-#vaultGalleryGrid.is-selecting .vault-card-check {
+#vaultGalleryGrid.is-selecting .vault-card-check,
+#projectFilesGrid.is-selecting .vault-card-check {
   opacity: 1;
 }
 
@@ -1770,9 +1797,33 @@ body.in-workspace main {
   padding-right: 46px;
 }
 
-#vaultGalleryGrid.is-selecting .vault-card-actions {
+#vaultGalleryGrid.is-selecting .vault-card-actions,
+#projectFilesGrid.is-selecting .vault-file-actions {
   opacity: 0.35;
   pointer-events: none;
+}
+
+#projectFilesGrid.is-selecting .vault-file-card {
+  cursor: pointer;
+}
+
+#projectFilesGrid.is-selecting media-theme-sutro,
+#projectFilesGrid.is-selecting video,
+#projectFilesGrid.is-selecting audio {
+  pointer-events: none;
+}
+
+.vault-file-card {
+  position: relative;
+}
+
+.vault-file-card .vault-card-check {
+  top: 10px;
+  right: 10px;
+  z-index: 30;
+  background: rgba(0, 0, 0, 0.55);
+  border-color: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(6px);
 }
 
 #vaultGalleryGrid.is-selecting .vault-card.is-virtual {
@@ -1780,11 +1831,13 @@ body.in-workspace main {
   cursor: not-allowed;
 }
 
-.t-rec-card.vault-card.is-selected {
+.t-rec-card.vault-card.is-selected,
+.vault-file-card.is-selected {
   border-color: rgba(255, 255, 255, 0.42) !important;
 }
 
-.vault-card.is-selected .vault-card-check {
+.vault-card.is-selected .vault-card-check,
+.vault-file-card.is-selected .vault-card-check {
   background: #ffffff;
   border-color: #ffffff;
   color: #000000;
@@ -1825,8 +1878,7 @@ body.in-workspace main {
     visibility 0s;
 }
 
-body:not(.tab-vault) .vault-selection-bar,
-body.in-workspace .vault-selection-bar {
+body:not(.tab-vault) .vault-selection-bar {
   display: none;
 }
 

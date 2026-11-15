@@ -3072,8 +3072,9 @@ function switchMainTab(tab) {
       clearTimeout(studioBgResumeTimer);
       studioBgResumeTimer = null;
     }
-    if (tab !== 'vault' && typeof exitVaultSelectionMode === 'function') {
-      exitVaultSelectionMode();
+    if (tab !== 'vault') {
+      if (typeof exitActiveSelectionMode === 'function') exitActiveSelectionMode();
+      else if (typeof exitVaultSelectionMode === 'function') exitVaultSelectionMode();
     }
 
     document.body.classList.remove('tab-studio', 'tab-vault', 'tab-settings');
@@ -4451,10 +4452,12 @@ function renderVaultGallery() {
   lucide.createIcons();
 }
 
-// Media Vault card "more" menu and multi-select mode
+// Media Vault card "more" menu and multi-select mode (workspaces + files)
 let vaultSelectionMode = false;
 const vaultSelectedIds = new Set();
-let vaultCardMenuProjectId = null;
+let vaultFileSelectionMode = false;
+const vaultFileSelectedIds = new Set();
+let vaultCardMenuContext = null; // { type: 'project' | 'workspace-header' | 'file', id: string }
 let vaultCardMenuAnchor = null;
 
 function attachVaultCardMenuGliding(menu) {
@@ -4479,19 +4482,58 @@ function attachVaultCardMenuGliding(menu) {
   };
 }
 
-function toggleVaultCardMenu(projectId, btn, event) {
+function findActiveProjectFile(fileId) {
+  if (!fileId) return null;
+  const activeProj = currentActiveProjectId
+    ? vaultProjects.find(p => p.project_id === currentActiveProjectId)
+    : null;
+  const fromProj = activeProj && Array.isArray(activeProj.files)
+    ? activeProj.files.find(f => f.id === fileId)
+    : null;
+  return fromProj || vaultItems.find(it => it.id === fileId) || null;
+}
+
+function configureVaultCardMenu(context) {
+  const selectBtn = document.getElementById('vaultCardMenuSelectBtn');
+  const selectLabel = document.getElementById('vaultCardMenuSelectLabel');
+  const renameBtn = document.getElementById('vaultCardMenuRenameBtn');
+  const sepEl = document.getElementById('vaultCardMenuSep');
+  const deleteBtn = document.getElementById('vaultCardMenuDeleteBtn');
+
+  if (selectBtn) selectBtn.classList.remove('hidden');
+  if (renameBtn) renameBtn.classList.remove('hidden');
+  if (sepEl) sepEl.classList.remove('hidden');
+  if (deleteBtn) deleteBtn.classList.remove('hidden');
+  if (selectLabel) selectLabel.textContent = context.type === 'workspace-header' ? 'Select Files' : 'Select';
+
+  if (context.type === 'workspace-header') {
+    const proj = vaultProjects.find(p => p.project_id === context.id);
+    const isVirtual = !!(proj && proj.virtual);
+    const hasFiles = !!(proj && proj.files && proj.files.length > 0);
+    if (isVirtual && !hasFiles) return false;
+    if (selectBtn) selectBtn.classList.toggle('hidden', !hasFiles);
+    if (renameBtn) renameBtn.classList.toggle('hidden', isVirtual);
+    if (sepEl) sepEl.classList.toggle('hidden', isVirtual);
+    if (deleteBtn) deleteBtn.classList.toggle('hidden', isVirtual);
+  }
+  return true;
+}
+
+function openVaultMoreMenu(context, btn, event) {
   if (event) {
     event.preventDefault();
     event.stopPropagation();
   }
   const menu = document.getElementById('vaultCardMenu');
-  if (!menu || !btn) return;
+  if (!menu || !btn || !context || !context.id) return;
   if (vaultCardMenuAnchor === btn && menu.dataset.open === 'true') {
     closeVaultCardMenu();
     return;
   }
   closeVaultCardMenu();
-  vaultCardMenuProjectId = projectId;
+  if (!configureVaultCardMenu(context)) return;
+
+  vaultCardMenuContext = context;
   vaultCardMenuAnchor = btn;
   btn.setAttribute('aria-expanded', 'true');
   attachVaultCardMenuGliding(menu);
@@ -4515,6 +4557,18 @@ function toggleVaultCardMenu(projectId, btn, event) {
   menu.dataset.open = 'true';
 }
 
+function toggleVaultCardMenu(projectId, btn, event) {
+  openVaultMoreMenu({ type: 'project', id: projectId }, btn, event);
+}
+
+function toggleWorkspaceHeaderMenu(projectId, btn, event) {
+  openVaultMoreMenu({ type: 'workspace-header', id: projectId }, btn, event);
+}
+
+function toggleFileCardMenu(fileId, btn, event) {
+  openVaultMoreMenu({ type: 'file', id: fileId }, btn, event);
+}
+
 function closeVaultCardMenu() {
   const menu = document.getElementById('vaultCardMenu');
   if (menu) {
@@ -4525,21 +4579,69 @@ function closeVaultCardMenu() {
   }
   if (vaultCardMenuAnchor) vaultCardMenuAnchor.setAttribute('aria-expanded', 'false');
   vaultCardMenuAnchor = null;
-  vaultCardMenuProjectId = null;
+  vaultCardMenuContext = null;
 }
 
 function handleVaultCardMenuAction(action) {
-  const projectId = vaultCardMenuProjectId;
+  const ctx = vaultCardMenuContext;
   closeVaultCardMenu();
-  const proj = vaultProjects.find(p => p.project_id === projectId);
-  if (!proj || proj.virtual) return;
-  if (action === 'select') {
-    enterVaultSelectionMode(proj.project_id);
-  } else if (action === 'rename') {
-    promptRenameWorkspace(proj.project_id, proj.workspace_name);
-  } else if (action === 'delete') {
-    confirmDeleteVaultProject(proj.project_id, proj.workspace_name);
+  if (!ctx) return;
+
+  if (ctx.type === 'project' || ctx.type === 'workspace-header') {
+    const proj = vaultProjects.find(p => p.project_id === ctx.id);
+    if (!proj) return;
+    if (action === 'select') {
+      if (ctx.type === 'workspace-header') enterFileSelectionMode(null);
+      else if (!proj.virtual) enterVaultSelectionMode(proj.project_id);
+    } else if (action === 'rename' && !proj.virtual) {
+      promptRenameWorkspace(proj.project_id, proj.workspace_name);
+    } else if (action === 'delete' && !proj.virtual) {
+      confirmDeleteVaultProject(proj.project_id, proj.workspace_name);
+    }
+    return;
   }
+
+  if (ctx.type === 'file') {
+    const file = findActiveProjectFile(ctx.id);
+    if (!file) return;
+    if (action === 'select') {
+      enterFileSelectionMode(file.id);
+    } else if (action === 'rename') {
+      promptRenameVaultItem(file.id);
+    } else if (action === 'delete') {
+      confirmDeleteVaultItem(file.id, file.title || file.filename, file.file_path);
+    }
+  }
+}
+
+function updateSelectionToolbar({ isOpen, selectedCount, allSelected, ariaLabel }) {
+  const bar = document.getElementById('vaultSelectionBar');
+  if (bar) {
+    bar.dataset.open = isOpen ? 'true' : 'false';
+    bar.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+    if (ariaLabel) bar.setAttribute('aria-label', ariaLabel);
+  }
+  const countEl = document.getElementById('vaultSelectionCount');
+  if (countEl) countEl.textContent = `${selectedCount} selected`;
+  const deleteBtn = document.getElementById('vaultSelectionDeleteBtn');
+  if (deleteBtn) deleteBtn.disabled = selectedCount === 0;
+  const selectAllBtn = document.getElementById('vaultSelectionSelectAllBtn');
+  if (selectAllBtn) selectAllBtn.textContent = allSelected ? 'Deselect all' : 'Select all';
+}
+
+function handleSelectionSelectAll() {
+  if (vaultFileSelectionMode) toggleSelectAllVaultFiles();
+  else toggleSelectAllVaultProjects();
+}
+
+function handleSelectionConfirmDelete() {
+  if (vaultFileSelectionMode) confirmBulkDeleteVaultItems();
+  else confirmBulkDeleteVaultProjects();
+}
+
+function exitActiveSelectionMode() {
+  exitFileSelectionMode();
+  exitVaultSelectionMode();
 }
 
 function getVisibleSelectableVaultIds() {
@@ -4549,6 +4651,8 @@ function getVisibleSelectableVaultIds() {
 }
 
 function enterVaultSelectionMode(initialId) {
+  vaultFileSelectionMode = false;
+  vaultFileSelectedIds.clear();
   vaultSelectionMode = true;
   vaultSelectedIds.clear();
   if (initialId) vaultSelectedIds.add(initialId);
@@ -4564,11 +4668,8 @@ function exitVaultSelectionMode() {
 
 function toggleVaultProjectSelection(projectId) {
   if (!projectId) return;
-  if (vaultSelectedIds.has(projectId)) {
-    vaultSelectedIds.delete(projectId);
-  } else {
-    vaultSelectedIds.add(projectId);
-  }
+  if (vaultSelectedIds.has(projectId)) vaultSelectedIds.delete(projectId);
+  else vaultSelectedIds.add(projectId);
   syncVaultSelectionUI();
 }
 
@@ -4590,23 +4691,87 @@ function syncVaultSelectionUI() {
       card.classList.toggle('is-selected', vaultSelectionMode && vaultSelectedIds.has(card.dataset.projectId));
     });
   }
+  if (vaultFileSelectionMode) return;
+  const ids = getVisibleSelectableVaultIds();
+  updateSelectionToolbar({
+    isOpen: vaultSelectionMode,
+    selectedCount: vaultSelectedIds.size,
+    allSelected: ids.length > 0 && ids.every(id => vaultSelectedIds.has(id)),
+    ariaLabel: 'Selected workspaces',
+  });
+}
 
-  const bar = document.getElementById('vaultSelectionBar');
-  if (bar) {
-    bar.dataset.open = vaultSelectionMode ? 'true' : 'false';
-    bar.setAttribute('aria-hidden', vaultSelectionMode ? 'false' : 'true');
+function getVisibleSelectableFileIds() {
+  return Array.from(document.querySelectorAll('#projectFilesGrid .vault-file-card:not(.hidden)'))
+    .map(el => el.dataset.fileId)
+    .filter(Boolean);
+}
+
+function enterFileSelectionMode(initialFileId) {
+  vaultSelectionMode = false;
+  vaultSelectedIds.clear();
+  vaultFileSelectionMode = true;
+  vaultFileSelectedIds.clear();
+  if (initialFileId) vaultFileSelectedIds.add(initialFileId);
+  syncFileSelectionUI();
+}
+
+function exitFileSelectionMode() {
+  if (!vaultFileSelectionMode && vaultFileSelectedIds.size === 0) return;
+  vaultFileSelectionMode = false;
+  vaultFileSelectedIds.clear();
+  syncFileSelectionUI();
+}
+
+function toggleVaultFileSelection(fileId) {
+  if (!fileId) return;
+  if (vaultFileSelectedIds.has(fileId)) vaultFileSelectedIds.delete(fileId);
+  else vaultFileSelectedIds.add(fileId);
+  syncFileSelectionUI();
+}
+
+function toggleSelectAllVaultFiles() {
+  const ids = getVisibleSelectableFileIds();
+  const allSelected = ids.length > 0 && ids.every(id => vaultFileSelectedIds.has(id));
+  ids.forEach(id => {
+    if (allSelected) vaultFileSelectedIds.delete(id);
+    else vaultFileSelectedIds.add(id);
+  });
+  syncFileSelectionUI();
+}
+
+function syncFileSelectionUI() {
+  const grid = document.getElementById('projectFilesGrid');
+  if (grid) {
+    grid.classList.toggle('is-selecting', vaultFileSelectionMode);
+    grid.querySelectorAll('.vault-file-card').forEach(card => {
+      card.classList.toggle('is-selected', vaultFileSelectionMode && vaultFileSelectedIds.has(card.dataset.fileId));
+    });
   }
+  if (vaultSelectionMode) return;
+  const ids = getVisibleSelectableFileIds();
+  updateSelectionToolbar({
+    isOpen: vaultFileSelectionMode,
+    selectedCount: vaultFileSelectedIds.size,
+    allSelected: ids.length > 0 && ids.every(id => vaultFileSelectedIds.has(id)),
+    ariaLabel: 'Selected files',
+  });
+}
 
-  const count = vaultSelectedIds.size;
-  const countEl = document.getElementById('vaultSelectionCount');
-  if (countEl) countEl.textContent = `${count} selected`;
-  const deleteBtn = document.getElementById('vaultSelectionDeleteBtn');
-  if (deleteBtn) deleteBtn.disabled = count === 0;
-  const selectAllBtn = document.getElementById('vaultSelectionSelectAllBtn');
-  if (selectAllBtn) {
-    const ids = getVisibleSelectableVaultIds();
-    const allSelected = ids.length > 0 && ids.every(id => vaultSelectedIds.has(id));
-    selectAllBtn.textContent = allSelected ? 'Deselect all' : 'Select all';
+function updateProjectDetailHeaderMeta(proj) {
+  if (!proj) return;
+  const files = proj.files || [];
+  const totalSize = files.reduce((acc, f) => acc + (f.file_size || 0), 0);
+  const countEl = document.getElementById('projectDetailFileCount');
+  const sizeEl = document.getElementById('projectDetailTotalSize');
+  const emptyState = document.getElementById('projectFilesEmptyState');
+  const btnDetailMenu = document.getElementById('btnProjectDetailMenu');
+
+  if (countEl) countEl.innerText = `${files.length} Media Files`;
+  if (sizeEl) sizeEl.innerText = `${formatBytes(totalSize)} Total`;
+  if (emptyState) emptyState.classList.toggle('hidden', files.length > 0);
+  if (btnDetailMenu) {
+    btnDetailMenu.classList.toggle('hidden', !!proj.virtual && files.length === 0);
   }
 }
 
@@ -4686,6 +4851,113 @@ async function executeBulkDeleteVaultProjects() {
   }
 }
 
+function confirmBulkDeleteVaultItems() {
+  const ids = Array.from(vaultFileSelectedIds);
+  if (!ids.length) return;
+  deletingProjectId = null;
+  deletingItemId = null;
+  const heading = document.getElementById('deleteModalHeading');
+  const desc = document.getElementById('deleteModalDesc');
+  const btnText = document.getElementById('deleteModalBtnText');
+  const confirmBtn = document.getElementById('deleteModalConfirmBtn');
+
+  if (ids.length === 1) {
+    const file = findActiveProjectFile(ids[0]);
+    const label = (file && (file.title || file.filename)) || 'this file';
+    if (heading) heading.innerText = 'Delete this file?';
+    if (desc) desc.innerText = `Are you sure you want to delete "${label}"? This action cannot be undone.`;
+  } else {
+    if (heading) heading.innerText = `Delete ${ids.length} files?`;
+    if (desc) desc.innerText = `${ids.length} selected files will be permanently removed from this workspace.`;
+  }
+  if (btnText) btnText.innerText = 'Delete';
+  if (confirmBtn) {
+    confirmBtn.disabled = false;
+    confirmBtn.onclick = executeBulkDeleteVaultItems;
+  }
+
+  openDeleteModalBox();
+}
+
+async function executeBulkDeleteVaultItems() {
+  const ids = Array.from(vaultFileSelectedIds);
+  if (!ids.length) return;
+  const confirmBtn = document.getElementById('deleteModalConfirmBtn');
+  const btnText = document.getElementById('deleteModalBtnText');
+  const btnSpinner = document.getElementById('deleteModalBtnSpinner');
+
+  if (confirmBtn) confirmBtn.disabled = true;
+  if (btnSpinner) btnSpinner.classList.remove('hidden');
+  if (btnText) btnText.innerText = 'Deleting...';
+
+  ids.forEach(id => {
+    const cardEl = document.getElementById(`vault-card-${id}`);
+    if (cardEl) releaseMediaLocks(cardEl);
+  });
+
+  const deletedIds = new Set();
+  const failedIds = [];
+  for (const id of ids) {
+    try {
+      const res = await fetch(`/api/vault/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (res.ok) deletedIds.add(id);
+      else failedIds.push(id);
+    } catch (e) {
+      failedIds.push(id);
+    }
+  }
+
+  const failedNames = failedIds.map(id => {
+    const f = findActiveProjectFile(id);
+    return (f && (f.title || f.filename)) || id;
+  });
+
+  deletedIds.forEach(id => {
+    const cardEl = document.getElementById(`vault-card-${id}`);
+    if (cardEl && cardEl.parentNode) cardEl.remove();
+  });
+
+  if (deletedIds.size > 0) {
+    vaultItems = vaultItems.filter(it => !deletedIds.has(it.id));
+    if (vaultStats.total_files >= deletedIds.size) vaultStats.total_files -= deletedIds.size;
+  }
+
+  const activeProj = currentActiveProjectId
+    ? vaultProjects.find(p => p.project_id === currentActiveProjectId)
+    : null;
+  if (activeProj && Array.isArray(activeProj.files)) {
+    activeProj.files = activeProj.files.filter(f => !deletedIds.has(f.id));
+    updateProjectDetailHeaderMeta(activeProj);
+    if (failedIds.length) {
+      // Restore media players on files whose delete failed so they remain playable.
+      renderProjectFiles(activeProj);
+    } else {
+      updateVaultFilterCounters();
+    }
+  }
+
+  if (confirmBtn) confirmBtn.disabled = false;
+  if (btnSpinner) btnSpinner.classList.add('hidden');
+  if (btnText) btnText.innerText = 'Delete';
+  closeDeleteModal();
+
+  // Keep only the files that failed selected so the user can retry or cancel.
+  vaultFileSelectedIds.clear();
+  failedIds.forEach(id => vaultFileSelectedIds.add(id));
+  if (!failedIds.length) vaultFileSelectionMode = false;
+
+  syncFileSelectionUI();
+  await loadVaultItems();
+  if (vaultFileSelectionMode) syncFileSelectionUI();
+
+  if (failedIds.length) {
+    showNoticeModal(
+      'Some files could not be deleted',
+      `Could not delete: ${failedNames.join(', ')}. Close any files that are open elsewhere and try again.`
+    );
+  }
+}
+
 document.addEventListener('click', (e) => {
   const menu = document.getElementById('vaultCardMenu');
   if (!menu || menu.dataset.open !== 'true') return;
@@ -4701,12 +4973,12 @@ document.addEventListener('keydown', (e) => {
     closeVaultCardMenu();
     return;
   }
-  if (!vaultSelectionMode) return;
+  if (!vaultSelectionMode && !vaultFileSelectionMode) return;
   const modalOpen = ['deleteModal', 'renameWorkspaceModal', 'noticeModal', 'confirmModal'].some(id => {
     const el = document.getElementById(id);
     return el && !el.classList.contains('hidden');
   });
-  if (!modalOpen) exitVaultSelectionMode();
+  if (!modalOpen) exitActiveSelectionMode();
 });
 
 window.addEventListener('scroll', () => {
@@ -4736,6 +5008,8 @@ async function openProjectPage(projectId) {
     }
   }
   if (reqSeq !== openProjectRequestSeq || !proj) return;
+  exitActiveSelectionMode();
+  closeVaultCardMenu();
   currentActiveProjectId = projectId;
   document.body.classList.add('in-workspace');
 
@@ -4759,8 +5033,7 @@ async function openProjectPage(projectId) {
   const sizeEl = document.getElementById('projectDetailTotalSize');
   const dateEl = document.getElementById('projectDetailCreatedDate');
   const breadcrumbEl = document.getElementById('detailViewBreadcrumb');
-  const btnRename = document.getElementById('btnRenameInDetail');
-  const btnDelete = document.getElementById('btnDeleteInDetail');
+  const btnDetailMenu = document.getElementById('btnProjectDetailMenu');
 
   const files = proj.files || [];
   const totalSize = files.reduce((acc, f) => acc + (f.file_size || 0), 0);
@@ -4776,13 +5049,6 @@ async function openProjectPage(projectId) {
   if (dateEl) dateEl.innerText = formatSavedDate(proj.created_at);
   if (breadcrumbEl) breadcrumbEl.innerText = `${proj.project_id}`;
 
-  if (btnRename) {
-    btnRename.onclick = () => promptRenameWorkspace(proj.project_id, proj.workspace_name);
-  }
-  if (btnDelete) {
-    btnDelete.onclick = (e) => confirmDeleteVaultProject(proj.project_id, proj.workspace_name, e);
-  }
-
   const stdView = document.getElementById('vaultStandardDetailView');
   const clipContainer = document.getElementById('clipperWorkflowContainer');
   const clipperTitle = document.getElementById('clipperWorkspaceTitle');
@@ -4793,7 +5059,13 @@ async function openProjectPage(projectId) {
   const isVirtualProj = !!proj.virtual;
   if (isVirtualProj && titleEl) titleEl.title = 'Category archive — not deletable';
   else if (titleEl) titleEl.removeAttribute('title');
-  [btnRename, btnDelete, btnClipperRename, btnClipperDelete].forEach(btn => {
+
+  if (btnDetailMenu) {
+    btnDetailMenu.classList.toggle('hidden', isVirtualProj && files.length === 0);
+    btnDetailMenu.onclick = (e) => toggleWorkspaceHeaderMenu(proj.project_id, btnDetailMenu, e);
+  }
+
+  [btnClipperRename, btnClipperDelete].forEach(btn => {
     if (!btn) return;
     if (btn.dataset.baseTitle === undefined) btn.dataset.baseTitle = btn.getAttribute('title') || '';
     btn.classList.toggle('hidden', isVirtualProj);
@@ -4980,6 +5252,8 @@ window.handleVaultVideoMetadata = function (videoEl, fileId) {
 
 function closeProjectPage() {
   openProjectRequestSeq++;
+  closeVaultCardMenu();
+  exitFileSelectionMode();
   if (currentlyPlayingAudioId) {
     const otherEl = document.getElementById(`audio-el-${currentlyPlayingAudioId}`);
     if (otherEl) otherEl.pause();
@@ -6288,6 +6562,7 @@ window.addEventListener('resize', () => {
 });
 
 function renderProjectFiles(proj) {
+  closeVaultCardMenu();
   const grid = document.getElementById('projectFilesGrid');
   const emptyState = document.getElementById('projectFilesEmptyState');
   if (!grid) return;
@@ -6297,6 +6572,7 @@ function renderProjectFiles(proj) {
   if (files.length === 0) {
     if (emptyState) emptyState.classList.remove('hidden');
     updateVaultFilterCounters();
+    syncFileSelectionUI();
     return;
   }
   if (emptyState) emptyState.classList.add('hidden');
@@ -6324,8 +6600,16 @@ function renderProjectFiles(proj) {
 
     const card = document.createElement('div');
     card.id = `vault-card-${file.id}`;
-    card.className = 'rounded-2xl bg-[#171717] border border-white/[0.08] shadow-[0_4px_20px_-2px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col justify-between group';
+    card.className = 'vault-file-card rounded-2xl bg-[#171717] border border-white/[0.08] shadow-[0_4px_20px_-2px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col justify-between group';
     card.setAttribute('data-media-type', isAud ? 'audio' : mediaMeta.kind);
+    card.dataset.fileId = file.id;
+    card.onclick = (e) => {
+      if (!vaultFileSelectionMode) return;
+      if (e.target.closest('button') || e.target.closest('a')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      toggleVaultFileSelection(file.id);
+    };
 
     let mediaPreviewHtml = '';
     if (isAud) {
@@ -6357,6 +6641,11 @@ function renderProjectFiles(proj) {
     }
 
     card.innerHTML = `
+      <span class="vault-card-check" aria-hidden="true">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 8.5L6.75 11L12 5.5"></path>
+        </svg>
+      </span>
       ${mediaPreviewHtml}
       <div class="p-4 flex-1 flex flex-col justify-between space-y-3">
         <div>
@@ -6370,17 +6659,32 @@ function renderProjectFiles(proj) {
           </div>
         </div>
 
-        <!-- Balanced action footer with proportional button sizing -->
         <div class="flex items-center justify-between pt-2.5 border-t border-white/[0.06]">
           <span class="text-[10.5px] font-mono text-zinc-500">${dateStr}</span>
-          <div class="flex items-center gap-2">
-            <a href="${mediaUrl}" download="${escapeHtml(file.filename)}" class="h-8 px-4 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs font-semibold font-sans flex items-center gap-1.5 transition cursor-pointer shadow-sm" title="Download File">
-              <i data-lucide="download" class="w-3.5 h-3.5"></i>
-              <span>Download</span>
-            </a>
-            <button type="button" onclick="confirmDeleteVaultItem('${file.id}', '${escapeQuotes(file.title || file.filename)}', '${escapeQuotes(file.file_path)}')" class="w-8 h-8 rounded-xl bg-white/[0.04] hover:bg-red-500/15 border border-white/[0.08] text-zinc-400 hover:text-red-400 flex items-center justify-center transition cursor-pointer" title="Delete File">
-              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          <div class="vault-file-actions flex items-center gap-2">
+            <button
+              type="button"
+              onclick="toggleFileCardMenu('${file.id}', this, event)"
+              class="t-card-btn-more"
+              title="More actions"
+              aria-label="More actions"
+              aria-haspopup="menu"
+              aria-expanded="false">
+              <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <circle cx="8" cy="3.5" r="1.2"></circle>
+                <circle cx="8" cy="8" r="1.2"></circle>
+                <circle cx="8" cy="12.5" r="1.2"></circle>
+              </svg>
             </button>
+            <span class="vault-card-action-sep" aria-hidden="true"></span>
+            <a
+              href="${mediaUrl}"
+              download="${escapeHtml(file.filename)}"
+              class="luna-download-icon-link"
+              title="Download File"
+              aria-label="Download File">
+              <i data-lucide="download" class="w-4 h-4"></i>
+            </a>
           </div>
         </div>
       </div>
@@ -6395,6 +6699,7 @@ function renderProjectFiles(proj) {
 
   updateVaultFilterCounters();
   setVaultMediaFilter(window.currentVaultMediaFilter || 'all');
+  syncFileSelectionUI();
 
   lucide.createIcons();
   setTimeout(compactSutroPlayers, 30);
@@ -6406,14 +6711,41 @@ function toggleProjectDrawer(projectId) {
   openProjectPage(projectId);
 }
 
-function promptRenameWorkspace(projectId, currentName) {
+function splitFilenameParts(filename) {
+  const raw = String(filename || '');
+  const dotIdx = raw.lastIndexOf('.');
+  if (dotIdx > 0 && dotIdx < raw.length - 1) {
+    return { stem: raw.slice(0, dotIdx), ext: raw.slice(dotIdx) };
+  }
+  return { stem: raw, ext: '' };
+}
+
+function openRenameModalBox({ headingText, labelText, placeholderText, initialValue, targetIdVal, targetTypeVal, lockedExt }) {
   const modal = document.getElementById('renameWorkspaceModal');
+  const heading = document.getElementById('renameModalHeading');
+  const label = document.getElementById('renameWsLabel');
   const input = document.getElementById('renameWsInput');
   const targetId = document.getElementById('renameWsTargetId');
+  const targetType = document.getElementById('renameWsTargetType');
+  const extBadge = document.getElementById('renameWsExtBadge');
   if (!modal || !input || !targetId) return;
 
-  targetId.value = projectId;
-  input.value = currentName;
+  if (heading) heading.innerText = headingText;
+  if (label) label.innerText = labelText;
+  input.placeholder = placeholderText;
+  input.value = initialValue || '';
+  targetId.value = targetIdVal || '';
+  if (targetType) targetType.value = targetTypeVal || 'project';
+  if (extBadge) {
+    if (lockedExt) {
+      extBadge.textContent = lockedExt;
+      extBadge.classList.remove('hidden');
+    } else {
+      extBadge.textContent = '';
+      extBadge.classList.add('hidden');
+    }
+  }
+
   modal.classList.remove('hidden');
   setTimeout(() => {
     input.focus();
@@ -6421,6 +6753,33 @@ function promptRenameWorkspace(projectId, currentName) {
     input.setSelectionRange(len, len);
   }, 50);
   lucide.createIcons();
+}
+
+function promptRenameWorkspace(projectId, currentName) {
+  openRenameModalBox({
+    headingText: 'Rename Workspace',
+    labelText: 'New Name',
+    placeholderText: 'New workspace name',
+    initialValue: currentName,
+    targetIdVal: projectId,
+    targetTypeVal: 'project',
+    lockedExt: '',
+  });
+}
+
+function promptRenameVaultItem(fileId) {
+  const file = findActiveProjectFile(fileId);
+  if (!file) return;
+  const { stem, ext } = splitFilenameParts(file.filename || file.title || '');
+  openRenameModalBox({
+    headingText: 'Rename File',
+    labelText: 'New Filename',
+    placeholderText: 'New filename',
+    initialValue: stem,
+    targetIdVal: file.id,
+    targetTypeVal: 'file',
+    lockedExt: ext,
+  });
 }
 
 function closeRenameModal() {
@@ -6431,40 +6790,85 @@ function closeRenameModal() {
 async function submitRenameWorkspace() {
   const input = document.getElementById('renameWsInput');
   const targetId = document.getElementById('renameWsTargetId');
+  const targetTypeEl = document.getElementById('renameWsTargetType');
   if (!input || !targetId) return;
 
   const newName = input.value.trim();
-  const projectId = targetId.value;
-  if (!newName || !projectId) return;
+  const idValue = targetId.value;
+  const targetType = (targetTypeEl && targetTypeEl.value) || 'project';
+  if (!newName || !idValue) return;
+
+  if (targetType === 'file') {
+    const activeProj = currentActiveProjectId
+      ? vaultProjects.find(p => p.project_id === currentActiveProjectId)
+      : null;
+    releaseMediaLocks(document.getElementById(`vault-card-${idValue}`) || document);
+
+    try {
+      const res = await fetch(`/api/vault/item/${encodeURIComponent(idValue)}/rename`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ new_name: newName }),
+      });
+      if (res.ok) {
+        const payload = await res.json();
+        const updatedItem = (payload && payload.item) || {};
+        closeRenameModal();
+
+        const syncItemRecord = (rec) => {
+          if (rec) Object.assign(rec, updatedItem);
+        };
+        if (activeProj && Array.isArray(activeProj.files)) {
+          syncItemRecord(activeProj.files.find(f => f.id === idValue));
+          renderProjectFiles(activeProj);
+        }
+        syncItemRecord(vaultItems.find(it => it.id === idValue));
+        await loadVaultItems();
+      } else {
+        let errDetail = 'An error occurred while renaming the file.';
+        try {
+          const errJson = await res.json();
+          if (errJson && errJson.detail) errDetail = errJson.detail;
+        } catch (_) {}
+        if (activeProj) renderProjectFiles(activeProj);
+        showNoticeModal('Could not rename file', errDetail);
+      }
+    } catch (e) {
+      if (activeProj) renderProjectFiles(activeProj);
+      showNoticeModal('Connection Error', 'Could not connect to the server while renaming the file.');
+    }
+    return;
+  }
 
   try {
-    const res = await fetch(`/api/vault/project/${projectId}/rename`, {
+    const res = await fetch(`/api/vault/project/${idValue}/rename`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ new_name: newName }),
     });
     if (res.ok) {
       closeRenameModal();
-      const proj = vaultProjects.find(p => p.project_id === projectId);
+      const proj = vaultProjects.find(p => p.project_id === idValue);
       if (proj) {
         proj.workspace_name = newName;
       }
-      if (currentActiveProjectId === projectId) {
+      if (currentActiveProjectId === idValue) {
         const titleEl = document.getElementById('projectDetailPageTitle');
         if (titleEl) titleEl.innerText = newName;
         const clipperTitleEl = document.getElementById('clipperWorkspaceTitle');
         if (clipperTitleEl) clipperTitleEl.innerText = newName;
         const breadcrumbEl = document.getElementById('detailViewBreadcrumb');
-        if (breadcrumbEl) breadcrumbEl.innerText = `${projectId}`;
-        document.title = `${newName} (${projectId}) | Luna`;
-        const btnRename = document.getElementById('btnRenameInDetail');
-        if (btnRename) {
-          btnRename.onclick = () => promptRenameWorkspace(projectId, newName);
-        }
+        if (breadcrumbEl) breadcrumbEl.innerText = `${idValue}`;
+        document.title = `${newName} (${idValue}) | Luna`;
       }
       await loadVaultItems();
     } else {
-      showNoticeModal('Could not rename', 'An error occurred while saving the workspace name.');
+      let errDetail = 'An error occurred while saving the workspace name.';
+      try {
+        const errJson = await res.json();
+        if (errJson && errJson.detail) errDetail = errJson.detail;
+      } catch (_) {}
+      showNoticeModal('Could not rename', errDetail);
     }
   } catch (e) {
     showNoticeModal('Connection Error', 'Could not connect to the server while updating the workspace.');
@@ -6693,6 +7097,7 @@ async function executeDeleteVaultItem() {
     }
 
     // Update in-memory data
+    vaultFileSelectedIds.delete(idToDelete);
     vaultItems = vaultItems.filter(it => it.id !== idToDelete);
     if (vaultStats.total_files > 0) vaultStats.total_files -= 1;
 
@@ -6700,15 +7105,7 @@ async function executeDeleteVaultItem() {
       const activeProj = vaultProjects.find(p => p.project_id === currentActiveProjectId);
       if (activeProj && activeProj.files) {
         activeProj.files = activeProj.files.filter(f => f.id !== idToDelete);
-        const countEl = document.getElementById('projectDetailFileCount');
-        const sizeEl = document.getElementById('projectDetailTotalSize');
-        const totalSize = activeProj.files.reduce((acc, f) => acc + (f.file_size || 0), 0);
-        if (countEl) countEl.innerText = `${activeProj.files.length} file`;
-        if (sizeEl) sizeEl.innerText = formatBytes(totalSize);
-        if (activeProj.files.length === 0) {
-          const emptyState = document.getElementById('projectFilesEmptyState');
-          if (emptyState) emptyState.classList.remove('hidden');
-        }
+        updateProjectDetailHeaderMeta(activeProj);
       }
     }
 
@@ -6716,10 +7113,15 @@ async function executeDeleteVaultItem() {
     closeDeleteModal();
 
     setTimeout(() => {
-      renderVaultGallery();
+      updateVaultFilterCounters();
+      loadVaultItems();
     }, 320);
 
   } catch (err) {
+    const activeProj = currentActiveProjectId ? vaultProjects.find(p => p.project_id === currentActiveProjectId) : null;
+    if (activeProj && !isAiClipperProject(activeProj)) {
+      renderProjectFiles(activeProj);
+    }
     showNoticeModal('Could not delete file', err.message || 'An error occurred while deleting the file.');
   } finally {
     if (confirmBtn) confirmBtn.disabled = false;

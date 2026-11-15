@@ -83,6 +83,7 @@ from .vault_service import (
     list_vault_items,
     list_vault_projects,
     rename_vault_project,
+    rename_vault_item,
     delete_vault_project,
     get_next_workspace_index,
     delete_vault_item,
@@ -2284,6 +2285,21 @@ async def api_rename_vault_project(project_id: str, req: RenameProjectRequest):
     if not success:
         raise HTTPException(status_code=404, detail="Project not found")
     return {"status": "renamed", "project_id": project_id, "new_name": req.new_name}
+
+
+@app.patch("/api/vault/item/{item_id}/rename")
+async def api_rename_vault_item(item_id: str, req: RenameProjectRequest):
+    result = await asyncio.to_thread(rename_vault_item, item_id, req.new_name)
+    status = result.get("status")
+    if status == "not_found":
+        raise HTTPException(status_code=404, detail="Media item not found")
+    if status == "invalid":
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if status == "conflict":
+        raise HTTPException(status_code=409, detail="A file with that name already exists in this workspace")
+    if status == "locked":
+        raise HTTPException(status_code=409, detail="File is currently in use. Pause playback and try again")
+    return {"status": "renamed", "item": result["item"]}
 
 
 @app.delete("/api/vault/project/{project_id}")

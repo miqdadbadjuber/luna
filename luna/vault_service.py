@@ -3,6 +3,7 @@
 #
 # This file is part of Luna. See LICENSE and NOTICE at the repository root.
 
+import gc
 import hashlib
 import json
 import os
@@ -589,6 +590,144 @@ def delete_vault_item(item_id: str) -> str:
         return "deleted"
 
     return "not_found"
+
+
+def _find_item_in_entries(entries: List[Dict[str, Any]], item_id: str):
+    """Return (target_item, sibling_items) matching item_id inside parsed meta.json entries."""
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        files_list = entry.get("files")
+        if isinstance(files_list, list):
+            for candidate in files_list:
+                if isinstance(candidate, dict) and candidate.get("id") == item_id:
+                    return candidate, files_list
+        elif entry.get("id") == item_id:
+            return entry, entries
+    return None, None
+
+
+def _rename_physical_file(abs_old: str, new_path: str):
+    """Rename a physical media file inside the vault with brief Windows lock retries.
+
+    Returns ``(did_rename, error_status)`` where ``error_status`` is ``None``,
+    ``"conflict"``, or ``"locked"``.
+    """
+    if not abs_old or not os.path.exists(abs_old) or abs_old == new_path:
+        return False, None
+
+    if os.path.exists(new_path):
+        try:
+            same_target = os.path.samefile(abs_old, new_path)
+        except OSError:
+            same_target = False
+        if not same_target:
+            return False, "conflict"
+
+    for attempt in range(3):
+        try:
+            os.rename(abs_old, new_path)
+            return True, None
+        except PermissionError:
+            if attempt == 2:
+                return False, "locked"
+            gc.collect()
+            time.sleep(0.1)
+        except FileExistsError:
+            return False, "conflict"
+        except OSError:
+            return False, "locked"
+    return False, "locked"
+
+
+def rename_vault_item(item_id: str, new_name: str) -> Dict[str, Any]:
+    """Rename one media item's display/file stem while strictly locking its extension.
+
+    Returns ``{"status": "renamed", "item": ...}`` or ``{"status": code}`` where
+    ``code`` is one of ``"not_found"``, ``"invalid"``, ``"conflict"``, or ``"locked"``.
+    """
+    root = storage_manager.get_storage_root()
+    if not os.path.exists(root):
+        return {"status": "not_found"}
+
+    root_abs = os.path.abspath(root)
+
+    for current_dir, _, files in os.walk(root):
+        if INDEX_FILE_NAME not in files:
+            continue
+        meta_path = os.path.join(current_dir, INDEX_FILE_NAME)
+        try:
+            with open(meta_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            continue
+
+        was_dict = isinstance(data, dict)
+        entries = [data] if was_dict else ([e for e in data if isinstance(e, dict)] if isinstance(data, list) else None)
+        if entries is None:
+            continue
+
+        target_item, siblings = _find_item_in_entries(entries, item_id)
+        if not target_item:
+            continue
+
+        old_path = target_item.get("file_path") or ""
+        orig_filename = target_item.get("filename") or (os.path.basename(old_path) if old_path else "")
+        if not orig_filename:
+            return {"status": "invalid"}
+
+        _, orig_ext = os.path.splitext(orig_filename)
+        stem = " ".join(str(new_name or "").split()).strip()
+        if orig_ext:
+            if stem.lower() == orig_ext.lower():
+                return {"status": "invalid"}
+            if stem.lower().endswith(orig_ext.lower()):
+                stem = stem[: -len(orig_ext)].strip()
+
+        clean_stem = storage_manager.sanitize_name(stem)
+        if not clean_stem:
+            return {"status": "invalid"}
+
+        new_filename = f"{clean_stem}{orig_ext}"
+        parent_dir = os.path.dirname(os.path.abspath(old_path)) if old_path else os.path.abspath(current_dir)
+        new_path = os.path.abspath(os.path.join(parent_dir, new_filename))
+
+        if (old_path and not _is_inside_storage(old_path, root_abs)) or not _is_inside_storage(new_path, root_abs):
+            return {"status": "invalid"}
+
+        for sib in (siblings or []):
+            if not isinstance(sib, dict) or sib is target_item:
+                continue
+            sib_path = sib.get("file_path") or ""
+            sib_dir = os.path.dirname(os.path.abspath(sib_path)) if sib_path else os.path.abspath(current_dir)
+            if os.path.normcase(sib_dir) == os.path.normcase(parent_dir) and (sib.get("filename") or "").lower() == new_filename.lower():
+                return {"status": "conflict"}
+
+        abs_old = os.path.abspath(old_path) if old_path else ""
+        did_disk_rename, disk_err = _rename_physical_file(abs_old, new_path)
+        if disk_err:
+            return {"status": disk_err}
+
+        rel = os.path.relpath(new_path, root_abs).replace("\\", "/")
+        target_item["filename"] = new_filename
+        target_item["title"] = new_filename
+        target_item["file_path"] = new_path
+        target_item["url"] = f"/media-vault/{rel}"
+
+        payload_to_write: Any = entries[0] if was_dict and len(entries) == 1 else entries
+        try:
+            _atomic_write_json(meta_path, payload_to_write)
+        except Exception:
+            if did_disk_rename and os.path.exists(new_path) and not os.path.exists(abs_old):
+                try:
+                    os.rename(new_path, abs_old)
+                except OSError:
+                    pass
+            return {"status": "locked"}
+
+        return {"status": "renamed", "item": target_item}
+
+    return {"status": "not_found"}
 
 
 def get_storage_stats() -> Dict[str, Any]:

@@ -104,6 +104,41 @@ class TestFrontendVaultUI(unittest.TestCase):
         self.assertIn("Cancel", html)
         self.assertIn("Delete", html)
 
+    def test_standard_workspace_detail_uses_unified_dropdown_and_icon_download(self):
+        """Standard workspace header & cards use 3-dot dropdown + frameless download icon, without altering AI Clipper/Trimmer."""
+        source = self.source
+        css = self.client.get("/assets/ui/luna.css").text
+
+        # Workspace header unified 3-dot button, old duplicate pencil/trash header controls removed
+        self.assertIn('id="btnProjectDetailMenu"', source)
+        self.assertNotIn('id="btnRenameInDetail"', source)
+        self.assertNotIn('id="btnDeleteInDetail"', source)
+
+        # AI Clipper & Trimmer remain untouched
+        self.assertIn('id="btnClipperRename"', source)
+        self.assertIn('id="btnClipperDelete"', source)
+        self.assertIn("function renderClipperWorkflow", source)
+
+        # Rename modal supports locked extension badge
+        self.assertIn('id="renameWsExtBadge"', source)
+        self.assertIn('id="renameWsTargetType"', source)
+
+        # Dropdown labels & file card footer (no Open in Explorer, no white Download capsule button)
+        self.assertIn('id="vaultCardMenuSelectLabel"', source)
+        self.assertIn("Select Files", source)
+        self.assertIn("toggleFileCardMenu", source)
+        self.assertIn("luna-download-icon-link", source)
+        self.assertIn("executeBulkDeleteVaultItems", source)
+        render_files_block = source.split("function renderProjectFiles(proj)")[1].split("function toggleProjectDrawer")[0]
+        self.assertNotIn("<span>Download</span>", render_files_block)
+        self.assertIn("luna-download-icon-link", render_files_block)
+        self.assertIn("toggleFileCardMenu", render_files_block)
+
+        # Shared selection toolbar must not be blanket-hidden inside standard workspaces
+        self.assertNotIn("body.in-workspace .vault-selection-bar", css)
+        self.assertIn("#projectFilesGrid.is-selecting", css)
+        self.assertIn(".luna-download-icon-link", css)
+
     def test_required_js_functions_exist(self):
         """Verify presence of all required JS state and functions in index.html."""
         html = self.source
