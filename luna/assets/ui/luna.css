@@ -1276,6 +1276,34 @@ body.in-workspace main {
   background-image: none !important;
 }
 
+/* Minimal frameless Back navigation link (Workspaces & Settings) */
+.luna-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  background: transparent;
+  border: none;
+  color: #a1a1aa;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.25;
+  cursor: pointer;
+  user-select: none;
+  transition: color 180ms ease;
+}
+
+.luna-back-link:hover {
+  color: #ffffff;
+}
+
+.luna-back-chevron {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
 /* Expanding Monochrome Action Button (Open Workspace, Download ZIP) */
 .luna-expand-btn {
   width: 36px;

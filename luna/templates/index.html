@@ -625,8 +625,10 @@
               <!-- Breadcrumb -->
               <div class="flex items-center gap-2 text-xs font-sans text-zinc-400">
                 <button type="button" onclick="closeProjectPage()"
-                  class="hover:text-white transition flex items-center gap-1.5 py-0.5 text-zinc-400 hover:text-white cursor-pointer font-medium">
-                  <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+                  class="luna-back-link">
+                  <svg class="luna-back-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M10 4L6 8L10 12"></path>
+                  </svg>
                   <span>Back</span>
                 </button>
                 <span class="text-zinc-600 font-mono">/</span>
@@ -732,14 +734,11 @@
               class="pointer-events-none fixed top-4 sm:top-5 left-4 sm:left-6 right-4 sm:right-6 z-50 flex items-center justify-between gap-3 flex-wrap">
               <div class="pointer-events-auto flex items-center gap-3 min-w-0">
                 <button type="button" onclick="closeProjectPage()"
-                  class="t-learn-pill t-learn t-learn-back cursor-pointer shrink-0"
+                  class="luna-back-link shrink-0"
                   title="Back">
-                  <span class="t-learn-chevron-back">
-                    <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                      <path class="t-learn-arm-back t-learn-arm-back-top" d="M10 4L6 8"/>
-                      <path class="t-learn-arm-back t-learn-arm-back-bot" d="M6 8L10 12"/>
-                    </svg>
-                  </span>
+                  <svg class="luna-back-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M10 4L6 8L10 12"></path>
+                  </svg>
                   <span>Back</span>
                 </button>
                 <span class="text-zinc-600 font-mono text-xs">/</span>
@@ -803,9 +802,11 @@
       <!-- Button to return to Studio -->
       <div>
         <button type="button" onclick="switchMainTab('studio')"
-          class="inline-flex items-center gap-2 text-xs text-zinc-400 hover:text-white transition group cursor-pointer">
-          <i data-lucide="arrow-left" class="w-4 h-4 text-zinc-400 group-hover:-translate-x-0.5 transition-transform"></i>
-          <span class="font-sans font-medium">Back to Studio</span>
+          class="luna-back-link">
+          <svg class="luna-back-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M10 4L6 8L10 12"></path>
+          </svg>
+          <span>Back</span>
         </button>
       </div>
 
