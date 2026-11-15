@@ -6292,9 +6292,9 @@ function renderClipperWorkflow(proj) {
       const captionSnippet = hasCaption ? escapeHtml(file.caption.trim()) : '';
 
       const captionTrigger = hasCaption ? `
-        <div class="caption-trigger-row group/caption flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg mx-1 border border-transparent hover:border-white/[0.06] hover:bg-white/[0.04] transition cursor-pointer" onclick="toggleClipCaption(${idx}, event)" data-no-drag="true">
+        <div class="caption-trigger-row group/caption flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg mx-1 mb-1 cursor-pointer" onclick="toggleClipCaption(${idx}, event)" data-no-drag="true">
           <p class="text-[10px] text-zinc-400 group-hover/caption:text-zinc-200 leading-normal truncate flex-1 min-w-0 transition-colors select-none">${captionSnippet}</p>
-          <button type="button" onclick="copyClipCaption(${idx}, this, event)" class="caption-copy-btn p-1 rounded-md text-zinc-400 hover:text-white hover:bg-white/[0.08] transition flex items-center justify-center cursor-pointer shrink-0" aria-label="Copy caption">
+          <button type="button" onclick="copyClipCaption(${idx}, this, event)" class="caption-copy-btn p-1 rounded-md text-zinc-400 hover:text-white flex items-center justify-center cursor-pointer shrink-0" aria-label="Copy caption">
             <i data-lucide="copy" class="w-3.5 h-3.5"></i>
           </button>
         </div>

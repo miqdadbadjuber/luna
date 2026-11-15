@@ -150,6 +150,11 @@ class TestFrontendVaultUI(unittest.TestCase):
         self.assertIn("toggleFileCardMenu", render_clipper_block)
         self.assertIn("luna-download-icon-link", render_clipper_block)
         self.assertNotIn("<span>Download</span>", render_clipper_block)
+        self.assertNotIn("hover:border-white/[0.06]", render_clipper_block)
+        self.assertNotIn("hover:bg-white/[0.04]", render_clipper_block)
+        self.assertNotIn("hover:bg-white/[0.08]", render_clipper_block)
+        self.assertIn(".caption-trigger-row:hover", css)
+        self.assertIn("background: rgba(255, 255, 255, 0.06);", css)
 
         self.assertIn("targetType === 'clip-title'", source)
         self.assertIn("title_only: true", source)
