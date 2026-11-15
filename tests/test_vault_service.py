@@ -316,6 +316,41 @@ class TestVaultService(unittest.TestCase):
         items = vault_service.list_vault_items()
         self.assertEqual([i["filename"] for i in items if i["id"] == "f1"], ["Clip One.mp4"])
 
+    def test_rename_vault_item_title_only_preserves_disk_file_and_urls(self):
+        """AI Clipper / Trimmer title-only rename updates display title without renaming file on disk."""
+        ws_dir = os.path.join(self.test_dir, "01-AI-Clipper", "Clip_WS")
+        os.makedirs(ws_dir, exist_ok=True)
+        clip_file = os.path.join(ws_dir, "clip_01.mp4")
+        with open(clip_file, "wb") as f:
+            f.write(b"clip bytes")
+
+        orig_url = "/media-vault/01-AI-Clipper/Clip_WS/clip_01.mp4"
+        vault_service.save_project_metadata(ws_dir, {
+            "project_id": "proj_clip_1",
+            "workspace_name": "Clip Workspace",
+            "files": [{
+                "id": "clip_1",
+                "title": "Old AI Hook",
+                "filename": "clip_01.mp4",
+                "file_path": clip_file,
+                "url": orig_url,
+            }],
+        })
+
+        res = vault_service.rename_vault_item("clip_1", "New Viral Hook?! (2026)", title_only=True)
+        self.assertEqual(res["status"], "renamed")
+        self.assertEqual(res["item"]["title"], "New Viral Hook?! (2026)")
+        self.assertEqual(res["item"]["filename"], "clip_01.mp4")
+        self.assertEqual(res["item"]["file_path"], clip_file)
+        self.assertEqual(res["item"]["url"], orig_url)
+        self.assertTrue(os.path.exists(clip_file))
+
+        items = vault_service.list_vault_items()
+        persisted = [i for i in items if i["id"] == "clip_1"][0]
+        self.assertEqual(persisted["title"], "New Viral Hook?! (2026)")
+        self.assertEqual(persisted["filename"], "clip_01.mp4")
+        self.assertEqual(vault_service.rename_vault_item("clip_1", "   ", title_only=True)["status"], "invalid")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -640,9 +640,11 @@ def _rename_physical_file(abs_old: str, new_path: str):
     return False, "locked"
 
 
-def rename_vault_item(item_id: str, new_name: str) -> Dict[str, Any]:
-    """Rename one media item's display/file stem while strictly locking its extension.
+def rename_vault_item(item_id: str, new_name: str, title_only: bool = False) -> Dict[str, Any]:
+    """Rename a media item's display title or physical file stem (with locked extension).
 
+    When ``title_only`` is True (used for AI Clipper / Video Trimmer cards), only the
+    card's ``title`` field in ``meta.json`` is updated and the file on disk is left intact.
     Returns ``{"status": "renamed", "item": ...}`` or ``{"status": code}`` where
     ``code`` is one of ``"not_found"``, ``"invalid"``, ``"conflict"``, or ``"locked"``.
     """
@@ -670,6 +672,19 @@ def rename_vault_item(item_id: str, new_name: str) -> Dict[str, Any]:
         target_item, siblings = _find_item_in_entries(entries, item_id)
         if not target_item:
             continue
+
+        payload_to_write: Any = entries[0] if was_dict and len(entries) == 1 else entries
+
+        if title_only:
+            clean_title = " ".join(str(new_name or "").split()).strip()
+            if not clean_title:
+                return {"status": "invalid"}
+            target_item["title"] = clean_title
+            try:
+                _atomic_write_json(meta_path, payload_to_write)
+            except Exception:
+                return {"status": "locked"}
+            return {"status": "renamed", "item": target_item}
 
         old_path = target_item.get("file_path") or ""
         orig_filename = target_item.get("filename") or (os.path.basename(old_path) if old_path else "")
@@ -714,7 +729,6 @@ def rename_vault_item(item_id: str, new_name: str) -> Dict[str, Any]:
         target_item["file_path"] = new_path
         target_item["url"] = f"/media-vault/{rel}"
 
-        payload_to_write: Any = entries[0] if was_dict and len(entries) == 1 else entries
         try:
             _atomic_write_json(meta_path, payload_to_write)
         except Exception:

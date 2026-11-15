@@ -256,6 +256,39 @@ class TestApiVault(unittest.TestCase):
         missing = self.client.patch("/api/vault/item/does_not_exist/rename", json={"new_name": "Anything"})
         self.assertEqual(missing.status_code, 404)
 
+    def test_rename_clip_title_only_api_preserves_file_and_urls(self):
+        """PATCH /api/vault/item/{item_id}/rename with title_only=True updates title without disk rename."""
+        ws_dir = os.path.join(self.test_dir, "01-AI-Clipper", "Clip_API_WS")
+        os.makedirs(ws_dir, exist_ok=True)
+        clip_path = os.path.join(ws_dir, "clip_01.mp4")
+        with open(clip_path, "wb") as f:
+            f.write(b"clip bytes")
+
+        orig_url = "/media-vault/01-AI-Clipper/Clip_API_WS/clip_01.mp4"
+        vault_service.save_project_metadata(ws_dir, {
+            "project_id": "proj_clip_api",
+            "workspace_name": "Clip API WS",
+            "files": [{
+                "id": "clip_api_1",
+                "title": "Original Hook",
+                "filename": "clip_01.mp4",
+                "file_path": clip_path,
+                "url": orig_url,
+            }],
+        })
+
+        res = self.client.patch(
+            "/api/vault/item/clip_api_1/rename",
+            json={"new_name": "Updated Viral Title?!", "title_only": True},
+        )
+        self.assertEqual(res.status_code, 200)
+        body = res.json()
+        self.assertEqual(body["status"], "renamed")
+        self.assertEqual(body["item"]["title"], "Updated Viral Title?!")
+        self.assertEqual(body["item"]["filename"], "clip_01.mp4")
+        self.assertEqual(body["item"]["url"], orig_url)
+        self.assertTrue(os.path.exists(clip_path))
+
 
 if __name__ == "__main__":
     unittest.main()

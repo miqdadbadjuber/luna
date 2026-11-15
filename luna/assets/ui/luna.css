@@ -1789,7 +1789,8 @@ body.in-workspace main {
 }
 
 #vaultGalleryGrid.is-selecting .vault-card-check,
-#projectFilesGrid.is-selecting .vault-card-check {
+#projectFilesGrid.is-selecting .vault-card-check,
+#clipperBranchingClipsWrapper.is-selecting .vault-card-check {
   opacity: 1;
 }
 
@@ -1798,18 +1799,24 @@ body.in-workspace main {
 }
 
 #vaultGalleryGrid.is-selecting .vault-card-actions,
-#projectFilesGrid.is-selecting .vault-file-actions {
+#projectFilesGrid.is-selecting .vault-file-actions,
+#clipperBranchingClipsWrapper.is-selecting .vault-file-actions,
+#clipperBranchingClipsWrapper.is-selecting .caption-trigger-row {
   opacity: 0.35;
   pointer-events: none;
 }
 
-#projectFilesGrid.is-selecting .vault-file-card {
-  cursor: pointer;
+#projectFilesGrid.is-selecting .vault-file-card,
+.clipper-dotted-canvas #clipperBranchingClipsWrapper.is-selecting .clipper-branch-clip,
+#clipperBranchingClipsWrapper.is-selecting .vault-file-card {
+  cursor: pointer !important;
 }
 
 #projectFilesGrid.is-selecting media-theme-sutro,
 #projectFilesGrid.is-selecting video,
-#projectFilesGrid.is-selecting audio {
+#projectFilesGrid.is-selecting audio,
+#clipperBranchingClipsWrapper.is-selecting media-theme-sutro,
+#clipperBranchingClipsWrapper.is-selecting video {
   pointer-events: none;
 }
 

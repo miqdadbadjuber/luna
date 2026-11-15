@@ -1039,6 +1039,7 @@ class ProcessRequest(BaseModel):
 
 class RenameProjectRequest(BaseModel):
     new_name: str
+    title_only: bool = False
 
     @field_validator("new_name")
     @classmethod
@@ -2289,7 +2290,7 @@ async def api_rename_vault_project(project_id: str, req: RenameProjectRequest):
 
 @app.patch("/api/vault/item/{item_id}/rename")
 async def api_rename_vault_item(item_id: str, req: RenameProjectRequest):
-    result = await asyncio.to_thread(rename_vault_item, item_id, req.new_name)
+    result = await asyncio.to_thread(rename_vault_item, item_id, req.new_name, req.title_only)
     status = result.get("status")
     if status == "not_found":
         raise HTTPException(status_code=404, detail="Media item not found")

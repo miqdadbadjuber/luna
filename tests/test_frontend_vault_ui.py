@@ -139,6 +139,35 @@ class TestFrontendVaultUI(unittest.TestCase):
         self.assertIn("#projectFilesGrid.is-selecting", css)
         self.assertIn(".luna-download-icon-link", css)
 
+    def test_clipper_trimmer_card_actions_and_english_tooltips(self):
+        """Verify AI Clipper / Trimmer cards match frameless icon actions, title-only rename, and English toolbar tooltips."""
+        source = self.source
+        css = self.client.get("/assets/ui/luna.css").text
+
+        render_clipper_block = source.split("function renderClipperWorkflow(proj)")[1].split("(function initClipperCanvasControls()")[0]
+        self.assertIn("vault-file-card", render_clipper_block)
+        self.assertIn("vault-card-check", render_clipper_block)
+        self.assertIn("toggleFileCardMenu", render_clipper_block)
+        self.assertIn("luna-download-icon-link", render_clipper_block)
+        self.assertNotIn("<span>Download</span>", render_clipper_block)
+
+        self.assertIn("targetType === 'clip-title'", source)
+        self.assertIn("title_only: true", source)
+        self.assertIn("#clipperBranchingClipsWrapper.is-selecting", css)
+
+        toolbar_start = source.find('class="t-clipper-toolbar"')
+        toolbar_snippet = source[toolbar_start:source.find("clipperZoomOut()", toolbar_start) + 200]
+        self.assertNotIn("Reset Posisi Card", source)
+        for tooltip in (
+            "Reset Card Positions",
+            "Rename Workspace",
+            "Delete Workspace",
+            "Zoom In",
+            "Reset Zoom (100%)",
+            "Zoom Out",
+        ):
+            self.assertIn(tooltip, toolbar_snippet)
+
     def test_required_js_functions_exist(self):
         """Verify presence of all required JS state and functions in index.html."""
         html = self.source

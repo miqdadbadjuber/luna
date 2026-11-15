@@ -4702,6 +4702,14 @@ function syncVaultSelectionUI() {
 }
 
 function getVisibleSelectableFileIds() {
+  const activeProj = currentActiveProjectId
+    ? vaultProjects.find(p => p.project_id === currentActiveProjectId)
+    : null;
+  if (activeProj && isAiClipperProject(activeProj)) {
+    return Array.from(document.querySelectorAll('#clipperBranchingClipsWrapper .vault-file-card'))
+      .map(el => el.dataset.fileId)
+      .filter(Boolean);
+  }
   return Array.from(document.querySelectorAll('#projectFilesGrid .vault-file-card:not(.hidden)'))
     .map(el => el.dataset.fileId)
     .filter(Boolean);
@@ -4741,13 +4749,14 @@ function toggleSelectAllVaultFiles() {
 }
 
 function syncFileSelectionUI() {
-  const grid = document.getElementById('projectFilesGrid');
-  if (grid) {
-    grid.classList.toggle('is-selecting', vaultFileSelectionMode);
-    grid.querySelectorAll('.vault-file-card').forEach(card => {
+  ['projectFilesGrid', 'clipperBranchingClipsWrapper'].forEach(containerId => {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.classList.toggle('is-selecting', vaultFileSelectionMode);
+    container.querySelectorAll('.vault-file-card').forEach(card => {
       card.classList.toggle('is-selected', vaultFileSelectionMode && vaultFileSelectedIds.has(card.dataset.fileId));
     });
-  }
+  });
   if (vaultSelectionMode) return;
   const ids = getVisibleSelectableFileIds();
   updateSelectionToolbar({
@@ -4756,6 +4765,25 @@ function syncFileSelectionUI() {
     allSelected: ids.length > 0 && ids.every(id => vaultFileSelectedIds.has(id)),
     ariaLabel: 'Selected files',
   });
+}
+
+function syncAfterProjectFilesChanged(activeProj, { deletedClip = false, forceRerender = false } = {}) {
+  if (!activeProj) return;
+  if (isAiClipperProject(activeProj)) {
+    if (deletedClip) {
+      Object.keys(clipperNodeOffsets).forEach(k => {
+        if (k.startsWith('clip-node-')) delete clipperNodeOffsets[k];
+      });
+    }
+    renderClipperWorkflow(activeProj);
+    return;
+  }
+  updateProjectDetailHeaderMeta(activeProj);
+  if (forceRerender) {
+    renderProjectFiles(activeProj);
+  } else {
+    updateVaultFilterCounters();
+  }
 }
 
 function updateProjectDetailHeaderMeta(proj) {
@@ -4927,13 +4955,10 @@ async function executeBulkDeleteVaultItems() {
     : null;
   if (activeProj && Array.isArray(activeProj.files)) {
     activeProj.files = activeProj.files.filter(f => !deletedIds.has(f.id));
-    updateProjectDetailHeaderMeta(activeProj);
-    if (failedIds.length) {
-      // Restore media players on files whose delete failed so they remain playable.
-      renderProjectFiles(activeProj);
-    } else {
-      updateVaultFilterCounters();
-    }
+    syncAfterProjectFilesChanged(activeProj, {
+      deletedClip: deletedIds.size > 0,
+      forceRerender: failedIds.length > 0,
+    });
   }
 
   if (confirmBtn) confirmBtn.disabled = false;
@@ -5010,6 +5035,9 @@ async function openProjectPage(projectId) {
   if (reqSeq !== openProjectRequestSeq || !proj) return;
   exitActiveSelectionMode();
   closeVaultCardMenu();
+  for (const k in clipperNodeOffsets) {
+    delete clipperNodeOffsets[k];
+  }
   currentActiveProjectId = projectId;
   document.body.classList.add('in-workspace');
 
@@ -5254,6 +5282,9 @@ function closeProjectPage() {
   openProjectRequestSeq++;
   closeVaultCardMenu();
   exitFileSelectionMode();
+  for (const k in clipperNodeOffsets) {
+    delete clipperNodeOffsets[k];
+  }
   if (currentlyPlayingAudioId) {
     const otherEl = document.getElementById(`audio-el-${currentlyPlayingAudioId}`);
     if (otherEl) otherEl.pause();
@@ -5817,12 +5848,19 @@ window.resetClipperCanvasLayout = function () {
 
 function initClipperDraggable(nodeEl) {
   if (!nodeEl) return;
+  const savedOffset = clipperNodeOffsets[nodeEl.id];
+  if (savedOffset) {
+    nodeEl.style.transform = `translate(${savedOffset.dx}px, ${savedOffset.dy}px)`;
+  }
   let isDragging = false;
   let startX = 0, startY = 0;
   let initialDx = 0, initialDy = 0;
   let hasMoved = false;
 
   nodeEl.addEventListener('pointerdown', (e) => {
+    if (vaultFileSelectionMode && nodeEl.classList.contains('clipper-branch-clip')) {
+      return;
+    }
     // Do not drag if currently in fullscreen
     if (document.fullscreenElement || nodeEl.hasAttribute('mediaisfullscreen') || nodeEl.querySelector('[mediaisfullscreen]')) {
       return;
@@ -5972,6 +6010,7 @@ function drawClipperConnectors() {
 }
 
 window.toggleClipCaption = function (idx, event) {
+  if (vaultFileSelectionMode) return;
   if (event) {
     event.stopPropagation();
     event.preventDefault();
@@ -6083,6 +6122,7 @@ document.addEventListener('keydown', function (e) {
 function renderClipperWorkflow(proj) {
   const nodesWrapper = document.getElementById('clipperCanvasNodesWrapper');
   if (!nodesWrapper) return;
+  closeVaultCardMenu();
   nodesWrapper.innerHTML = '';
 
   const files = proj.files || [];
@@ -6245,6 +6285,8 @@ function renderClipperWorkflow(proj) {
       const rawMediaUrl = file.url || (file.relative_path ? `/media-vault/${file.relative_path.replace(/\\/g, '/')}` : '#');
       const mediaUrl = encodeMediaUrl(rawMediaUrl);
       const downloadUrl = file.download_url ? encodeMediaUrl(file.download_url) : mediaUrl;
+      const clipTitle = file.title || `Clip #${idx + 1}`;
+      const escapedTitle = escapeHtml(clipTitle);
 
       const hasCaption = !isTrimProject && Boolean(file.caption && file.caption.trim());
       const captionSnippet = hasCaption ? escapeHtml(file.caption.trim()) : '';
@@ -6266,7 +6308,12 @@ function renderClipperWorkflow(proj) {
 
       clipNode.innerHTML = `
         ${captionPopover}
-        <div class="w-full rounded-[14px] bg-[#171717] border border-white/[0.08] shadow-[0_8px_24px_rgba(0,0,0,0.6)] overflow-hidden flex flex-col">
+        <div id="vault-card-${file.id}" data-file-id="${file.id}" class="vault-file-card w-full rounded-[14px] bg-[#171717] border border-white/[0.08] shadow-[0_8px_24px_rgba(0,0,0,0.6)] overflow-hidden flex flex-col relative">
+          <span class="vault-card-check" aria-hidden="true">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 8.5L6.75 11L12 5.5"></path>
+            </svg>
+          </span>
           <!-- Video Preview Area (Starts directly at top of card, no header bar above) -->
           <div class="relative bg-black w-full overflow-hidden border-b border-white/[0.06]" style="aspect-ratio: 9/16; max-height: 230px;">
             <media-theme-sutro style="width:100%; height:100%;" data-player-size="mini" disabled>
@@ -6282,15 +6329,15 @@ function renderClipperWorkflow(proj) {
             </media-theme-sutro>
           </div>
 
-                        <div class="px-3 pt-2.5 pb-1">
-            <h4 class="text-[11px] font-semibold text-white line-clamp-1 leading-snug">${escapeHtml(file.title || `Clip #${idx + 1}`)}</h4>
+          <div class="px-3 pt-2.5 pb-1">
+            <h4 id="clip-title-${file.id}" class="text-[11px] font-semibold text-white line-clamp-1 leading-snug" title="${escapedTitle}">${escapedTitle}</h4>
           </div>
 
           ${captionTrigger}
 
-          <!-- Bottom Bar: Info on Left, Balanced Download Button on Right -->
+          <!-- Bottom Bar: Info on Left, Compact Action Icons on Right -->
           <div class="flex items-center justify-between gap-3 px-3 pb-3 pt-2 border-t border-white/[0.04]">
-            <div class="min-w-0 flex flex-col justify-center">
+            <div class="min-w-0 flex-1 flex flex-col justify-center">
               ${isTrimProject ? `
                 <span class="text-[11px] font-semibold text-white tracking-tight leading-tight">Clip #${idx + 1}</span>
                 <span class="text-[10px] font-mono text-zinc-400 leading-tight mt-0.5">${escapeHtml(file.start_time || '00:00')} - ${escapeHtml(file.end_time || '00:30')}</span>
@@ -6299,13 +6346,32 @@ function renderClipperWorkflow(proj) {
                 <span class="text-[10px] font-mono text-zinc-400 leading-tight mt-0.5">Clip #${idx + 1}</span>
               `}
             </div>
-            <a href="${downloadUrl}" download="${escapeHtml(file.filename || `clip_${idx + 1}.mp4`)}" class="t-btn t-btn-secondary !h-7 px-2.5 text-[10.5px] font-medium flex items-center justify-center gap-1.5 shrink-0 cursor-pointer" data-no-drag="true" aria-label="Download Clip">
-              <span>Download</span>
-              <i data-lucide="download" class="w-3.5 h-3.5"></i>
-            </a>
+            <div class="vault-file-actions flex items-center gap-1.5 shrink-0" data-no-drag="true">
+              <button type="button" class="t-card-btn-more" data-file-menu-id="${file.id}" data-no-drag="true" onclick="toggleFileCardMenu('${file.id}', this, event)" title="More actions" aria-label="More actions" aria-haspopup="menu" aria-expanded="false">
+                <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                  <circle cx="8" cy="3.5" r="1.2"></circle>
+                  <circle cx="8" cy="8" r="1.2"></circle>
+                  <circle cx="8" cy="12.5" r="1.2"></circle>
+                </svg>
+              </button>
+              <span class="vault-card-action-sep" aria-hidden="true"></span>
+              <a href="${downloadUrl}" download="${escapeHtml(file.filename || `clip_${idx + 1}.mp4`)}" class="luna-download-icon-link" data-no-drag="true" title="Download Clip" aria-label="Download Clip">
+                <i data-lucide="download" class="w-4 h-4"></i>
+              </a>
+            </div>
           </div>
         </div>
       `;
+      const innerCard = clipNode.querySelector('.vault-file-card');
+      if (innerCard) {
+        innerCard.addEventListener('click', (e) => {
+          if (!vaultFileSelectionMode) return;
+          if (e.target.closest('.vault-file-actions')) return;
+          e.preventDefault();
+          e.stopPropagation();
+          toggleVaultFileSelection(file.id);
+        });
+      }
       const clipVid = clipNode.querySelector('video');
       if (clipVid) {
         try { clipVid.disablePictureInPicture = true; } catch (e) {}
@@ -6318,6 +6384,7 @@ function renderClipperWorkflow(proj) {
   nodesWrapper.appendChild(clipsCol);
 
   lucide.createIcons();
+  syncFileSelectionUI();
 
   setTimeout(compactSutroPlayers, 30);
   setTimeout(compactSutroPlayers, 150);
@@ -6338,7 +6405,15 @@ let clipperPanX = 0, clipperPanY = 0, clipperZoom = 1;
   let panOriginX = 0, panOriginY = 0;
 
   function getRefs() {
-    if (!viewport) viewport = document.getElementById('clipperCanvasViewport');
+    if (!viewport) {
+      viewport = document.getElementById('clipperCanvasViewport');
+      if (viewport && !viewport.dataset.menuScrollBound) {
+        viewport.dataset.menuScrollBound = '1';
+        viewport.addEventListener('scroll', () => {
+          if (typeof vaultCardMenuAnchor !== 'undefined' && vaultCardMenuAnchor) closeVaultCardMenu();
+        }, { passive: true });
+      }
+    }
     if (!scrollCanvas) scrollCanvas = document.getElementById('clipperScrollCanvas');
     return viewport;
   }
@@ -6361,6 +6436,7 @@ let clipperPanX = 0, clipperPanY = 0, clipperZoom = 1;
     if (!isVisible()) return;
     if (!viewport.contains(e.target)) return;
     if (e.target.closest('.clipper-flow-node, button, a, video, media-theme-sutro, input, select, textarea, [data-no-drag]')) return;
+    closeVaultCardMenu();
     isPanning = true;
     panStartX = e.clientX;
     panStartY = e.clientY;
@@ -6430,6 +6506,7 @@ let clipperPanX = 0, clipperPanY = 0, clipperZoom = 1;
     const oldZoom = clipperZoom;
     const delta = e.deltaY > 0 ? -0.08 : 0.08;
     clipperZoom = Math.min(Math.max(clipperZoom + delta, 0.3), 2.5);
+    closeVaultCardMenu();
 
     // Adjust pan so zoom centers on cursor
     const ratio = clipperZoom / oldZoom;
@@ -6441,6 +6518,7 @@ let clipperPanX = 0, clipperPanY = 0, clipperZoom = 1;
   }, { passive: false });
 
   window.clipperZoomIn = function () {
+    closeVaultCardMenu();
     getRefs();
     const rect = viewport.getBoundingClientRect();
     const cx = rect.width / 2, cy = rect.height / 2;
@@ -6453,6 +6531,7 @@ let clipperPanX = 0, clipperPanY = 0, clipperZoom = 1;
     setTimeout(drawClipperConnectors, 20);
   };
   window.clipperZoomOut = function () {
+    closeVaultCardMenu();
     getRefs();
     const rect = viewport.getBoundingClientRect();
     const cx = rect.width / 2, cy = rect.height / 2;
@@ -6465,6 +6544,7 @@ let clipperPanX = 0, clipperPanY = 0, clipperZoom = 1;
     setTimeout(drawClipperConnectors, 20);
   };
   window.clipperZoomReset = function () {
+    closeVaultCardMenu();
     getRefs();
     clipperZoom = 1;
     clipperPanX = 0;
@@ -6770,6 +6850,21 @@ function promptRenameWorkspace(projectId, currentName) {
 function promptRenameVaultItem(fileId) {
   const file = findActiveProjectFile(fileId);
   if (!file) return;
+  const activeProj = currentActiveProjectId
+    ? vaultProjects.find(p => p.project_id === currentActiveProjectId)
+    : null;
+  if (activeProj && isAiClipperProject(activeProj)) {
+    openRenameModalBox({
+      headingText: 'Rename Clip',
+      labelText: 'Clip Title',
+      placeholderText: 'New clip title',
+      initialValue: file.title || file.filename || '',
+      targetIdVal: file.id,
+      targetTypeVal: 'clip-title',
+      lockedExt: '',
+    });
+    return;
+  }
   const { stem, ext } = splitFilenameParts(file.filename || file.title || '');
   openRenameModalBox({
     headingText: 'Rename File',
@@ -6797,6 +6892,53 @@ async function submitRenameWorkspace() {
   const idValue = targetId.value;
   const targetType = (targetTypeEl && targetTypeEl.value) || 'project';
   if (!newName || !idValue) return;
+
+  if (targetType === 'clip-title') {
+    const activeProj = currentActiveProjectId
+      ? vaultProjects.find(p => p.project_id === currentActiveProjectId)
+      : null;
+    try {
+      const res = await fetch(`/api/vault/item/${encodeURIComponent(idValue)}/rename`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ new_name: newName, title_only: true }),
+      });
+      if (res.ok) {
+        const payload = await res.json();
+        const updatedItem = (payload && payload.item) || {};
+        const newTitle = updatedItem.title || newName;
+        closeRenameModal();
+
+        const syncClipRecord = (rec) => {
+          if (rec) Object.assign(rec, updatedItem, { title: newTitle });
+        };
+        if (activeProj && Array.isArray(activeProj.files)) {
+          syncClipRecord(activeProj.files.find(f => f.id === idValue));
+        }
+        if (Array.isArray(clipperFilesCache)) {
+          syncClipRecord(clipperFilesCache.find(f => f.id === idValue));
+        }
+        syncClipRecord(vaultItems.find(it => it.id === idValue));
+
+        const titleNode = document.getElementById(`clip-title-${idValue}`);
+        if (titleNode) {
+          titleNode.textContent = newTitle;
+          titleNode.title = newTitle;
+        }
+        await loadVaultItems();
+      } else {
+        let errDetail = 'An error occurred while renaming the clip.';
+        try {
+          const errJson = await res.json();
+          if (errJson && errJson.detail) errDetail = errJson.detail;
+        } catch (_) {}
+        showNoticeModal('Could not rename clip', errDetail);
+      }
+    } catch (e) {
+      showNoticeModal('Connection Error', 'Could not connect to the server while renaming the clip.');
+    }
+    return;
+  }
 
   if (targetType === 'file') {
     const activeProj = currentActiveProjectId
@@ -7087,9 +7229,14 @@ async function executeDeleteVaultItem() {
       throw new Error(err.detail || 'Could not delete file');
     }
 
-    // Card smooth exit animation
+    // Card smooth exit animation (standard grid); clipper workflow re-renders immediately
     const card = document.getElementById(`vault-card-${idToDelete}`);
-    if (card) {
+    const activeProj = currentActiveProjectId
+      ? vaultProjects.find(p => p.project_id === currentActiveProjectId)
+      : null;
+    const isClipperProj = Boolean(activeProj && isAiClipperProject(activeProj));
+
+    if (card && !isClipperProj) {
       card.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
       setTimeout(() => {
         if (card && card.parentNode) card.remove();
@@ -7101,12 +7248,10 @@ async function executeDeleteVaultItem() {
     vaultItems = vaultItems.filter(it => it.id !== idToDelete);
     if (vaultStats.total_files > 0) vaultStats.total_files -= 1;
 
-    if (currentActiveProjectId) {
-      const activeProj = vaultProjects.find(p => p.project_id === currentActiveProjectId);
-      if (activeProj && activeProj.files) {
-        activeProj.files = activeProj.files.filter(f => f.id !== idToDelete);
-        updateProjectDetailHeaderMeta(activeProj);
-      }
+    if (activeProj && activeProj.files) {
+      activeProj.files = activeProj.files.filter(f => f.id !== idToDelete);
+      updateProjectDetailHeaderMeta(activeProj);
+      syncAfterProjectFilesChanged(activeProj, { deletedClip: true });
     }
 
     updateVaultStatsUI();
@@ -7119,8 +7264,8 @@ async function executeDeleteVaultItem() {
 
   } catch (err) {
     const activeProj = currentActiveProjectId ? vaultProjects.find(p => p.project_id === currentActiveProjectId) : null;
-    if (activeProj && !isAiClipperProject(activeProj)) {
-      renderProjectFiles(activeProj);
+    if (activeProj) {
+      syncAfterProjectFilesChanged(activeProj, { forceRerender: true });
     }
     showNoticeModal('Could not delete file', err.message || 'An error occurred while deleting the file.');
   } finally {
