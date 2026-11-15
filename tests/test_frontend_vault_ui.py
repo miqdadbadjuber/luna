@@ -68,16 +68,69 @@ class TestFrontendVaultUI(unittest.TestCase):
         for word in ("Landscape", "Portrait", "Square"):
             self.assertNotIn(word, ratios_block)
 
-        # Applied consistently across Studio cards, Node Canvas cards, and Media Vault Grid cards
+        # Applied on Studio cards and Media Vault Grid cards; Node Canvas AI Clipper omits the badge
         for section_fn in (
             ("function renderOpusResults(data)", "function copyText("),
-            ("function renderClipperWorkflow(proj)", "(function initClipperCanvasControls()"),
             ("function renderProjectFiles(proj)", "function toggleProjectDrawer"),
         ):
             block = source.split(section_fn[0])[1].split(section_fn[1])[0]
             self.assertIn("renderRatioBadgeHtml(", block)
             self.assertNotIn("9:16 Portrait", block)
             self.assertNotIn("16:9 Landscape", block)
+
+        clipper_block = source.split("function renderClipperWorkflow(proj)")[1].split("(function initClipperCanvasControls()")[0]
+        self.assertNotIn("renderRatioBadgeHtml(", clipper_block)
+        self.assertNotIn("ratio-pill", clipper_block)
+
+    def test_video_hover_controls_scrim_and_selection_rules(self):
+        """Video overlays stay hidden until video hover, animate synchronously with scrim, delay hide 1s, and stay off in selection mode."""
+        source = self.source
+        css = self.client.get("/assets/ui/luna.css").text
+
+        self.assertIn("const VIDEO_CONTROLS_HIDE_DELAY_MS = 1000;", source)
+        self.assertIn("function initVideoHoverPlayers", source)
+        self.assertIn("clearVideoHoverControls(container)", source)
+
+        # All 3 video card renderers wire hover controls
+        for section_fn in (
+            ("function renderOpusResults(data)", "function copyText("),
+            ("function renderClipperWorkflow(proj)", "(function initClipperCanvasControls()"),
+            ("function renderProjectFiles(proj)", "function toggleProjectDrawer"),
+        ):
+            block = source.split(section_fn[0])[1].split(section_fn[1])[0]
+            self.assertIn("initVideoHoverPlayers(", block)
+            self.assertIn("video-preview-wrapper", block)
+
+        # Light DOM & Shadow DOM share exact synchronized opacity fade + subtle bottom gradient scrim
+        self.assertIn(".video-preview-wrapper .ratio-pill", css)
+        self.assertIn('.video-preview-wrapper[data-controls-visible="true"] .ratio-pill', css)
+        self.assertIn("#projectFilesGrid.is-selecting .ratio-pill", css)
+        self.assertIn("#clipperBranchingClipsWrapper.is-selecting .ratio-pill", css)
+        self.assertIn("transition: opacity 220ms cubic-bezier(0.22, 1, 0.36, 1)", css)
+
+        sutro_block = source.split("window.compactSutroPlayers = function ()")[1].split("document.addEventListener('fullscreenchange'")[0]
+        self.assertIn(".media-gradient-bottom", sutro_block)
+        self.assertIn("rgba(0, 0, 0, 0.72)", sutro_block)
+        self.assertIn('data-controls-visible="true"', sutro_block)
+        self.assertIn("transition: opacity 220ms cubic-bezier(0.22, 1, 0.36, 1) !important;", sutro_block)
+        self.assertIn(':host([data-audio-player="true"]) media-control-bar', sutro_block)
+
+    def test_studio_video_cards_move_clip_meta_to_footer_and_handle_zero_start(self):
+        """Studio video cards place Clip #N • duration in the footer, keep 0s starts, and drop MP4 Video/raw timestamps."""
+        source = self.source
+        helper_block = source.split("function buildStudioVideoMetaParts(item, idx)")[1].split("function renderOpusResults(data)")[0]
+        studio_block = source.split("function renderOpusResults(data)")[1].split("function copyText(")[0]
+
+        self.assertIn("hasExplicitStart", helper_block)
+        self.assertIn("`Clip #${idx + 1}`", helper_block)
+        self.assertIn("if (hasClip)", helper_block)
+
+        self.assertIn("buildStudioVideoMetaParts(item, idx)", studio_block)
+        self.assertNotIn("MP4 Video", studio_block)
+        self.assertNotIn("footerMetaLabel", studio_block)
+        self.assertNotIn("`${item.start_time} - ${item.end_time}`", studio_block)
+        self.assertIn("sm:text-[15px]", studio_block)
+        self.assertIn("mt-2 text-xs text-zinc-400", studio_block)
 
     def test_navbar_tabs_exist(self):
         """Check for tabBtnStudio and tabBtnVault."""

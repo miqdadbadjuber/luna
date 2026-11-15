@@ -2377,27 +2377,37 @@ media-theme-sutro {
 }
 
 media-theme-sutro media-control-bar {
-  display: flex !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  align-items: center !important;
+  display: flex;
+  align-items: center;
 }
 
 media-theme-sutro media-play-button,
 media-theme-sutro media-mute-button,
 media-theme-sutro media-time-display,
 media-theme-sutro media-fullscreen-button {
-  display: inline-flex !important;
-  visibility: visible !important;
-  opacity: 1 !important;
+  display: inline-flex;
 }
 
 media-theme-sutro media-time-range {
-  display: block !important;
-  flex: 1 1 auto !important;
-  min-width: 44px !important;
-  visibility: visible !important;
-  opacity: 1 !important;
+  display: block;
+  flex: 1 1 auto;
+  min-width: 44px;
+}
+
+/* Synchronized video card overlay (ratio badge hides at idle and fades in/out with player & scrim) */
+.video-preview-wrapper .ratio-pill {
+  opacity: 0;
+  transition: opacity 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.video-preview-wrapper[data-controls-visible="true"] .ratio-pill {
+  opacity: 1;
+}
+
+#projectFilesGrid.is-selecting .ratio-pill,
+#clipperBranchingClipsWrapper.is-selecting .ratio-pill {
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 /* 1. Mini sizing for AI Clipper canvas cards */

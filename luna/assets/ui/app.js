@@ -2771,6 +2771,36 @@ function renderAudioShowcaseHtml(fileId, audioUrl, thumbnailUrl, isLarge = false
   `;
 }
 
+/**
+ * Build concise Studio video footer metadata tokens (e.g. "Clip #2 • 41s"),
+ * keeping zero-second start times and omitting raw timestamp ranges or "MP4 Video".
+ */
+function buildStudioVideoMetaParts(item, idx) {
+  const parseTimestampSec = (val) => {
+    if (typeof val === 'number') return val;
+    if (val === undefined || val === null) return NaN;
+    const trimmed = String(val).trim();
+    if (!trimmed) return NaN;
+    return trimmed.includes(':') ? timeToSeconds(trimmed) : Number(trimmed);
+  };
+
+  const startSec = parseTimestampSec(item.start_time);
+  const endSec = parseTimestampSec(item.end_time);
+  const hasRange = isFinite(startSec) && isFinite(endSec) && endSec > startSec;
+  const hasExplicitStart = item.start_time !== undefined && item.start_time !== null && String(item.start_time).trim() !== '';
+  const hasClip = hasRange || hasExplicitStart;
+
+  const parts = [];
+  // Check hasClip explicitly because numeric 0s start_time is falsy in JS.
+  if (hasClip) parts.push(`Clip #${idx + 1}`);
+  if (item.quality) {
+    const qStr = String(item.quality).trim();
+    parts.push(/^\d+$/.test(qStr) ? `${qStr}p` : qStr);
+  }
+  if (hasRange) parts.push(`${Math.round(endSec - startSec)}s`);
+  return parts;
+}
+
 function renderOpusResults(data) {
   shortsGalleryGrid.innerHTML = '';
   const items = data.results || [];
@@ -2795,10 +2825,6 @@ function renderOpusResults(data) {
     const card = document.createElement('div');
     card.id = `studio-card-${idx}`;
     const downloadUrl = item.download_url || `/api/download-file/${data.id}/${item.filename}`;
-    const startSec = (typeof item.start_time === 'number') ? item.start_time : (item.start_time ? timeToSeconds(item.start_time) : NaN);
-    const endSec = (typeof item.end_time === 'number') ? item.end_time : (item.end_time ? timeToSeconds(item.end_time) : NaN);
-    const hasRange = isFinite(startSec) && isFinite(endSec) && endSec > startSec;
-    const durationLabel = hasRange ? `${Math.round(endSec - startSec)}s` : (item.quality ? item.quality + 'p' : 'HD');
 
     if (item.type === 'audio') {
       const fileId = `studio-aud-${idx}`;
@@ -2836,14 +2862,15 @@ function renderOpusResults(data) {
       const itemMeta = resolveMediaRatioMeta(item.aspect_ratio, item.filename, isPortraitDefault);
       const itemIsWide = itemMeta.kind === 'landscape';
 
-      const metaBadges = [];
-      if (item.start_time) metaBadges.push(`Clip #${idx + 1}`);
-      if (item.quality) metaBadges.push(`${item.quality}p`);
-      if (hasRange) metaBadges.push(`${Math.round(endSec - startSec)}s`);
-      else if (!item.quality) metaBadges.push(durationLabel);
+      const footerMetaParts = buildStudioVideoMetaParts(item, idx);
+      const footerMetaHtml = footerMetaParts
+        .map((part, i) => i === 0
+          ? `<span>${escapeHtml(part)}</span>`
+          : `<span class="text-zinc-600" aria-hidden="true">•</span><span>${escapeHtml(part)}</span>`)
+        .join('');
 
       const captionSnippetHtml = item.caption ? `
-        <p class="mt-2 text-[11px] text-zinc-400 leading-relaxed line-clamp-2 select-all">
+        <p class="mt-2 text-xs text-zinc-400 leading-relaxed line-clamp-2 select-all">
           ${escapeHtml(item.caption)}
         </p>
       ` : '';
@@ -2858,10 +2885,6 @@ function renderOpusResults(data) {
         </button>
         <span class="vault-card-action-sep" aria-hidden="true"></span>
       ` : '';
-
-      const footerMetaLabel = (item.start_time && item.end_time)
-        ? `${item.start_time} - ${item.end_time}`
-        : 'MP4 Video';
 
       card.className = 'vault-file-card rounded-2xl bg-[#171717] border border-white/[0.08] shadow-[0_4px_20px_-2px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col justify-between group';
       card.innerHTML = `
@@ -2884,19 +2907,18 @@ function renderOpusResults(data) {
           </media-theme-sutro>
         </div>
 
-        <div class="p-4 flex-1 flex flex-col justify-between space-y-3">
+        <div class="p-4 flex-1 flex flex-col justify-between gap-3.5">
           <div>
-            <h4 class="text-xs sm:text-sm font-semibold font-sans text-white line-clamp-2 leading-snug mb-1">
+            <h4 class="text-sm sm:text-[15px] font-semibold font-sans text-white line-clamp-2 leading-snug tracking-[-0.01em]">
               ${escapeHtml(item.title || item.filename)}
             </h4>
-            <div class="flex items-center gap-2 text-[11px] text-zinc-400 font-mono">
-              ${metaBadges.map((m, i) => i === 0 ? `<span>${escapeHtml(m)}</span>` : `<span>• ${escapeHtml(m)}</span>`).join('\n              ')}
-            </div>
             ${captionSnippetHtml}
           </div>
 
-          <div class="flex items-center justify-between pt-2.5 border-t border-white/[0.06]">
-            <span class="text-[10.5px] font-mono text-zinc-500">${escapeHtml(footerMetaLabel)}</span>
+          <div class="flex items-center justify-between pt-3 border-t border-white/[0.06]">
+            <div class="flex items-center gap-1.5 text-[11.5px] font-mono font-medium text-zinc-400">
+              ${footerMetaHtml}
+            </div>
             <div class="vault-file-actions flex items-center gap-2">
               ${copyBtn}
               <a href="${downloadUrl}" download="${escapeHtml(item.filename || 'video.mp4')}" class="luna-download-icon-link" aria-label="Download File">
@@ -2918,6 +2940,7 @@ function renderOpusResults(data) {
   });
 
   resultsShowcase.classList.remove('hidden');
+  initVideoHoverPlayers(shortsGalleryGrid);
   lucide.createIcons();
   setTimeout(compactSutroPlayers, 30);
   setTimeout(compactSutroPlayers, 150);
@@ -4768,6 +4791,9 @@ function syncFileSelectionUI() {
     const container = document.getElementById(containerId);
     if (!container) return;
     container.classList.toggle('is-selecting', vaultFileSelectionMode);
+    if (vaultFileSelectionMode) {
+      clearVideoHoverControls(container);
+    }
     container.querySelectorAll('.vault-file-card').forEach(card => {
       card.classList.toggle('is-selected', vaultFileSelectionMode && vaultFileSelectedIds.has(card.dataset.fileId));
     });
@@ -5291,7 +5317,6 @@ window.handleVaultVideoMetadata = function (videoEl, fileId) {
   const meta = ratioMetaFromSize(videoEl.videoWidth, videoEl.videoHeight);
   const ratioText = wrapper.querySelector('.ratio-text');
   if (ratioText && meta) ratioText.innerText = meta.label;
-  if (wrapper.dataset.lockLayout === 'true') return;
 
   const card = wrapper.closest('.t-rec-card') || wrapper.closest('[data-media-type]') || wrapper.parentElement;
   const isSingleCard = card && card.classList.contains('single-result-card');
@@ -5363,8 +5388,78 @@ function closeProjectPage() {
   lucide.createIcons();
 }
 
+const VIDEO_CONTROLS_HIDE_DELAY_MS = 1000;
+const videoHoverHideTimers = new WeakMap();
+
+function isVideoSelectionBlockingHover(wrapper) {
+  return Boolean(vaultFileSelectionMode || (wrapper && wrapper.closest('.is-selecting')));
+}
+
+function cancelVideoControlsHideTimer(wrapper) {
+  const timerId = videoHoverHideTimers.get(wrapper);
+  if (timerId) {
+    clearTimeout(timerId);
+    videoHoverHideTimers.delete(wrapper);
+  }
+}
+
+function setVideoWrapperControlsVisible(wrapper, visible) {
+  if (!wrapper) return;
+  const sutro = wrapper.querySelector('media-theme-sutro');
+  if (visible) {
+    wrapper.setAttribute('data-controls-visible', 'true');
+    if (sutro) sutro.setAttribute('data-controls-visible', 'true');
+  } else {
+    wrapper.removeAttribute('data-controls-visible');
+    if (sutro) sutro.removeAttribute('data-controls-visible');
+  }
+}
+
+function clearVideoHoverControls(root = document) {
+  if (!root || typeof root.querySelectorAll !== 'function') return;
+  root.querySelectorAll('.video-preview-wrapper').forEach(wrapper => {
+    cancelVideoControlsHideTimer(wrapper);
+    setVideoWrapperControlsVisible(wrapper, false);
+  });
+}
+
+function initVideoHoverPlayers(root = document) {
+  if (!root || typeof root.querySelectorAll !== 'function') return;
+  root.querySelectorAll('.video-preview-wrapper').forEach(wrapper => {
+    if (wrapper.dataset.hoverBound === '1') return;
+    wrapper.dataset.hoverBound = '1';
+
+    wrapper.addEventListener('mouseenter', () => {
+      cancelVideoControlsHideTimer(wrapper);
+      if (isVideoSelectionBlockingHover(wrapper)) {
+        setVideoWrapperControlsVisible(wrapper, false);
+        return;
+      }
+      setVideoWrapperControlsVisible(wrapper, true);
+    });
+
+    wrapper.addEventListener('mouseleave', () => {
+      cancelVideoControlsHideTimer(wrapper);
+      if (isVideoSelectionBlockingHover(wrapper)) {
+        setVideoWrapperControlsVisible(wrapper, false);
+        return;
+      }
+      const timerId = setTimeout(() => {
+        videoHoverHideTimers.delete(wrapper);
+        setVideoWrapperControlsVisible(wrapper, false);
+      }, VIDEO_CONTROLS_HIDE_DELAY_MS);
+      videoHoverHideTimers.set(wrapper, timerId);
+    });
+
+    if (wrapper.matches && wrapper.matches(':hover') && !isVideoSelectionBlockingHover(wrapper)) {
+      setVideoWrapperControlsVisible(wrapper, true);
+    }
+  });
+}
+
 // Global Sutro media player engine
 window.compactSutroPlayers = function () {
+  initVideoHoverPlayers(document);
   document.querySelectorAll('media-theme-sutro').forEach(player => {
     if (!player.shadowRoot) return;
     if (!player.shadowRoot.querySelector('#sutro-mini-style')) {
@@ -5410,14 +5505,12 @@ window.compactSutroPlayers = function () {
           pointer-events: none !important;
         }
 
-        /* Universal Base Controls: Play, Time, Scrubber, Mute, Fullscreen ALWAYS visible */
+        /* Universal Base Controls layout (visibility/opacity driven per mode below) */
         media-control-bar {
           display: flex !important;
           visibility: visible !important;
-          opacity: 1 !important;
           align-items: center !important;
           z-index: 30 !important;
-          pointer-events: auto !important;
         }
         media-play-button {
           display: inline-flex !important;
@@ -5425,7 +5518,6 @@ window.compactSutroPlayers = function () {
           opacity: 1 !important;
           flex-shrink: 0 !important;
           cursor: pointer !important;
-          pointer-events: auto !important;
         }
         media-mute-button {
           display: inline-flex !important;
@@ -5433,7 +5525,6 @@ window.compactSutroPlayers = function () {
           opacity: 1 !important;
           flex-shrink: 0 !important;
           cursor: pointer !important;
-          pointer-events: auto !important;
         }
         /* One time display only, and always the one that carries the duration.
            The theme ships <media-time-display> and <media-time-display showduration>
@@ -5455,7 +5546,6 @@ window.compactSutroPlayers = function () {
           visibility: visible !important;
           opacity: 1 !important;
           cursor: pointer !important;
-          pointer-events: auto !important;
           --media-range-track-background: rgba(255, 255, 255, 0.28) !important;
           --media-range-bar-color: #ffffff !important;
         }
@@ -5465,7 +5555,6 @@ window.compactSutroPlayers = function () {
           opacity: 1 !important;
           flex-shrink: 0 !important;
           cursor: pointer !important;
-          pointer-events: auto !important;
         }
         media-pip-button,
         [part~="pip-button"] {
@@ -5473,6 +5562,75 @@ window.compactSutroPlayers = function () {
           visibility: hidden !important;
           opacity: 0 !important;
           pointer-events: none !important;
+        }
+
+        /* Audio and fullscreen players keep controls visible & interactive immediately */
+        :host([data-audio-player="true"]) media-control-bar,
+        :host([data-audio-player="true"]) media-play-button,
+        :host([data-audio-player="true"]) media-mute-button,
+        :host([data-audio-player="true"]) media-time-range,
+        media-controller[mediaisfullscreen] media-control-bar,
+        media-controller[mediaisfullscreen] media-play-button,
+        media-controller[mediaisfullscreen] media-mute-button,
+        media-controller[mediaisfullscreen] media-time-range,
+        media-controller[mediaisfullscreen] media-fullscreen-button,
+        media-controller:fullscreen media-control-bar,
+        media-controller:fullscreen media-play-button,
+        media-controller:fullscreen media-mute-button,
+        media-controller:fullscreen media-time-range,
+        media-controller:fullscreen media-fullscreen-button {
+          opacity: 1 !important;
+          pointer-events: auto !important;
+        }
+
+        /* Video card mode: subtle dark bottom scrim & player bar hide at idle, then fade together on hover */
+        :host(:not([data-audio-player="true"])) media-controller:not([mediaisfullscreen]):not(:fullscreen) .media-gradient-bottom {
+          display: block !important;
+          visibility: visible !important;
+          position: absolute !important;
+          left: 0 !important;
+          right: 0 !important;
+          bottom: 0 !important;
+          width: 100% !important;
+          height: clamp(68px, 38%, 104px) !important;
+          z-index: 20 !important;
+          opacity: 0 !important;
+          transform: none !important;
+          pointer-events: none !important;
+          transition: opacity 220ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+        }
+        :host(:not([data-audio-player="true"])) media-controller:not([mediaisfullscreen]):not(:fullscreen) .media-gradient-bottom::before {
+          opacity: 1 !important;
+          background: linear-gradient(
+            to top,
+            rgba(0, 0, 0, 0.72) 0%,
+            rgba(0, 0, 0, 0.36) 52%,
+            rgba(0, 0, 0, 0) 100%
+          ) !important;
+        }
+        :host(:not([data-audio-player="true"])) media-controller:not([mediaisfullscreen]):not(:fullscreen) media-control-bar {
+          opacity: 0 !important;
+          transform: none !important;
+          pointer-events: none !important;
+          transition: opacity 220ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+        }
+        :host(:not([data-audio-player="true"])) media-controller:not([mediaisfullscreen]):not(:fullscreen) media-play-button,
+        :host(:not([data-audio-player="true"])) media-controller:not([mediaisfullscreen]):not(:fullscreen) media-mute-button,
+        :host(:not([data-audio-player="true"])) media-controller:not([mediaisfullscreen]):not(:fullscreen) media-time-range,
+        :host(:not([data-audio-player="true"])) media-controller:not([mediaisfullscreen]):not(:fullscreen) media-fullscreen-button {
+          pointer-events: none !important;
+        }
+
+        :host([data-controls-visible="true"]:not([data-audio-player="true"])) media-controller:not([mediaisfullscreen]):not(:fullscreen) .media-gradient-bottom,
+        :host([data-controls-visible="true"]:not([data-audio-player="true"])) media-controller:not([mediaisfullscreen]):not(:fullscreen) media-control-bar {
+          opacity: 1 !important;
+        }
+        :host([data-controls-visible="true"]:not([data-audio-player="true"])) media-controller:not([mediaisfullscreen]):not(:fullscreen) media-control-bar,
+        :host([data-controls-visible="true"]:not([data-audio-player="true"])) media-controller:not([mediaisfullscreen]):not(:fullscreen) media-play-button,
+        :host([data-controls-visible="true"]:not([data-audio-player="true"])) media-controller:not([mediaisfullscreen]):not(:fullscreen) media-mute-button,
+        :host([data-controls-visible="true"]:not([data-audio-player="true"])) media-controller:not([mediaisfullscreen]):not(:fullscreen) media-time-range,
+        :host([data-controls-visible="true"]:not([data-audio-player="true"])) media-controller:not([mediaisfullscreen]):not(:fullscreen) media-fullscreen-button {
+          pointer-events: auto !important;
         }
 
         /* Audio cards use Sutro medium controls over a transparent stage without fullscreen/cast/gradient */
@@ -5833,6 +5991,11 @@ document.addEventListener('fullscreenchange', () => {
       player.setAttribute('mediaisfullscreen', '');
     } else {
       player.removeAttribute('mediaisfullscreen');
+      const wrapper = player.closest('.video-preview-wrapper');
+      if (wrapper && wrapper.matches && !wrapper.matches(':hover')) {
+        cancelVideoControlsHideTimer(wrapper);
+        setVideoWrapperControlsVisible(wrapper, false);
+      }
     }
   });
 });
@@ -6354,8 +6517,6 @@ function renderClipperWorkflow(proj) {
         </div>
       ` : '';
 
-      const clipRatioMeta = resolveMediaRatioMeta(file.aspect_ratio || detectedRatio, file.filename, !isTrimProject);
-
       clipNode.innerHTML = `
         ${captionPopover}
         <div id="vault-card-${file.id}" data-file-id="${file.id}" class="vault-file-card w-full rounded-[14px] bg-[#171717] border border-white/[0.08] shadow-[0_8px_24px_rgba(0,0,0,0.6)] overflow-hidden flex flex-col relative">
@@ -6365,8 +6526,7 @@ function renderClipperWorkflow(proj) {
             </svg>
           </span>
           <!-- Video Preview Area (Starts directly at top of card, no header bar above) -->
-          <div class="video-preview-wrapper relative bg-black w-full overflow-hidden border-b border-white/[0.06]" style="aspect-ratio: 9/16; max-height: 230px;" data-file-id="${file.id}" data-lock-layout="true">
-            ${renderRatioBadgeHtml(clipRatioMeta.label)}
+          <div class="video-preview-wrapper relative bg-black w-full overflow-hidden border-b border-white/[0.06]" style="aspect-ratio: 9/16; max-height: 230px;" data-file-id="${file.id}">
             <media-theme-sutro style="width:100%; height:100%;" data-player-size="mini" disabled>
               <video
                 slot="media"
@@ -6375,7 +6535,6 @@ function renderClipperWorkflow(proj) {
                 disablepictureinpicture
                 controlslist="nodownload nopictureinpicture"
                 src="${mediaUrl}"
-                onloadedmetadata="handleVaultVideoMetadata(this, '${file.id}')"
                 style="width:100%; height:100%; object-fit:contain; pointer-events:none;">
               </video>
             </media-theme-sutro>
@@ -6435,6 +6594,7 @@ function renderClipperWorkflow(proj) {
   }
   nodesWrapper.appendChild(clipsCol);
 
+  initVideoHoverPlayers(nodesWrapper);
   lucide.createIcons();
   syncFileSelectionUI();
 
@@ -6822,6 +6982,7 @@ function renderProjectFiles(proj) {
   updateVaultFilterCounters();
   setVaultMediaFilter(window.currentVaultMediaFilter || 'all');
   syncFileSelectionUI();
+  initVideoHoverPlayers(grid);
 
   lucide.createIcons();
   setTimeout(compactSutroPlayers, 30);
