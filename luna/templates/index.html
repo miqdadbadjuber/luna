@@ -45,7 +45,7 @@
     <nav class="pill-nav" aria-label="Main navigation">
 
       <!-- Left: Brand Logo & App Name (No Circle Badge) -->
-      <a href="javascript:void(0)" onclick="switchMainTab('studio')" class="nav-brand" title="Luna Media Engine">
+      <a href="javascript:void(0)" onclick="switchMainTab('studio')" class="nav-brand">
         <img src="/assets/logo-app.png" alt="Luna" class="nav-logo-img" />
         <span class="nav-brand-title">Luna</span>
       </a>
@@ -70,14 +70,13 @@
       <!-- Right: Guide (Text Only) & Settings (Separated by Dot) -->
       <div class="flex items-center">
         <button type="button" id="btnNavGuide" onclick="switchMainTab('guide')"
-          class="nav-link"
-          title="User Guide &amp; Workflow">
+          class="nav-link">
           Guide
         </button>
         <span class="nav-dot-divider" aria-hidden="true"></span>
         <button type="button" id="btnNavSettings" onclick="switchMainTab('settings')"
           class="nav-icon-btn"
-          title="Settings">
+          aria-label="Settings">
           <i data-lucide="settings" class="w-3.5 h-3.5"></i>
         </button>
       </div>
@@ -385,7 +384,7 @@
               </div>
 
               <!-- Segment #1 Start Pill -->
-              <div id="trimStartPill_0" class="pill-control !py-0 !px-2.5 flex items-center gap-1 cursor-text flex-shrink-0" title="Start Time" onclick="this.querySelector('input')?.focus()">
+              <div id="trimStartPill_0" class="pill-control !py-0 !px-2.5 flex items-center gap-1 cursor-text flex-shrink-0" onclick="this.querySelector('input')?.focus()">
                 <span class="text-zinc-400 text-[11px] select-none pointer-events-none">Start:</span>
                 <input type="text" maxlength="8" id="trimInputStart_0" value="00:00"
                   class="trim-input-field bg-transparent text-white text-xs font-mono text-center focus:outline-none w-[68px] selection:bg-white/20"
@@ -393,7 +392,7 @@
               </div>
 
               <!-- Segment #1 End Pill -->
-              <div id="trimEndPill_0" class="pill-control !py-0 !px-2.5 flex items-center gap-1 cursor-text flex-shrink-0" title="End Time" onclick="this.querySelector('input')?.focus()">
+              <div id="trimEndPill_0" class="pill-control !py-0 !px-2.5 flex items-center gap-1 cursor-text flex-shrink-0" onclick="this.querySelector('input')?.focus()">
                 <span class="text-zinc-400 text-[11px] select-none pointer-events-none">End:</span>
                 <input type="text" maxlength="8" id="trimInputEnd_0" value="00:30"
                   class="trim-input-field bg-transparent text-white text-xs font-mono text-center focus:outline-none w-[68px] selection:bg-white/20"
@@ -403,7 +402,7 @@
               <!-- Simple Plus Button (Icon only) -->
               <button type="button" id="btnAddTrimSegment" onclick="addTrimSegmentUI()"
                 class="pill-control !w-7 !h-7 !p-0 flex items-center justify-center hover:text-white transition-colors flex-shrink-0"
-                title="Add clip segment">
+                aria-label="Add clip segment">
                 <i data-lucide="plus" class="w-3.5 h-3.5 text-zinc-300"></i>
               </button>
             </div>
@@ -451,7 +450,7 @@
             <span id="jobIdPill" class="text-[11px] text-zinc-500 font-mono">JOB-0000</span>
             <button type="button" id="btnCancelJob" onclick="cancelActiveJob()"
               class="px-2.5 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/20 text-xs font-medium flex items-center gap-1.5 transition cursor-pointer active:scale-95"
-              title="Cancel the current process">
+              aria-label="Cancel the current process">
               <i data-lucide="x-circle" class="w-3.5 h-3.5"></i>
               <span>Cancel</span>
             </button>
@@ -658,7 +657,7 @@
             <div class="flex items-center gap-2 shrink-0 self-start sm:self-center">
               <button type="button" id="btnProjectDetailMenu"
                 class="t-card-btn-more"
-                title="Workspace actions" aria-label="Workspace actions" aria-haspopup="menu" aria-expanded="false">
+                aria-label="Workspace actions" aria-haspopup="menu" aria-expanded="false">
                 <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                   <circle cx="8" cy="3.5" r="1.2"></circle>
                   <circle cx="8" cy="8" r="1.2"></circle>
@@ -726,7 +725,7 @@
               <div class="pointer-events-auto flex items-center gap-3 min-w-0">
                 <button type="button" onclick="closeProjectPage()"
                   class="luna-back-link shrink-0"
-                  title="Back">
+                  aria-label="Back">
                   <svg class="luna-back-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M10 4L6 8L10 12"></path>
                   </svg>
@@ -942,7 +941,7 @@
                   class="w-full h-full bg-transparent px-3 text-xs font-mono text-white placeholder-zinc-500 disabled:opacity-100 disabled:cursor-default outline-none" />
                 <button type="button" onclick="toggleSecret('inputGemini', 'iconGeminiEye')"
                   class="p-2 text-zinc-400 hover:text-white transition cursor-pointer shrink-0"
-                  title="Show / Hide">
+                  aria-label="Show / Hide">
                   <i id="iconGeminiEye" data-lucide="eye" class="w-3.5 h-3.5"></i>
                 </button>
               </div>
@@ -987,7 +986,7 @@
                   class="w-full h-full bg-transparent px-3 text-xs font-mono text-white placeholder-zinc-500 disabled:opacity-100 disabled:cursor-default outline-none" />
                 <button type="button" onclick="toggleSecret('inputGroq', 'iconGroqEye')"
                   class="p-2 text-zinc-400 hover:text-white transition cursor-pointer shrink-0"
-                  title="Show / Hide">
+                  aria-label="Show / Hide">
                   <i id="iconGroqEye" data-lucide="eye" class="w-3.5 h-3.5"></i>
                 </button>
               </div>
@@ -1033,7 +1032,7 @@
                     class="w-full h-full bg-transparent px-3 text-xs font-mono text-white placeholder-zinc-500 outline-none" />
                   <button type="button" onclick="toggleSecret('inputOpenai', 'iconOpenaiEye')"
                     class="p-2 text-zinc-400 hover:text-white transition cursor-pointer shrink-0"
-                    title="Show / Hide">
+                    aria-label="Show / Hide">
                     <i id="iconOpenaiEye" data-lucide="eye" class="w-3.5 h-3.5"></i>
                   </button>
                 </div>
@@ -1663,7 +1662,7 @@
         <h3 class="font-sans text-sm font-semibold text-white tracking-tight">Choose Workspace</h3>
         <button type="button" onclick="closeWorkspaceModal()"
           class="w-7 h-7 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] flex items-center justify-center text-zinc-400 hover:text-white transition cursor-pointer"
-          title="Cancel / Close">
+          aria-label="Cancel / Close">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
@@ -1779,7 +1778,7 @@
           <input type="text" id="renameWsInput" placeholder="New workspace name"
             class="flex-1 min-w-0 h-10 px-3.5 rounded-xl bg-[#202020] border border-white/[0.08] focus:border-white/[0.18] text-white placeholder-zinc-500 text-xs font-sans focus:outline-none transition"
             onkeydown="if(event.key === 'Enter') submitRenameWorkspace(); if(event.key === 'Escape') closeRenameModal();" />
-          <span id="renameWsExtBadge" title="File extension cannot be changed"
+          <span id="renameWsExtBadge"
             class="hidden shrink-0 h-10 px-3 rounded-xl bg-[#1a1a1a] border border-white/[0.08] text-zinc-400 text-xs font-mono inline-flex items-center select-none"></span>
         </div>
         <input type="hidden" id="renameWsTargetId" value="" />
@@ -1912,7 +1911,7 @@
       </svg>
       <span>Delete</span>
     </button>
-    <button type="button" class="vault-selection-btn vault-selection-close" onclick="exitActiveSelectionMode()" title="Cancel selection" aria-label="Cancel selection">
+    <button type="button" class="vault-selection-btn vault-selection-close" onclick="exitActiveSelectionMode()" aria-label="Cancel selection">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M18 6L6 18"></path>
         <path d="M6 6l12 12"></path>

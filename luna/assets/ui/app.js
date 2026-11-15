@@ -121,7 +121,7 @@ function renderTrimSegments() {
 
       row.innerHTML = `
         <!-- Start Pill -->
-        <div class="pill-control !py-0 !px-2.5 flex items-center gap-1 cursor-text flex-shrink-0" title="Start Time" onclick="this.querySelector('input')?.focus()">
+        <div class="pill-control !py-0 !px-2.5 flex items-center gap-1 cursor-text flex-shrink-0" onclick="this.querySelector('input')?.focus()">
           <span class="text-zinc-400 text-[11px] select-none pointer-events-none">Start:</span>
           <input type="text" maxlength="8" value="${escapeHtml(seg.start_time || '00:00')}"
             class="trim-input-field bg-transparent text-white text-xs font-mono text-center focus:outline-none w-[68px] selection:bg-white/20"
@@ -129,7 +129,7 @@ function renderTrimSegments() {
         </div>
 
         <!-- End Pill -->
-        <div class="pill-control !py-0 !px-2.5 flex items-center gap-1 cursor-text flex-shrink-0" title="End Time" onclick="this.querySelector('input')?.focus()">
+        <div class="pill-control !py-0 !px-2.5 flex items-center gap-1 cursor-text flex-shrink-0" onclick="this.querySelector('input')?.focus()">
           <span class="text-zinc-400 text-[11px] select-none pointer-events-none">End:</span>
           <input type="text" maxlength="8" value="${escapeHtml(seg.end_time || '00:30')}"
             class="trim-input-field bg-transparent text-white text-xs font-mono text-center focus:outline-none w-[68px] selection:bg-white/20"
@@ -139,7 +139,7 @@ function renderTrimSegments() {
         <!-- Delete Button -->
         <button type="button" onclick="removeTrimSegment('${seg.id}')"
           class="pill-control !w-7 !h-7 !p-0 flex items-center justify-center text-zinc-500 hover:text-red-400 hover:bg-white/[0.08] transition-colors flex-shrink-0"
-          title="Delete this clip">
+          aria-label="Delete this clip">
           <i data-lucide="x" class="w-3.5 h-3.5"></i>
         </button>
       `;
@@ -2810,7 +2810,7 @@ function renderOpusResults(data) {
 
         <div class="p-4 flex-1 flex flex-col justify-between space-y-3">
           <div>
-            <h4 class="text-xs sm:text-sm font-semibold font-sans text-white line-clamp-2 leading-snug mb-1" title="${escapeHtml(item.title)}">
+            <h4 class="text-xs sm:text-sm font-semibold font-sans text-white line-clamp-2 leading-snug mb-1">
               ${escapeHtml(item.title)}
             </h4>
             <div class="flex items-center gap-2 text-[11px] text-zinc-400 font-mono">
@@ -2819,7 +2819,7 @@ function renderOpusResults(data) {
           </div>
 
           <div class="pt-2.5 border-t border-white/[0.06]">
-            <a href="${downloadUrl}" download="${escapeHtml(item.filename || 'audio.mp3')}" class="h-8 px-4 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs font-semibold font-sans w-full flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm" title="Download File">
+            <a href="${downloadUrl}" download="${escapeHtml(item.filename || 'audio.mp3')}" class="h-8 px-4 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs font-semibold font-sans w-full flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm" aria-label="Download File">
               <i data-lucide="download" class="w-3.5 h-3.5"></i>
               <span>Download Audio MP3</span>
             </a>
@@ -2884,7 +2884,7 @@ function renderOpusResults(data) {
               <span class="text-[11px] font-mono font-medium text-white">${item.start_time ? `Clip #${idx + 1}` : 'Video'}</span>
               <span class="text-[11px] font-mono text-zinc-500">${durationLabel}</span>
             </div>
-            <h4 class="text-xs sm:text-sm font-semibold font-sans text-white line-clamp-2 leading-snug mb-1" title="${escapeHtml(item.title)}">
+            <h4 class="text-xs sm:text-sm font-semibold font-sans text-white line-clamp-2 leading-snug mb-1">
               ${escapeHtml(item.title)}
             </h4>
             ${captionBox}
@@ -2892,7 +2892,7 @@ function renderOpusResults(data) {
 
           <div class="flex items-center gap-2 pt-2.5 border-t border-white/[0.06]">
             ${copyBtn}
-            <a href="${downloadUrl}" download="${escapeHtml(item.filename || 'video.mp4')}" class="h-8 px-4 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs font-semibold font-sans flex-1 flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm" title="Download File">
+            <a href="${downloadUrl}" download="${escapeHtml(item.filename || 'video.mp4')}" class="h-8 px-4 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs font-semibold font-sans flex-1 flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm" aria-label="Download File">
               <i data-lucide="download" class="w-3.5 h-3.5"></i>
               <span>Download MP4</span>
             </a>
@@ -4373,7 +4373,6 @@ function renderVaultGallery() {
     const isVirtualProj = !!proj.virtual;
     card.className = `t-rec-card vault-card cursor-pointer${isVirtualProj ? ' is-virtual' : ''}`;
     card.dataset.projectId = proj.project_id;
-    if (isVirtualProj) card.title = 'Category archive — not deletable';
     card.onclick = (e) => {
       if (vaultSelectionMode) {
         if (!isVirtualProj) toggleVaultProjectSelection(proj.project_id);
@@ -4419,7 +4418,6 @@ function renderVaultGallery() {
             type="button" 
             onclick="toggleVaultCardMenu('${proj.project_id}', this, event)" 
             class="t-card-btn-more${isVirtualProj ? ' hidden' : ''}"
-            title="More actions"
             aria-label="More actions"
             aria-haspopup="menu"
             aria-expanded="false"
@@ -4434,8 +4432,7 @@ function renderVaultGallery() {
           <button 
             type="button" 
             onclick="openProjectPage('${proj.project_id}')" 
-            class="luna-open-link"
-            title="Open Workspace">
+            class="luna-open-link">
             <span>Open</span>
             <svg class="luna-open-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M6 4L10 8L6 12"></path>
@@ -5085,8 +5082,6 @@ async function openProjectPage(projectId) {
   const btnClipperDelete = document.getElementById('btnClipperDelete');
 
   const isVirtualProj = !!proj.virtual;
-  if (isVirtualProj && titleEl) titleEl.title = 'Category archive — not deletable';
-  else if (titleEl) titleEl.removeAttribute('title');
 
   if (btnDetailMenu) {
     btnDetailMenu.classList.toggle('hidden', isVirtualProj && files.length === 0);
@@ -5095,9 +5090,7 @@ async function openProjectPage(projectId) {
 
   [btnClipperRename, btnClipperDelete].forEach(btn => {
     if (!btn) return;
-    if (btn.dataset.baseTitle === undefined) btn.dataset.baseTitle = btn.getAttribute('title') || '';
     btn.classList.toggle('hidden', isVirtualProj);
-    btn.title = isVirtualProj ? 'Category archive — not deletable' : btn.dataset.baseTitle;
     if (isVirtualProj) {
       btn.setAttribute('disabled', 'disabled');
       btn.setAttribute('aria-disabled', 'true');
@@ -6158,7 +6151,7 @@ function renderClipperWorkflow(proj) {
   }
 
   const sourceLinkHtml = rawUrl
-    ? `<a href="${encodeURI(rawUrl)}" target="_blank" rel="noopener noreferrer" class="block text-[11px] font-medium text-white hover:text-white leading-tight truncate mt-0.5 hover:underline" title="${escapeHtml(rawUrl)}" data-no-drag="true">
+    ? `<a href="${encodeURI(rawUrl)}" target="_blank" rel="noopener noreferrer" class="block text-[11px] font-medium text-white hover:text-white leading-tight truncate mt-0.5 hover:underline" data-no-drag="true">
             ${escapeHtml(displayUrl)}
           </a>`
     : `<span class="block text-[11px] font-medium text-zinc-500 leading-tight truncate mt-0.5">Source unavailable</span>`;
@@ -6178,11 +6171,11 @@ function renderClipperWorkflow(proj) {
       <div class="divide-y divide-white/[0.04] flex-1 flex flex-col justify-between">
         <div class="px-3.5 py-2 flex flex-col justify-center flex-1">
           <span class="block text-[9px] text-zinc-500 font-mono leading-tight">Input Video</span>
-          <span class="block text-[11px] font-medium text-white leading-tight truncate mt-0.5" title="${sourceTitle}">${sourceTitle}</span>
+          <span class="block text-[11px] font-medium text-white leading-tight truncate mt-0.5">${sourceTitle}</span>
         </div>
         <div class="px-3.5 py-2 flex flex-col justify-center flex-1">
           <span class="block text-[9px] text-zinc-500 font-mono leading-tight">Channel / Source</span>
-          <span class="block text-[11px] font-medium text-white leading-tight truncate mt-0.5" title="${sourceChannel}">${sourceChannel}</span>
+          <span class="block text-[11px] font-medium text-white leading-tight truncate mt-0.5">${sourceChannel}</span>
         </div>
         <div class="px-3.5 py-2 flex flex-col justify-center flex-1">
           <span class="block text-[9px] text-zinc-500 font-mono leading-tight">Link YouTube</span>
@@ -6229,7 +6222,7 @@ function renderClipperWorkflow(proj) {
   ];
 
   const checkmarkHtml = `
-    <span class="text-emerald-400 shrink-0" title="Complete">
+    <span class="text-emerald-400 shrink-0">
       <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
         <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
       </svg>
@@ -6330,7 +6323,7 @@ function renderClipperWorkflow(proj) {
           </div>
 
           <div class="px-3 pt-2.5 pb-1">
-            <h4 id="clip-title-${file.id}" class="text-[11px] font-semibold text-white line-clamp-1 leading-snug" title="${escapedTitle}">${escapedTitle}</h4>
+            <h4 id="clip-title-${file.id}" class="text-[11px] font-semibold text-white line-clamp-1 leading-snug">${escapedTitle}</h4>
           </div>
 
           ${captionTrigger}
@@ -6347,7 +6340,7 @@ function renderClipperWorkflow(proj) {
               `}
             </div>
             <div class="vault-file-actions flex items-center gap-1.5 shrink-0" data-no-drag="true">
-              <button type="button" class="t-card-btn-more" data-file-menu-id="${file.id}" data-no-drag="true" onclick="toggleFileCardMenu('${file.id}', this, event)" title="More actions" aria-label="More actions" aria-haspopup="menu" aria-expanded="false">
+              <button type="button" class="t-card-btn-more" data-file-menu-id="${file.id}" data-no-drag="true" onclick="toggleFileCardMenu('${file.id}', this, event)" aria-label="More actions" aria-haspopup="menu" aria-expanded="false">
                 <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                   <circle cx="8" cy="3.5" r="1.2"></circle>
                   <circle cx="8" cy="8" r="1.2"></circle>
@@ -6355,7 +6348,7 @@ function renderClipperWorkflow(proj) {
                 </svg>
               </button>
               <span class="vault-card-action-sep" aria-hidden="true"></span>
-              <a href="${downloadUrl}" download="${escapeHtml(file.filename || `clip_${idx + 1}.mp4`)}" class="luna-download-icon-link" data-no-drag="true" title="Download Clip" aria-label="Download Clip">
+              <a href="${downloadUrl}" download="${escapeHtml(file.filename || `clip_${idx + 1}.mp4`)}" class="luna-download-icon-link" data-no-drag="true" aria-label="Download Clip">
                 <i data-lucide="download" class="w-4 h-4"></i>
               </a>
             </div>
@@ -6729,7 +6722,7 @@ function renderProjectFiles(proj) {
       ${mediaPreviewHtml}
       <div class="p-4 flex-1 flex flex-col justify-between space-y-3">
         <div>
-          <h4 class="text-xs sm:text-sm font-semibold font-sans text-white line-clamp-2 leading-snug mb-1" title="${escapeHtml(file.title || file.filename)}">
+          <h4 class="text-xs sm:text-sm font-semibold font-sans text-white line-clamp-2 leading-snug mb-1">
             ${escapeHtml(file.title || file.filename)}
           </h4>
           <div class="flex items-center gap-2 text-[11px] text-zinc-400 font-mono">
@@ -6746,7 +6739,6 @@ function renderProjectFiles(proj) {
               type="button"
               onclick="toggleFileCardMenu('${file.id}', this, event)"
               class="t-card-btn-more"
-              title="More actions"
               aria-label="More actions"
               aria-haspopup="menu"
               aria-expanded="false">
@@ -6761,7 +6753,6 @@ function renderProjectFiles(proj) {
               href="${mediaUrl}"
               download="${escapeHtml(file.filename)}"
               class="luna-download-icon-link"
-              title="Download File"
               aria-label="Download File">
               <i data-lucide="download" class="w-4 h-4"></i>
             </a>
@@ -6923,7 +6914,6 @@ async function submitRenameWorkspace() {
         const titleNode = document.getElementById(`clip-title-${idValue}`);
         if (titleNode) {
           titleNode.textContent = newTitle;
-          titleNode.title = newTitle;
         }
         await loadVaultItems();
       } else {

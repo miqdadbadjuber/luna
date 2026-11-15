@@ -155,6 +155,11 @@ class TestFrontendVaultUI(unittest.TestCase):
         self.assertNotIn("hover:bg-white/[0.08]", render_clipper_block)
         self.assertIn(".caption-trigger-row:hover", css)
         self.assertIn("background: rgba(255, 255, 255, 0.06);", css)
+        self.assertNotIn('title="More actions"', source)
+        self.assertNotIn('title="Download Clip"', source)
+        self.assertNotIn('title="Download File"', source)
+        self.assertNotIn('title="Settings"', source)
+        self.assertNotIn('title="Back"', source)
 
         self.assertIn("targetType === 'clip-title'", source)
         self.assertIn("title_only: true", source)
