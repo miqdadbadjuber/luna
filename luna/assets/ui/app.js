@@ -3016,6 +3016,9 @@ function switchMainTab(tab) {
       clearTimeout(studioBgResumeTimer);
       studioBgResumeTimer = null;
     }
+    if (tab !== 'vault' && typeof exitVaultSelectionMode === 'function') {
+      exitVaultSelectionMode();
+    }
 
     document.body.classList.remove('tab-studio', 'tab-vault', 'tab-settings');
     document.body.classList.add('tab-' + tab);
@@ -4276,11 +4279,19 @@ function renderVaultGallery() {
   const emptyDesc = document.getElementById('vaultEmptyDesc');
   if (!grid) return;
 
+  closeVaultCardMenu();
   grid.innerHTML = '';
 
   const filtered = vaultProjects.filter(p => matchesProjectFilter(p) && matchesProjectSearch(p));
 
+  // Selection only covers cards the user can currently see, so a bulk delete never hits hidden workspaces.
+  const visibleSelectable = new Set(filtered.filter(p => !p.virtual).map(p => p.project_id));
+  Array.from(vaultSelectedIds).forEach(id => {
+    if (!visibleSelectable.has(id)) vaultSelectedIds.delete(id);
+  });
+
   if (filtered.length === 0) {
+    syncVaultSelectionUI();
     if (emptyState) {
       emptyState.classList.remove('hidden');
       if (currentVaultSearch) {
@@ -4302,10 +4313,15 @@ function renderVaultGallery() {
   filtered.forEach(proj => {
     const card = document.createElement('div');
     card.id = `vault-proj-card-${proj.project_id}`;
-    card.className = 't-rec-card cursor-pointer';
     const isVirtualProj = !!proj.virtual;
+    card.className = `t-rec-card vault-card cursor-pointer${isVirtualProj ? ' is-virtual' : ''}`;
+    card.dataset.projectId = proj.project_id;
     if (isVirtualProj) card.title = 'Category archive — not deletable';
     card.onclick = (e) => {
+      if (vaultSelectionMode) {
+        if (!isVirtualProj) toggleVaultProjectSelection(proj.project_id);
+        return;
+      }
       if (!e.target.closest('button') && !e.target.closest('a')) {
         openProjectPage(proj.project_id);
       }
@@ -4314,6 +4330,12 @@ function renderVaultGallery() {
     const meter = getProjectMeter(proj);
 
     card.innerHTML = `
+      ${isVirtualProj ? '' : `
+      <span class="vault-card-check" aria-hidden="true">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 8.5L6.75 11L12 5.5"></path>
+        </svg>
+      </span>`}
       <!-- primitive-card-pad -->
       <div class="primitive-card-pad">
         <span class="text-[14px] font-medium text-white tracking-tight block truncate">
@@ -4335,27 +4357,32 @@ function renderVaultGallery() {
           <span class="text-[12.5px] font-medium text-zinc-400">${meter.label}</span>
         </span>
 
-        <span class="-mr-0.5 flex items-center gap-1.5">
+        <span class="vault-card-actions -mr-0.5 flex items-center gap-2">
           <button 
             type="button" 
-            onclick="confirmDeleteVaultProject('${proj.project_id}', '${escapeQuotes(proj.workspace_name)}', event)" 
-            class="t-card-btn-delete group${isVirtualProj ? ' hidden' : ''}"
-            title="${isVirtualProj ? 'Category archive — not deletable' : 'Delete Workspace'}"
+            onclick="toggleVaultCardMenu('${proj.project_id}', this, event)" 
+            class="t-card-btn-more${isVirtualProj ? ' hidden' : ''}"
+            title="More actions"
+            aria-label="More actions"
+            aria-haspopup="menu"
+            aria-expanded="false"
             ${isVirtualProj ? 'disabled aria-disabled="true"' : ''}>
-            <i data-lucide="trash-2" class="w-3.5 h-3.5 t-btn-icon"></i>
+            <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <circle cx="8" cy="3.5" r="1.2"></circle>
+              <circle cx="8" cy="8" r="1.2"></circle>
+              <circle cx="8" cy="12.5" r="1.2"></circle>
+            </svg>
           </button>
+          <span class="vault-card-action-sep${isVirtualProj ? ' hidden' : ''}" aria-hidden="true"></span>
           <button 
             type="button" 
             onclick="openProjectPage('${proj.project_id}')" 
-            class="t-card-btn-open t-learn group"
+            class="luna-open-link"
             title="Open Workspace">
             <span>Open</span>
-            <span class="t-learn-chevron">
-              <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path class="t-learn-arm t-learn-arm-top" d="M6 4L10 8"/>
-                <path class="t-learn-arm t-learn-arm-bot" d="M10 8L6 12"/>
-              </svg>
-            </span>
+            <svg class="luna-open-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6 4L10 8L6 12"></path>
+            </svg>
           </button>
         </span>
       </div>
@@ -4364,8 +4391,275 @@ function renderVaultGallery() {
     grid.appendChild(card);
   });
 
+  syncVaultSelectionUI();
   lucide.createIcons();
 }
+
+// Media Vault card "more" menu and multi-select mode
+let vaultSelectionMode = false;
+const vaultSelectedIds = new Set();
+let vaultCardMenuProjectId = null;
+let vaultCardMenuAnchor = null;
+
+function attachVaultCardMenuGliding(menu) {
+  if (!menu) return;
+  const indicator = ensureMenuIndicator(menu);
+  indicator.style.transition = 'none';
+  indicator.style.opacity = '0';
+  void indicator.offsetHeight;
+  indicator.style.transition = '';
+
+  menu.querySelectorAll('.vault-card-menu-item').forEach((item) => {
+    item.onmouseenter = (event) => {
+      event.stopPropagation();
+      moveIndicatorTo(menu, item);
+    };
+    item.onfocus = () => {
+      moveIndicatorTo(menu, item);
+    };
+  });
+  menu.onmouseleave = () => {
+    moveIndicatorTo(menu, null);
+  };
+}
+
+function toggleVaultCardMenu(projectId, btn, event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  const menu = document.getElementById('vaultCardMenu');
+  if (!menu || !btn) return;
+  if (vaultCardMenuAnchor === btn && menu.dataset.open === 'true') {
+    closeVaultCardMenu();
+    return;
+  }
+  closeVaultCardMenu();
+  vaultCardMenuProjectId = projectId;
+  vaultCardMenuAnchor = btn;
+  btn.setAttribute('aria-expanded', 'true');
+  attachVaultCardMenuGliding(menu);
+
+  const rect = btn.getBoundingClientRect();
+  const menuW = menu.offsetWidth || 148;
+  const menuH = menu.offsetHeight || 114;
+  const gap = 6;
+  const left = Math.max(8, Math.min(rect.right - menuW, window.innerWidth - menuW - 8));
+  let top = rect.bottom + gap;
+  let placement = 'bottom';
+  if (top + menuH > window.innerHeight - 8 && rect.top - gap - menuH >= 8) {
+    top = rect.top - gap - menuH;
+    placement = 'top';
+  }
+  menu.style.left = `${Math.round(left)}px`;
+  menu.style.top = `${Math.round(top)}px`;
+  menu.dataset.placement = placement;
+  menu.setAttribute('aria-hidden', 'false');
+  void menu.offsetHeight;
+  menu.dataset.open = 'true';
+}
+
+function closeVaultCardMenu() {
+  const menu = document.getElementById('vaultCardMenu');
+  if (menu) {
+    menu.dataset.open = 'false';
+    menu.setAttribute('aria-hidden', 'true');
+    const indicator = menu.querySelector('.gliding-menu-indicator');
+    if (indicator) indicator.style.opacity = '0';
+  }
+  if (vaultCardMenuAnchor) vaultCardMenuAnchor.setAttribute('aria-expanded', 'false');
+  vaultCardMenuAnchor = null;
+  vaultCardMenuProjectId = null;
+}
+
+function handleVaultCardMenuAction(action) {
+  const projectId = vaultCardMenuProjectId;
+  closeVaultCardMenu();
+  const proj = vaultProjects.find(p => p.project_id === projectId);
+  if (!proj || proj.virtual) return;
+  if (action === 'select') {
+    enterVaultSelectionMode(proj.project_id);
+  } else if (action === 'rename') {
+    promptRenameWorkspace(proj.project_id, proj.workspace_name);
+  } else if (action === 'delete') {
+    confirmDeleteVaultProject(proj.project_id, proj.workspace_name);
+  }
+}
+
+function getVisibleSelectableVaultIds() {
+  return Array.from(document.querySelectorAll('#vaultGalleryGrid .vault-card:not(.is-virtual)'))
+    .map(el => el.dataset.projectId)
+    .filter(Boolean);
+}
+
+function enterVaultSelectionMode(initialId) {
+  vaultSelectionMode = true;
+  vaultSelectedIds.clear();
+  if (initialId) vaultSelectedIds.add(initialId);
+  syncVaultSelectionUI();
+}
+
+function exitVaultSelectionMode() {
+  if (!vaultSelectionMode && vaultSelectedIds.size === 0) return;
+  vaultSelectionMode = false;
+  vaultSelectedIds.clear();
+  syncVaultSelectionUI();
+}
+
+function toggleVaultProjectSelection(projectId) {
+  if (!projectId) return;
+  if (vaultSelectedIds.has(projectId)) {
+    vaultSelectedIds.delete(projectId);
+  } else {
+    vaultSelectedIds.add(projectId);
+  }
+  syncVaultSelectionUI();
+}
+
+function toggleSelectAllVaultProjects() {
+  const ids = getVisibleSelectableVaultIds();
+  const allSelected = ids.length > 0 && ids.every(id => vaultSelectedIds.has(id));
+  ids.forEach(id => {
+    if (allSelected) vaultSelectedIds.delete(id);
+    else vaultSelectedIds.add(id);
+  });
+  syncVaultSelectionUI();
+}
+
+function syncVaultSelectionUI() {
+  const grid = document.getElementById('vaultGalleryGrid');
+  if (grid) {
+    grid.classList.toggle('is-selecting', vaultSelectionMode);
+    grid.querySelectorAll('.vault-card').forEach(card => {
+      card.classList.toggle('is-selected', vaultSelectionMode && vaultSelectedIds.has(card.dataset.projectId));
+    });
+  }
+
+  const bar = document.getElementById('vaultSelectionBar');
+  if (bar) {
+    bar.dataset.open = vaultSelectionMode ? 'true' : 'false';
+    bar.setAttribute('aria-hidden', vaultSelectionMode ? 'false' : 'true');
+  }
+
+  const count = vaultSelectedIds.size;
+  const countEl = document.getElementById('vaultSelectionCount');
+  if (countEl) countEl.textContent = `${count} selected`;
+  const deleteBtn = document.getElementById('vaultSelectionDeleteBtn');
+  if (deleteBtn) deleteBtn.disabled = count === 0;
+  const selectAllBtn = document.getElementById('vaultSelectionSelectAllBtn');
+  if (selectAllBtn) {
+    const ids = getVisibleSelectableVaultIds();
+    const allSelected = ids.length > 0 && ids.every(id => vaultSelectedIds.has(id));
+    selectAllBtn.textContent = allSelected ? 'Deselect all' : 'Select all';
+  }
+}
+
+function confirmBulkDeleteVaultProjects() {
+  const ids = Array.from(vaultSelectedIds);
+  if (!ids.length) return;
+  deletingProjectId = null;
+  deletingItemId = null;
+  const heading = document.getElementById('deleteModalHeading');
+  const desc = document.getElementById('deleteModalDesc');
+  const btnText = document.getElementById('deleteModalBtnText');
+  const confirmBtn = document.getElementById('deleteModalConfirmBtn');
+
+  if (ids.length === 1) {
+    const proj = vaultProjects.find(p => p.project_id === ids[0]);
+    if (heading) heading.innerText = 'Delete this workspace?';
+    if (desc) desc.innerText = `Are you sure you want to delete workspace "${(proj && proj.workspace_name) || 'Workspace'}"? All files in it will be deleted and cannot be recovered.`;
+  } else {
+    if (heading) heading.innerText = `Delete ${ids.length} workspaces?`;
+    if (desc) desc.innerText = `All files in the ${ids.length} selected workspaces will be deleted and cannot be recovered.`;
+  }
+  if (btnText) btnText.innerText = 'Delete';
+  if (confirmBtn) {
+    confirmBtn.disabled = false;
+    confirmBtn.onclick = executeBulkDeleteVaultProjects;
+  }
+
+  openDeleteModalBox();
+}
+
+async function executeBulkDeleteVaultProjects() {
+  const ids = Array.from(vaultSelectedIds);
+  if (!ids.length) return;
+  const confirmBtn = document.getElementById('deleteModalConfirmBtn');
+  const btnText = document.getElementById('deleteModalBtnText');
+  const btnSpinner = document.getElementById('deleteModalBtnSpinner');
+
+  if (confirmBtn) confirmBtn.disabled = true;
+  if (btnSpinner) btnSpinner.classList.remove('hidden');
+  if (btnText) btnText.innerText = 'Deleting...';
+
+  releaseMediaLocks();
+
+  const failedIds = [];
+  for (const id of ids) {
+    try {
+      const res = await fetch(`/api/vault/project/${id}`, { method: 'DELETE' });
+      if (!res.ok) failedIds.push(id);
+    } catch (e) {
+      failedIds.push(id);
+    }
+  }
+
+  const failedNames = failedIds.map(id => {
+    const proj = vaultProjects.find(p => p.project_id === id);
+    return (proj && proj.workspace_name) || id;
+  });
+
+  if (confirmBtn) confirmBtn.disabled = false;
+  if (btnSpinner) btnSpinner.classList.add('hidden');
+  if (btnText) btnText.innerText = 'Delete';
+  closeDeleteModal();
+
+  // Keep only the workspaces that failed selected, so the user can retry them.
+  vaultSelectedIds.clear();
+  failedIds.forEach(id => vaultSelectedIds.add(id));
+  if (!failedIds.length) vaultSelectionMode = false;
+
+  await loadVaultItems();
+  syncVaultSelectionUI();
+
+  if (failedIds.length) {
+    showNoticeModal(
+      'Some workspaces could not be deleted',
+      `Could not delete: ${failedNames.join(', ')}. Close any files that are open elsewhere and try again.`
+    );
+  }
+}
+
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('vaultCardMenu');
+  if (!menu || menu.dataset.open !== 'true') return;
+  if (menu.contains(e.target)) return;
+  if (vaultCardMenuAnchor && vaultCardMenuAnchor.contains(e.target)) return;
+  closeVaultCardMenu();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  const menu = document.getElementById('vaultCardMenu');
+  if (menu && menu.dataset.open === 'true') {
+    closeVaultCardMenu();
+    return;
+  }
+  if (!vaultSelectionMode) return;
+  const modalOpen = ['deleteModal', 'renameWorkspaceModal', 'noticeModal', 'confirmModal'].some(id => {
+    const el = document.getElementById(id);
+    return el && !el.classList.contains('hidden');
+  });
+  if (!modalOpen) exitVaultSelectionMode();
+});
+
+window.addEventListener('scroll', () => {
+  if (vaultCardMenuAnchor) closeVaultCardMenu();
+}, { passive: true });
+
+window.addEventListener('resize', () => {
+  if (vaultCardMenuAnchor) closeVaultCardMenu();
+});
 
 async function openProjectPage(projectId) {
   if (!projectId) return;

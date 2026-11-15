@@ -1565,6 +1565,351 @@ body.in-workspace main {
   transform: rotate(-8deg);
 }
 
+/* Media Vault card: vertical three-dot "more" button + minimal frameless Open link */
+.t-card-btn-more {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: #737373;
+  cursor: pointer;
+  user-select: none;
+  transition: color 180ms ease, background-color 180ms ease;
+}
+
+.t-card-btn-more svg {
+  width: 15px;
+  height: 15px;
+}
+
+.t-card-btn-more:hover,
+.t-card-btn-more[aria-expanded="true"] {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.vault-card-action-sep {
+  width: 1px;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
+}
+
+.luna-open-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 2px;
+  background: transparent;
+  border: none;
+  color: #e5e5e5;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.25;
+  cursor: pointer;
+  user-select: none;
+  transition: color 180ms ease;
+}
+
+.luna-open-link:hover,
+.vault-card:hover .luna-open-link {
+  color: #ffffff;
+}
+
+.luna-open-chevron {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+/* Media Vault card dropdown (matches Settings #171717 dropdown + gliding hover highlight) */
+.vault-card-menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 70;
+  min-width: 148px;
+  padding: 4px;
+  border-radius: 12px;
+  background: #171717;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-4px) scale(0.97);
+  transform-origin: top right;
+  transition:
+    opacity 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s linear 160ms;
+}
+
+.vault-card-menu[data-placement="top"] {
+  transform-origin: bottom right;
+  transform: translateY(4px) scale(0.97);
+}
+
+.vault-card-menu[data-open="true"] {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: none;
+  transition:
+    opacity 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s;
+}
+
+.vault-card-menu .gliding-menu-indicator {
+  left: 4px;
+  right: 4px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.vault-card-menu-item {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #e5e5e5;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+
+.vault-card-menu-item svg {
+  width: 13.5px;
+  height: 13.5px;
+  flex-shrink: 0;
+  color: #a3a3a3;
+  transition: color 140ms ease;
+}
+
+.vault-card-menu-item:hover,
+.vault-card-menu-item:focus-visible {
+  color: #ffffff;
+  outline: none;
+}
+
+.vault-card-menu-item:hover svg,
+.vault-card-menu-item:focus-visible svg {
+  color: #ffffff;
+}
+
+.vault-card-menu-item.is-danger,
+.vault-card-menu-item.is-danger svg {
+  color: #f87171;
+}
+
+.vault-card-menu-item.is-danger:hover,
+.vault-card-menu-item.is-danger:focus-visible,
+.vault-card-menu-item.is-danger:hover svg,
+.vault-card-menu-item.is-danger:focus-visible svg {
+  color: #fca5a5;
+}
+
+.vault-card-menu-sep {
+  position: relative;
+  z-index: 2;
+  height: 1px;
+  margin: 4px 6px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+/* Media Vault multi-select mode */
+.t-rec-card.vault-card {
+  position: relative;
+}
+
+.vault-card-check {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  border: 1.5px solid rgba(255, 255, 255, 0.28);
+  background: rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease, background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.vault-card-check svg {
+  width: 12px;
+  height: 12px;
+}
+
+#vaultGalleryGrid.is-selecting .vault-card-check {
+  opacity: 1;
+}
+
+#vaultGalleryGrid.is-selecting .vault-card .primitive-card-pad {
+  padding-right: 46px;
+}
+
+#vaultGalleryGrid.is-selecting .vault-card-actions {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+#vaultGalleryGrid.is-selecting .vault-card.is-virtual {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.t-rec-card.vault-card.is-selected {
+  border-color: rgba(255, 255, 255, 0.42) !important;
+}
+
+.vault-card.is-selected .vault-card-check {
+  background: #ffffff;
+  border-color: #ffffff;
+  color: #000000;
+}
+
+/* Floating action bar shown while selecting workspaces (pure neutral charcoal, zero obsidian) */
+.vault-selection-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 65;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 6px 6px 16px;
+  border-radius: 9999px;
+  background: #171717;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.85);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translate(-50%, 12px);
+  transition:
+    opacity 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear 200ms;
+}
+
+.vault-selection-bar[data-open="true"] {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+  transition:
+    opacity 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s;
+}
+
+body:not(.tab-vault) .vault-selection-bar,
+body.in-workspace .vault-selection-bar {
+  display: none;
+}
+
+.vault-selection-count {
+  min-width: 76px;
+  padding-right: 6px;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.vault-selection-divider {
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
+}
+
+.vault-selection-btn {
+  height: 30px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #e5e5e5;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease, opacity 160ms ease;
+}
+
+.vault-selection-btn svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.vault-selection-btn:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #ffffff;
+}
+
+.vault-selection-btn.is-danger {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.28);
+  color: #f87171;
+}
+
+.vault-selection-btn.is-danger:hover {
+  background: rgba(239, 68, 68, 0.20);
+  color: #fca5a5;
+}
+
+.vault-selection-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.vault-selection-close {
+  width: 30px;
+  padding: 0;
+  justify-content: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-card-btn-more,
+  .vault-card-menu,
+  .vault-card-menu[data-open="true"],
+  .vault-card-check,
+  .vault-selection-bar,
+  .vault-selection-bar[data-open="true"] {
+    transition: none !important;
+  }
+}
+
 /* Audio Vinyl & Waveform Visualizer */
 @keyframes spinVinyl {
   from {
