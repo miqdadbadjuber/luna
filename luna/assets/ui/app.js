@@ -2745,11 +2745,6 @@ function renderOpusResults(data) {
           <div class="audio-card-showcase relative bg-[#121212] border-b border-white/[0.06] p-7 flex flex-col items-center justify-center overflow-hidden select-none">
             <div class="absolute inset-0 bg-radial from-white/[0.08] via-transparent to-transparent pointer-events-none"></div>
 
-            <div class="absolute top-3.5 right-3.5 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.06] border border-white/10 text-[11px] font-mono text-zinc-300">
-              <span class="w-2 h-2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]"></span>
-              <span>320 KBPS MP3</span>
-            </div>
-
             <!-- Vinyl Disc Graphic (Enlarged) -->
             <div class="relative my-3 flex items-center justify-center">
               <div id="vinyl-disc-${fileId}" class="vinyl-disc w-28 h-28 rounded-full bg-[#0a0a0a] border border-zinc-700/60 shadow-[0_12px_32px_rgba(0,0,0,0.8)] relative flex items-center justify-center transition-transform">
@@ -2813,7 +2808,7 @@ function renderOpusResults(data) {
                 ${escapeHtml(item.title)}
               </h4>
               <div class="flex items-center gap-2 text-xs text-zinc-400 font-mono mb-4">
-                <span class="px-2 py-0.5 rounded bg-white/[0.04] border border-white/[0.06]">320 kbps MP3</span>
+                <span>320 kbps MP3</span>
               </div>
             </div>
 
@@ -2830,11 +2825,6 @@ function renderOpusResults(data) {
         card.innerHTML = `
           <div class="audio-card-showcase relative bg-[#121212] border-b border-white/[0.06] p-5 flex flex-col items-center justify-center overflow-hidden select-none">
             <div class="absolute inset-0 bg-radial from-white/[0.07] via-transparent to-transparent pointer-events-none"></div>
-
-            <div class="absolute top-2.5 right-2.5 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/[0.04] border border-white/10 text-[10px] font-mono text-zinc-400">
-              <span class="w-1.5 h-1.5 rounded-full bg-white"></span>
-              <span>320 KBPS MP3</span>
-            </div>
 
             <!-- Vinyl Disc Graphic -->
             <div class="relative my-2 flex items-center justify-center">

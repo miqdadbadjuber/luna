@@ -464,21 +464,25 @@
         <!-- Transitions.dev Completion Notice & Workspace Action (Below Task Rows, Frameless) -->
         <div id="progressCompletionBanner"
           class="hidden mt-6 pt-5 border-t border-white/[0.08] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div class="text-left">
+          <div class="text-left min-w-0 sm:pr-[108px]">
             <h4 class="font-sans text-sm font-semibold text-white">Processing complete</h4>
             <p class="font-sans text-xs text-zinc-400 mt-0.5">All tasks completed and were saved to workspace:
               <strong class="text-white" id="completionWsLabel">Workspace</strong>.
             </p>
           </div>
 
-          <!-- Single Workspace Navigation Button (Transitions.dev Capsule Solid Charcoal) -->
-          <button type="button" id="completionWsBtn" onclick="goToCurrentJobWorkspace()"
-            class="t-action-pill self-start sm:self-auto"
-            title="Open Workspace in Media Vault">
-            <i data-lucide="folder-open" class="w-3.5 h-3.5 text-emerald-400"></i>
-            <span>Open Workspace</span>
-            <i data-lucide="arrow-right" class="w-3 h-3 text-zinc-400"></i>
-          </button>
+          <!-- Expanding Workspace Navigation Button (Fixed Anchor Slot prevents text reflow) -->
+          <div class="relative shrink-0 h-[36px] self-start sm:w-[36px] sm:self-center">
+            <button type="button" id="completionWsBtn" onclick="goToCurrentJobWorkspace()"
+              class="luna-expand-btn sm:absolute sm:right-0 sm:top-0"
+              style="--expand-width: 136px;"
+              data-label="Open Workspace"
+              aria-label="Open Workspace in Media Vault">
+              <svg viewBox="0 0 512 512" class="luna-expand-icon" aria-hidden="true">
+                <path d="M464 128H272l-64-64H48C21.5 64 0 85.5 0 112v288c0 26.5 21.5 48 48 48h416c26.5 0 48-21.5 48-48V176c0-26.5-21.5-48-48-48z"></path>
+              </svg>
+            </button>
+          </div>
         </div>
 
       </div>
@@ -487,7 +491,7 @@
       <div id="resultsShowcase" class="hidden space-y-8 mt-12">
 
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/[0.08]">
-          <div>
+          <div class="min-w-0 sm:pr-[100px]">
             <h2 class="font-sans text-2xl sm:text-3xl font-bold text-white">
               Generated Results
             </h2>
@@ -495,12 +499,15 @@
             </p>
           </div>
 
-          <div class="flex items-center gap-2.5 flex-wrap">
+          <div class="relative shrink-0 h-[36px] self-start sm:w-[36px] sm:self-center">
             <a id="batchZipDownloadBtn" href="#"
-              class="t-action-pill"
-              title="Download all clips as a ZIP file">
-              <i data-lucide="archive" class="w-3.5 h-3.5 text-zinc-300"></i>
-              <span>Download All (.ZIP)</span>
+              class="luna-expand-btn sm:absolute sm:right-0 sm:top-0"
+              style="--expand-width: 126px;"
+              data-label="Download ZIP"
+              aria-label="Download all clips as a ZIP file">
+              <svg viewBox="0 0 512 512" class="luna-expand-icon" aria-hidden="true">
+                <path d="M32 32H480c17.7 0 32 14.3 32 32V96c0 17.7-14.3 32-32 32H32C14.3 128 0 113.7 0 96V64C0 46.3 14.3 32 32 32zm0 128H480V416c0 35.3-28.7 64-64 64H96c-35.3 0-64-28.7-64-64V160zm192 80c-13.3 0-24 10.7-24 24v64h-40c-9.7 0-18.5 5.8-22.2 14.8s-1.7 19.3 5.2 26.2l96 96c9.4 9.4 24.6 9.4 33.9 0l96-96c6.9-6.9 8.9-17.2 5.2-26.2S361.7 328 352 328H312V264c0-13.3-10.7-24-24-24H224z"></path>
+              </svg>
             </a>
           </div>
         </div>

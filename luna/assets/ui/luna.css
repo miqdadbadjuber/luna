@@ -1276,42 +1276,100 @@ body.in-workspace main {
   background-image: none !important;
 }
 
-    /* Bulletproof Transitions.dev Action Pill (Open Workspace, Download ZIP) */
-.t-action-pill {
-  height: 34px !important;
-  padding: 0 16px !important;
-  border-radius: 9999px !important;
-  background-color: #262629 !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  color: #ffffff !important;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
-  font-size: 12.5px !important;
-  font-weight: 500 !important;
-  line-height: 1 !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 7px !important;
-  cursor: pointer !important;
-  text-decoration: none !important;
-  white-space: nowrap !important;
-  user-select: none !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;
-  transition: background-color 150ms ease, border-color 150ms ease !important;
+/* Expanding Monochrome Action Button (Open Workspace, Download ZIP) */
+.luna-expand-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 9999px;
+  background-color: #161616;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    width 0.26s cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 0.22s ease,
+    border-color 0.22s ease,
+    transform 0.12s ease;
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+  user-select: none;
 }
-.t-action-pill:hover {
-  background-color: #323236 !important;
-  border-color: rgba(255, 255, 255, 0.20) !important;
-  color: #ffffff !important;
+
+.luna-expand-btn.hidden {
+  display: none !important;
 }
-.t-action-pill:active {
-  transform: scale(0.97) !important;
-  background-color: #1f1f22 !important;
+
+.luna-expand-btn .luna-expand-icon {
+  width: 15px;
+  height: 15px;
+  transition:
+    transform 0.26s cubic-bezier(0.22, 1, 0.36, 1),
+    width 0.26s cubic-bezier(0.22, 1, 0.36, 1),
+    height 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+  flex-shrink: 0;
+  pointer-events: none;
 }
-.t-action-pill svg,
-.t-action-pill i {
-  display: block !important;
-  flex-shrink: 0 !important;
+
+.luna-expand-btn .luna-expand-icon path {
+  fill: #ffffff;
+  transition: fill 0.22s ease;
+}
+
+.luna-expand-btn::before {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translate(-50%, 0);
+  content: attr(data-label);
+  color: #09090b;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-weight: 600;
+  font-size: 11.5px;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  white-space: nowrap;
+  opacity: 0;
+  transition:
+    transform 0.26s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.luna-expand-btn:hover,
+.luna-expand-btn:focus-visible {
+  width: var(--expand-width, 136px);
+  background-color: #ffffff;
+  border-color: #ffffff;
+  outline: none;
+}
+
+.luna-expand-btn:hover .luna-expand-icon,
+.luna-expand-btn:focus-visible .luna-expand-icon {
+  width: 22px;
+  height: 22px;
+  transform: translateY(68%);
+}
+
+.luna-expand-btn:hover .luna-expand-icon path,
+.luna-expand-btn:focus-visible .luna-expand-icon path {
+  fill: #09090b;
+}
+
+.luna-expand-btn:hover::before,
+.luna-expand-btn:focus-visible::before {
+  opacity: 1;
+  transform: translate(-50%, 24px);
+}
+
+.luna-expand-btn:active {
+  transform: scale(0.96);
 }
 
 /* Exact Original t-card-btn-open from Screenshot 2026-10-24 200524.png */
