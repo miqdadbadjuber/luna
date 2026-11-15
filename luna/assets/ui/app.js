@@ -2702,29 +2702,116 @@ async function goToCurrentJobWorkspace() {
   }
 }
 
+const AUDIO_WAVEFORM_HEIGHTS = [20, 45, 75, 30, 85, 55, 95, 70, 40, 90, 100, 65, 45, 80, 60, 35, 75, 50, 25, 15, 35, 65, 80, 45, 70, 90, 40, 20];
+
+function renderAudioShowcaseHtml(fileId, audioUrl, thumbnailUrl, isLarge = false) {
+  const heights = isLarge ? AUDIO_WAVEFORM_HEIGHTS : AUDIO_WAVEFORM_HEIGHTS.slice(0, 20);
+  const barsHtml = heights
+    .map(h => `<span class="waveform-bar w-[3.5px] rounded-full" style="height: ${h}%;"></span>`)
+    .join('');
+
+  const safeThumb = thumbnailUrl ? escapeHtml(thumbnailUrl) : '';
+  const hasThumb = Boolean(safeThumb);
+
+  const controlsHtml = `
+    <div class="relative z-10 w-full ${hasThumb ? `${isLarge ? 'px-6 pt-1 pb-4' : 'px-4 pt-1 pb-3.5'}` : `${isLarge ? 'mt-4 pt-4 border-t border-white/[0.06]' : 'mt-3 pt-3 border-t border-white/[0.06]'}`} ${isLarge ? 'space-y-2.5' : 'space-y-2'}">
+      <audio id="audio-el-${fileId}" src="${audioUrl}" preload="metadata" class="hidden"></audio>
+
+      <div class="flex items-center ${isLarge ? 'gap-2.5 text-xs' : 'gap-2 text-[11px]'} font-mono text-zinc-400">
+        <span id="audio-time-${fileId}">0:00</span>
+        <div
+          class="relative flex-1 ${isLarge ? 'h-2' : 'h-1.5'} rounded-full bg-white/10 hover:bg-white/20 transition cursor-pointer overflow-hidden group/scrubber"
+          onclick="seekCustomAudio(event, '${fileId}')"
+          title="Seek">
+          <div id="audio-progress-${fileId}" class="h-full bg-[#f5ebd4] rounded-full w-0 transition-[width] duration-75"></div>
+        </div>
+        <span id="audio-dur-${fileId}">--:--</span>
+      </div>
+
+      <div class="flex items-center justify-between ${isLarge ? 'pt-1' : 'pt-0.5'}">
+        <div class="flex items-center ${isLarge ? 'gap-2.5' : 'gap-2'}">
+          <button
+            type="button"
+            id="audio-play-btn-${fileId}"
+            onclick="toggleCustomAudioPlay('${fileId}')"
+            class="${isLarge ? 'w-8 h-8' : 'w-7 h-7'} rounded-full bg-white text-black hover:bg-zinc-200 active:scale-95 transition-all flex items-center justify-center shadow cursor-pointer"
+            title="Play / Pause">
+            <i data-lucide="play" class="${isLarge ? 'w-4 h-4' : 'w-3.5 h-3.5'} ml-0.5"></i>
+          </button>
+          <span class="${isLarge ? 'text-xs text-zinc-300' : 'text-[11px] text-zinc-400'} font-mono" id="audio-status-${fileId}">Audio Track</span>
+        </div>
+
+        <button
+          type="button"
+          onclick="toggleCustomAudioMute('${fileId}')"
+          id="audio-mute-btn-${fileId}"
+          class="${isLarge ? 'p-1.5 rounded-lg' : 'p-1 rounded-md'} text-zinc-400 hover:text-white hover:bg-white/[0.06] transition cursor-pointer"
+          title="Mute / Unmute">
+          <i data-lucide="volume-2" class="${isLarge ? 'w-4 h-4' : 'w-3.5 h-3.5'}"></i>
+        </button>
+      </div>
+    </div>
+  `;
+
+  if (hasThumb) {
+    return `
+      <div class="audio-card-showcase audio-has-thumb bg-[#0a0a0a] border-b border-white/[0.06] overflow-hidden select-none">
+        <div class="relative w-full ${isLarge ? 'h-48' : 'h-40'} flex items-center justify-center overflow-hidden">
+          <img src="${safeThumb}" alt="" loading="lazy" class="audio-thumb-img absolute inset-0 w-full h-full object-cover object-center brightness-[0.52] pointer-events-none" onerror="const s = this.closest('.audio-card-showcase'); if (s) s.classList.remove('audio-has-thumb'); this.remove();" />
+          <div class="absolute inset-0 shadow-[inset_0_0_36px_rgba(10,10,10,0.8)] pointer-events-none"></div>
+
+          <div id="waveform-bars-${fileId}" class="relative z-10 waveform-bars flex items-end justify-center gap-[4px] ${isLarge ? 'h-10 max-w-[260px]' : 'h-8 max-w-[190px]'} w-full px-3 drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)]">
+            ${barsHtml}
+          </div>
+        </div>
+        ${controlsHtml}
+      </div>
+    `;
+  }
+
+  return `
+    <div class="audio-card-showcase relative bg-[#121212] border-b border-white/[0.06] ${isLarge ? 'p-7' : 'p-5'} flex flex-col items-center justify-center overflow-hidden select-none">
+      <div class="absolute inset-0 bg-radial from-white/[0.07] via-transparent to-transparent pointer-events-none"></div>
+
+      <div class="relative ${isLarge ? 'my-3' : 'my-2'} flex items-center justify-center">
+        <div id="vinyl-disc-${fileId}" class="vinyl-disc ${isLarge ? 'w-28 h-28' : 'w-20 h-20'} rounded-full bg-[#0a0a0a] border border-zinc-700/60 ${isLarge ? 'shadow-[0_12px_32px_rgba(0,0,0,0.8)]' : 'shadow-[0_8px_25px_rgba(0,0,0,0.8)]'} relative flex items-center justify-center transition-transform">
+          <div class="absolute ${isLarge ? 'inset-2' : 'inset-1.5'} rounded-full border border-white/[0.06]"></div>
+          <div class="absolute ${isLarge ? 'inset-4' : 'inset-3'} rounded-full border border-white/[0.04]"></div>
+          <div class="absolute ${isLarge ? 'inset-6' : 'inset-4.5'} rounded-full border border-white/[0.05]"></div>
+          <div class="${isLarge ? 'w-9 h-9' : 'w-7 h-7'} rounded-full bg-zinc-800 border border-white/20 flex items-center justify-center shadow-inner">
+            <div class="${isLarge ? 'w-2.5 h-2.5' : 'w-2 h-2'} rounded-full bg-[#0a0a0a] border border-white/40"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="waveform-bars-${fileId}" class="waveform-bars flex items-end justify-center gap-[3.5px] ${isLarge ? 'h-8 max-w-[280px] mt-2 mb-2' : 'h-6 max-w-[200px] mt-1 mb-1'} w-full px-2">
+        ${barsHtml}
+      </div>
+
+      ${controlsHtml}
+    </div>
+  `;
+}
+
 function renderOpusResults(data) {
   shortsGalleryGrid.innerHTML = '';
   const items = data.results || [];
-  const isSingle = items.length === 1;
 
   if (items.length === 0) {
     batchZipDownloadBtn.classList.add('hidden');
     shortsGalleryGrid.classList.add('hidden');
     resultsCountNotice.innerText = 'No files were produced. Check the job log and try again.';
-  } else if (items.length > 1) {
-    batchZipDownloadBtn.href = `/api/download-zip/${data.id}`;
-    batchZipDownloadBtn.classList.remove('hidden');
+  } else {
+    if (items.length > 1) {
+      batchZipDownloadBtn.href = `/api/download-zip/${data.id}`;
+      batchZipDownloadBtn.classList.remove('hidden');
+    } else {
+      batchZipDownloadBtn.classList.add('hidden');
+    }
     shortsGalleryGrid.classList.remove('hidden');
     resultsCountNotice.innerText = `${items.length} media files are ready to play and download.`;
-    shortsGalleryGrid.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 items-start';
-  } else {
-    batchZipDownloadBtn.classList.add('hidden');
-    shortsGalleryGrid.classList.remove('hidden');
-    resultsCountNotice.innerText = `1 media files are ready to play and download.`;
-    shortsGalleryGrid.className = 'flex justify-center w-full max-w-4xl mx-auto';
+    shortsGalleryGrid.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 items-start';
   }
-
-  const waveformHeights = [20, 45, 75, 30, 85, 55, 95, 70, 40, 90, 100, 65, 45, 80, 60, 35, 75, 50, 25, 15, 35, 65, 80, 45, 70, 90, 40, 20];
 
   items.forEach((item, idx) => {
     const card = document.createElement('div');
@@ -2737,171 +2824,30 @@ function renderOpusResults(data) {
 
     if (item.type === 'audio') {
       const fileId = `studio-aud-${idx}`;
-      const waveformBarsHtml = waveformHeights.map(h => `<span class="waveform-bar w-[3px] rounded-full bg-zinc-600/70" style="height: ${h}%;"></span>`).join('');
+      const showcaseHtml = renderAudioShowcaseHtml(fileId, item.url, item.thumbnail || '', false);
 
-      if (isSingle) {
-        card.className = 't-rec-card single-result-card flex flex-col justify-between w-full max-w-xl mx-auto shadow-2xl';
-        card.innerHTML = `
-          <div class="audio-card-showcase relative bg-[#121212] border-b border-white/[0.06] p-7 flex flex-col items-center justify-center overflow-hidden select-none">
-            <div class="absolute inset-0 bg-radial from-white/[0.08] via-transparent to-transparent pointer-events-none"></div>
+      card.className = 't-rec-card flex flex-col justify-between';
+      card.innerHTML = `
+        ${showcaseHtml}
 
-            <!-- Vinyl Disc Graphic (Enlarged) -->
-            <div class="relative my-3 flex items-center justify-center">
-              <div id="vinyl-disc-${fileId}" class="vinyl-disc w-28 h-28 rounded-full bg-[#0a0a0a] border border-zinc-700/60 shadow-[0_12px_32px_rgba(0,0,0,0.8)] relative flex items-center justify-center transition-transform">
-                <div class="absolute inset-2 rounded-full border border-white/[0.06]"></div>
-                <div class="absolute inset-4 rounded-full border border-white/[0.04]"></div>
-                <div class="absolute inset-6 rounded-full border border-white/[0.05]"></div>
-                <div class="w-9 h-9 rounded-full bg-zinc-800 border border-white/20 flex items-center justify-center shadow-inner">
-                  <div class="w-2.5 h-2.5 rounded-full bg-[#0a0a0a] border border-white/40"></div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Waveform Visualizer (Enlarged) -->
-            <div id="waveform-bars-${fileId}" class="waveform-bars flex items-end justify-center gap-[3px] h-8 w-full max-w-[280px] mt-2 mb-2 px-2">
-              ${waveformBarsHtml}
-            </div>
-
-            <!-- Custom Controls -->
-            <div class="w-full mt-4 pt-4 border-t border-white/[0.06] space-y-2.5">
-              <audio id="audio-el-${fileId}" src="${item.url}" preload="metadata" class="hidden"></audio>
-
-              <div class="flex items-center gap-2.5 text-xs font-mono text-zinc-400">
-                <span id="audio-time-${fileId}">0:00</span>
-                <div 
-                  class="relative flex-1 h-2 rounded-full bg-white/10 hover:bg-white/20 transition cursor-pointer overflow-hidden group/scrubber" 
-                  onclick="seekCustomAudio(event, '${fileId}')"
-                  title="Seek">
-                  <div id="audio-progress-${fileId}" class="h-full bg-white rounded-full w-0 transition-[width] duration-75"></div>
-                </div>
-                <span id="audio-dur-${fileId}">--:--</span>
-              </div>
-
-              <div class="flex items-center justify-between pt-1">
-                <div class="flex items-center gap-2.5">
-                  <button 
-                    type="button" 
-                    id="audio-play-btn-${fileId}" 
-                    onclick="toggleCustomAudioPlay('${fileId}')" 
-                    class="w-8 h-8 rounded-full bg-white text-black hover:bg-zinc-200 active:scale-95 transition-all flex items-center justify-center shadow cursor-pointer"
-                    title="Play / Pause">
-                    <i data-lucide="play" class="w-4 h-4 ml-0.5"></i>
-                  </button>
-                  <span class="text-xs font-mono text-zinc-300" id="audio-status-${fileId}">Audio Track</span>
-                </div>
-
-                <button 
-                  type="button" 
-                  onclick="toggleCustomAudioMute('${fileId}')" 
-                  id="audio-mute-btn-${fileId}"
-                  class="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition cursor-pointer" 
-                  title="Mute / Unmute">
-                  <i data-lucide="volume-2" class="w-4 h-4"></i>
-                </button>
-              </div>
+        <div class="p-4 flex-1 flex flex-col justify-between space-y-3">
+          <div>
+            <h4 class="text-xs sm:text-sm font-semibold font-sans text-white line-clamp-2 leading-snug mb-1" title="${escapeHtml(item.title)}">
+              ${escapeHtml(item.title)}
+            </h4>
+            <div class="flex items-center gap-2 text-[11px] text-zinc-400 font-mono">
+              <span>320 kbps MP3</span>
             </div>
           </div>
 
-          <div class="p-5 flex-1 flex flex-col justify-between">
-            <div>
-              <h4 class="text-base font-semibold text-white line-clamp-2 mb-1.5" title="${escapeHtml(item.title)}">
-                ${escapeHtml(item.title)}
-              </h4>
-              <div class="flex items-center gap-2 text-xs text-zinc-400 font-mono mb-4">
-                <span>320 kbps MP3</span>
-              </div>
-            </div>
-
-            <div class="pt-3 border-t border-white/[0.06]">
-              <a href="${downloadUrl}" download="${escapeHtml(item.filename || 'audio.mp3')}" class="t-btn t-btn-primary w-full !h-10 text-[13px] font-semibold flex items-center justify-center gap-2" title="Download File">
-                <i data-lucide="download" class="w-4 h-4"></i>
-                <span>Download Audio MP3</span>
-              </a>
-            </div>
+          <div class="pt-2.5 border-t border-white/[0.06]">
+            <a href="${downloadUrl}" download="${escapeHtml(item.filename || 'audio.mp3')}" class="h-8 px-4 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs font-semibold font-sans w-full flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm" title="Download File">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i>
+              <span>Download Audio MP3</span>
+            </a>
           </div>
-        `;
-      } else {
-        card.className = 't-rec-card flex flex-col justify-between';
-        card.innerHTML = `
-          <div class="audio-card-showcase relative bg-[#121212] border-b border-white/[0.06] p-5 flex flex-col items-center justify-center overflow-hidden select-none">
-            <div class="absolute inset-0 bg-radial from-white/[0.07] via-transparent to-transparent pointer-events-none"></div>
-
-            <!-- Vinyl Disc Graphic -->
-            <div class="relative my-2 flex items-center justify-center">
-              <div id="vinyl-disc-${fileId}" class="vinyl-disc w-20 h-20 rounded-full bg-[#0a0a0a] border border-zinc-700/60 shadow-[0_8px_25px_rgba(0,0,0,0.8)] relative flex items-center justify-center transition-transform">
-                <div class="absolute inset-1.5 rounded-full border border-white/[0.06]"></div>
-                <div class="absolute inset-3 rounded-full border border-white/[0.04]"></div>
-                <div class="absolute inset-4.5 rounded-full border border-white/[0.05]"></div>
-                <div class="w-7 h-7 rounded-full bg-zinc-800 border border-white/20 flex items-center justify-center shadow-inner">
-                  <div class="w-2 h-2 rounded-full bg-[#0a0a0a] border border-white/40"></div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Waveform Visualizer -->
-            <div id="waveform-bars-${fileId}" class="waveform-bars flex items-end justify-center gap-[3px] h-6 w-full max-w-[200px] mt-1 mb-1 px-2">
-              ${waveformBarsHtml.slice(0, 20).join('')}
-            </div>
-
-            <!-- Custom Controls -->
-            <div class="w-full mt-3 pt-3 border-t border-white/[0.06] space-y-2">
-              <audio id="audio-el-${fileId}" src="${item.url}" preload="metadata" class="hidden"></audio>
-
-              <div class="flex items-center gap-2 text-[11px] font-mono text-zinc-400">
-                <span id="audio-time-${fileId}">0:00</span>
-                <div 
-                  class="relative flex-1 h-1.5 rounded-full bg-white/10 hover:bg-white/20 transition cursor-pointer overflow-hidden group/scrubber" 
-                  onclick="seekCustomAudio(event, '${fileId}')"
-                  title="Seek">
-                  <div id="audio-progress-${fileId}" class="h-full bg-white rounded-full w-0 transition-[width] duration-75"></div>
-                </div>
-                <span id="audio-dur-${fileId}">--:--</span>
-              </div>
-
-              <div class="flex items-center justify-between pt-0.5">
-                <div class="flex items-center gap-2">
-                  <button 
-                    type="button" 
-                    id="audio-play-btn-${fileId}" 
-                    onclick="toggleCustomAudioPlay('${fileId}')" 
-                    class="w-7 h-7 rounded-full bg-white text-black hover:bg-zinc-200 active:scale-95 transition-all flex items-center justify-center shadow cursor-pointer"
-                    title="Play / Pause">
-                    <i data-lucide="play" class="w-3.5 h-3.5 ml-0.5"></i>
-                  </button>
-                  <span class="text-[11px] font-mono text-zinc-400" id="audio-status-${fileId}">Audio Track</span>
-                </div>
-
-                <button 
-                  type="button" 
-                  onclick="toggleCustomAudioMute('${fileId}')" 
-                  id="audio-mute-btn-${fileId}"
-                  class="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-white/[0.06] transition cursor-pointer" 
-                  title="Mute / Unmute">
-                  <i data-lucide="volume-2" class="w-3.5 h-3.5"></i>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div class="p-4 flex-1 flex flex-col justify-between">
-            <div>
-              <h4 class="text-sm font-medium text-white line-clamp-2 mb-1" title="${escapeHtml(item.title)}">
-                ${escapeHtml(item.title)}
-              </h4>
-              <div class="flex items-center gap-2 text-[11px] text-zinc-400 font-mono mb-4">
-                <span>320 kbps MP3</span>
-              </div>
-            </div>
-
-            <div class="pt-2 border-t border-white/[0.06]">
-              <a href="${downloadUrl}" download="${escapeHtml(item.filename || 'audio.mp3')}" class="t-btn t-btn-primary w-full text-[12px] flex items-center justify-center gap-1.5" title="Download File">
-                <i data-lucide="download" class="w-3.5 h-3.5"></i>
-                <span>Download Audio MP3</span>
-              </a>
-            </div>
-          </div>
-        `;
-      }
+        </div>
+      `;
       setTimeout(() => initAudioEvents(fileId), 20);
     } else {
       const fileId = `studio-vid-${idx}`;
@@ -2926,101 +2872,55 @@ function renderOpusResults(data) {
         <button 
           type="button"
           onclick="copyText('${escapeQuotes(item.caption)}', this)" 
-          class="t-btn t-btn-secondary ${isSingle ? '!h-10 px-4 text-xs' : 'px-3 py-2 text-[12px]'} flex items-center justify-center gap-1.5 cursor-pointer">
+          class="t-btn t-btn-secondary h-8 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer">
           <i data-lucide="copy" class="w-3.5 h-3.5 text-white"></i>
           <span>Copy</span>
         </button>
       ` : '';
 
-      if (isSingle) {
-        card.className = `t-rec-card single-result-card flex flex-col justify-between w-full ${itemIsWide ? 'max-w-3xl' : 'max-w-md'} mx-auto shadow-2xl`;
-        card.innerHTML = `
-          <div class="video-preview-wrapper relative bg-[#09090b] w-full overflow-hidden border-b border-white/[0.06] flex items-center justify-center ${ratioAspectClass(itemMeta)} ${itemIsWide ? 'max-h-[520px]' : 'max-h-[580px]'}" style="aspect-ratio: ${ratioAspectStyle(itemMeta)}" data-file-id="${fileId}">
-            <div class="ambient-glow absolute inset-0 opacity-15 pointer-events-none filter blur-2xl scale-125 bg-gradient-to-t from-white/10 via-white/5 to-transparent"></div>
+      card.className = 't-rec-card flex flex-col justify-between';
+      card.innerHTML = `
+        <div class="video-preview-wrapper relative bg-[#09090b] w-full overflow-hidden border-b border-white/[0.06] flex items-center justify-center ${ratioAspectClass(itemMeta)} ${itemIsWide ? 'max-h-[520px]' : 'max-h-[500px]'}" style="aspect-ratio: ${ratioAspectStyle(itemMeta)}" data-file-id="${fileId}">
+          <div class="ambient-glow absolute inset-0 opacity-15 pointer-events-none filter blur-2xl scale-125 bg-gradient-to-t from-white/10 via-white/5 to-transparent"></div>
 
-            <div class="ratio-pill absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-[11px] font-mono text-zinc-300 pointer-events-none">
-              <i data-lucide="${itemMeta.icon}" class="w-3.5 h-3.5 ${itemIsWide ? 'text-zinc-400' : 'text-white'}"></i>
-              <span class="ratio-text">${itemMeta.label}</span>
-            </div>
-
-            <media-theme-sutro style="width:100%; height:100%;" data-player-size="large">
-              <video 
-                slot="media"
-                preload="metadata" 
-                playsinline 
-                class="w-full h-full object-contain relative z-10" 
-                src="${item.url}" 
-                onloadedmetadata="handleVaultVideoMetadata(this, '${fileId}')">
-              </video>
-            </media-theme-sutro>
+          <div class="ratio-pill absolute top-2.5 left-2.5 z-20 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-[10px] font-mono text-zinc-300 pointer-events-none">
+            <i data-lucide="${itemMeta.icon}" class="w-3 h-3 ${itemIsWide ? 'text-zinc-400' : 'text-white'}"></i>
+            <span class="ratio-text">${itemMeta.label}</span>
           </div>
 
-          <div class="p-5 flex-1 flex flex-col justify-between">
-            <div>
-              <div class="flex items-center justify-between mb-2">
-                <span class="text-xs font-mono font-medium text-white">${item.start_time ? `Clip #${idx + 1}` : 'Video'}</span>
-                <span class="text-xs font-mono text-zinc-400 px-2 py-0.5 rounded bg-white/[0.04] border border-white/[0.06]">${durationLabel}</span>
-              </div>
-              <h4 class="text-base sm:text-lg font-semibold text-white line-clamp-2 mb-1.5" title="${escapeHtml(item.title)}">
-                ${escapeHtml(item.title)}
-              </h4>
-              ${captionBox}
-            </div>
+          <media-theme-sutro style="width:100%; height:100%;" data-player-size="medium">
+            <video 
+              slot="media"
+              preload="metadata" 
+              playsinline 
+              class="w-full h-full object-contain relative z-10" 
+              src="${item.url}" 
+              onloadedmetadata="handleVaultVideoMetadata(this, '${fileId}')">
+            </video>
+          </media-theme-sutro>
+        </div>
 
-            <div class="flex items-center gap-2.5 pt-3 border-t border-white/[0.06] mt-4">
-              ${copyBtn}
-              <a href="${downloadUrl}" download="${escapeHtml(item.filename || 'video.mp4')}" class="t-btn t-btn-primary flex-1 !h-10 text-[13px] font-semibold flex items-center justify-center gap-2" title="Download File">
-                <i data-lucide="download" class="w-4 h-4"></i>
-                <span>Download MP4</span>
-              </a>
+        <div class="p-4 flex-1 flex flex-col justify-between space-y-3">
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-[11px] font-mono font-medium text-white">${item.start_time ? `Clip #${idx + 1}` : 'Video'}</span>
+              <span class="text-[11px] font-mono text-zinc-500">${durationLabel}</span>
             </div>
-          </div>
-        `;
-      } else {
-        card.className = 't-rec-card flex flex-col justify-between';
-        card.innerHTML = `
-          <div class="video-preview-wrapper relative bg-[#09090b] w-full overflow-hidden border-b border-white/[0.06] flex items-center justify-center ${ratioAspectClass(itemMeta)} ${itemIsWide ? 'max-h-[460px]' : ''}" style="aspect-ratio: ${ratioAspectStyle(itemMeta)}" data-file-id="${fileId}">
-            <div class="ambient-glow absolute inset-0 opacity-15 pointer-events-none filter blur-2xl scale-125 bg-gradient-to-t from-white/10 via-white/5 to-transparent"></div>
-
-            <div class="ratio-pill absolute top-2.5 left-2.5 z-20 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-[10px] font-mono text-zinc-300 pointer-events-none">
-              <i data-lucide="${itemMeta.icon}" class="w-3 h-3 ${itemIsWide ? 'text-zinc-400' : 'text-white'}"></i>
-              <span class="ratio-text">${itemMeta.label}</span>
-            </div>
-
-            <media-theme-sutro style="width:100%; height:100%;" data-player-size="mini">
-              <video 
-                slot="media"
-                preload="metadata" 
-                playsinline 
-                class="w-full h-full object-contain relative z-10" 
-                src="${item.url}" 
-                onloadedmetadata="handleVaultVideoMetadata(this, '${fileId}')">
-              </video>
-            </media-theme-sutro>
+            <h4 class="text-xs sm:text-sm font-semibold font-sans text-white line-clamp-2 leading-snug mb-1" title="${escapeHtml(item.title)}">
+              ${escapeHtml(item.title)}
+            </h4>
+            ${captionBox}
           </div>
 
-          <div class="p-4 flex-1 flex flex-col justify-between">
-            <div>
-              <div class="flex items-center justify-between mb-1.5">
-                <span class="text-[11px] font-mono font-medium text-white">${item.start_time ? `Clip #${idx + 1}` : 'Video'}</span>
-                <span class="text-[11px] font-mono text-zinc-500">${durationLabel}</span>
-              </div>
-              <h4 class="text-sm font-medium text-white line-clamp-2 mb-1" title="${escapeHtml(item.title)}">
-                ${escapeHtml(item.title)}
-              </h4>
-              ${captionBox}
-            </div>
-
-            <div class="flex items-center gap-2 pt-2 border-t border-white/[0.06] mt-3">
-              ${copyBtn}
-              <a href="${downloadUrl}" download="${escapeHtml(item.filename || 'video.mp4')}" class="t-btn t-btn-primary flex-1 text-[12px] flex items-center justify-center gap-1.5" title="Download File">
-                <i data-lucide="download" class="w-3.5 h-3.5"></i>
-                <span>Download MP4</span>
-              </a>
-            </div>
+          <div class="flex items-center gap-2 pt-2.5 border-t border-white/[0.06]">
+            ${copyBtn}
+            <a href="${downloadUrl}" download="${escapeHtml(item.filename || 'video.mp4')}" class="h-8 px-4 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs font-semibold font-sans flex-1 flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm" title="Download File">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i>
+              <span>Download MP4</span>
+            </a>
           </div>
-        `;
-      }
+        </div>
+      `;
     }
 
     shortsGalleryGrid.appendChild(card);
@@ -6096,8 +5996,6 @@ function renderProjectFiles(proj) {
     (proj.workspace_name || '').toLowerCase().includes('reels') ||
     (proj.workspace_name || '').toLowerCase().includes('short');
 
-  const waveformHeights = [20, 45, 75, 30, 85, 55, 95, 70, 40, 90, 100, 65, 45, 80, 60, 35, 75, 50, 25, 15];
-
   files.forEach(file => {
     const isAud = file.type === 'audio' || (file.filename || '').endsWith('.mp3');
     const storedRatio = ratioMetaFromValue(file.aspect_ratio) || ratioMetaFromFilename(file.filename);
@@ -6121,70 +6019,7 @@ function renderProjectFiles(proj) {
 
     let mediaPreviewHtml = '';
     if (isAud) {
-      const waveformBarsHtml = waveformHeights.map(h => `<span class="waveform-bar w-[3px] rounded-full bg-zinc-600/70" style="height: ${h}%;"></span>`).join('');
-      mediaPreviewHtml = `
-        <div class="audio-card-showcase relative bg-[#121212] border-b border-white/[0.06] p-5 flex flex-col items-center justify-center overflow-hidden select-none">
-          <div class="absolute inset-0 bg-radial from-white/[0.07] via-transparent to-transparent pointer-events-none"></div>
-
-          <!-- Vinyl Disc Graphic -->
-          <div class="relative my-2 flex items-center justify-center">
-            <div id="vinyl-disc-${file.id}" class="vinyl-disc w-20 h-20 rounded-full bg-[#0a0a0a] border border-zinc-700/60 shadow-[0_8px_25px_rgba(0,0,0,0.8)] relative flex items-center justify-center transition-transform">
-              <div class="absolute inset-1.5 rounded-full border border-white/[0.06]"></div>
-              <div class="absolute inset-3 rounded-full border border-white/[0.04]"></div>
-              <div class="absolute inset-4.5 rounded-full border border-white/[0.05]"></div>
-              <div class="w-7 h-7 rounded-full bg-zinc-800 border border-white/20 flex items-center justify-center shadow-inner">
-                <div class="w-2 h-2 rounded-full bg-[#0a0a0a] border border-white/40"></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Waveform Visualizer -->
-          <div id="waveform-bars-${file.id}" class="waveform-bars flex items-end justify-center gap-[3px] h-6 w-full max-w-[200px] mt-1 mb-1 px-2">
-            ${waveformBarsHtml}
-          </div>
-
-          <!-- Custom Player Controls -->
-          <div class="w-full mt-3 pt-3 border-t border-white/[0.06] space-y-2">
-            <audio id="audio-el-${file.id}" src="${mediaUrl}" preload="metadata" class="hidden"></audio>
-
-            <!-- Scrubber Timeline -->
-            <div class="flex items-center gap-2 text-[11px] font-mono text-zinc-400">
-              <span id="audio-time-${file.id}">0:00</span>
-              <div 
-                class="relative flex-1 h-1.5 rounded-full bg-white/10 hover:bg-white/20 transition cursor-pointer overflow-hidden group/scrubber" 
-                onclick="seekCustomAudio(event, '${file.id}')"
-                title="Seek">
-                <div id="audio-progress-${file.id}" class="h-full bg-white rounded-full w-0 transition-[width] duration-75"></div>
-              </div>
-              <span id="audio-dur-${file.id}">--:--</span>
-            </div>
-
-            <!-- Play/Pause & Status Row -->
-            <div class="flex items-center justify-between pt-0.5">
-              <div class="flex items-center gap-2">
-                <button 
-                  type="button" 
-                  id="audio-play-btn-${file.id}" 
-                  onclick="toggleCustomAudioPlay('${file.id}')" 
-                  class="w-7 h-7 rounded-full bg-white text-black hover:bg-zinc-200 active:scale-95 transition-all flex items-center justify-center shadow cursor-pointer"
-                  title="Play / Pause">
-                  <i data-lucide="play" class="w-3.5 h-3.5 ml-0.5"></i>
-                </button>
-                <span class="text-[11px] font-mono text-zinc-400" id="audio-status-${file.id}">Audio Track</span>
-              </div>
-
-              <button 
-                type="button" 
-                onclick="toggleCustomAudioMute('${file.id}')" 
-                id="audio-mute-btn-${file.id}"
-                class="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-white/[0.06] transition cursor-pointer" 
-                title="Mute / Unmute">
-                <i data-lucide="volume-2" class="w-3.5 h-3.5"></i>
-              </button>
-            </div>
-          </div>
-        </div>
-      `;
+      mediaPreviewHtml = renderAudioShowcaseHtml(file.id, mediaUrl, file.thumbnail || '', false);
     } else {
       mediaPreviewHtml = `
         <div class="video-preview-wrapper relative bg-[#09090b] w-full overflow-hidden border-b border-white/[0.06] flex items-center justify-center ${ratioAspectClass(mediaMeta)} ${mediaMeta.kind === 'landscape' ? 'max-h-[520px]' : 'max-h-[500px]'}" style="aspect-ratio: ${ratioAspectStyle(mediaMeta)}" data-file-id="${file.id}">

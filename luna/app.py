@@ -765,11 +765,95 @@ def download_tiktok_video(url: str, output_dir: str, progress_hook: Optional[Cal
     raise RuntimeError("All TikTok download methods failed. Try another link.")
 
 
+def _trim_thumbnail_borders(cover_path: str) -> None:
+    """Strip symmetric YouTube pillarbox/letterbox bars baked into thumbnails."""
+    try:
+        from PIL import Image, ImageStat
+
+        with Image.open(cover_path) as raw:
+            im = raw.convert("RGB")
+            w, h = im.size
+            if w < 120 or h < 120:
+                return
+
+            def is_flat(box, max_mean=85.0):
+                st = ImageStat.Stat(im.crop(box))
+                return max(st.stddev) < 8.0 and max(st.mean) < max_mean
+
+            left, right = 0, w
+            while left < w // 3 and is_flat((left, 0, left + 1, h)):
+                left += 1
+            while right > (w * 2) // 3 and is_flat((right - 1, 0, right, h)):
+                right -= 1
+
+            top, bottom = 0, h
+            while top < h // 3 and is_flat((0, top, w, top + 1)):
+                top += 1
+            while bottom > (h * 2) // 3 and is_flat((0, bottom - 1, w, bottom)):
+                bottom -= 1
+
+            r_pad = w - right
+            b_pad = h - bottom
+            crop_x = left > 8 and r_pad > 8 and abs(left - r_pad) <= 24 and (right - left) >= w * 0.45
+            crop_y = top > 8 and b_pad > 8 and abs(top - b_pad) <= 24 and (bottom - top) >= h * 0.45
+
+            if not (crop_x or crop_y):
+                return
+
+            nx1 = min(left + 2, w // 3) if crop_x else 0
+            nx2 = max(right - 2, (w * 2) // 3) if crop_x else w
+            ny1 = min(top + 2, h // 3) if crop_y else 0
+            ny2 = max(bottom - 2, (h * 2) // 3) if crop_y else h
+
+            if nx2 > nx1 + 60 and ny2 > ny1 + 60:
+                im.crop((nx1, ny1, nx2, ny2)).save(cover_path, quality=92)
+    except Exception:
+        pass
+
+
+def _download_thumbnail_file(thumb_url: str, output_dir: str, stem: str) -> str:
+    """Download a remote video/audio thumbnail locally into output_dir, returning its path or ''."""
+    if not thumb_url or not thumb_url.startswith(("http://", "https://")):
+        return ""
+    try:
+        resp = requests.get(thumb_url, timeout=10, stream=True)
+        resp.raise_for_status()
+        ctype = (resp.headers.get("content-type") or "").lower()
+        if "webp" in ctype:
+            ext = ".webp"
+        elif "png" in ctype:
+            ext = ".png"
+        elif "jpeg" in ctype or "jpg" in ctype or "image/" in ctype:
+            ext = ".jpg"
+        else:
+            return ""
+        os.makedirs(output_dir, exist_ok=True)
+        cover_path = os.path.join(output_dir, f"{stem}_cover{ext}")
+        total = 0
+        with open(cover_path, "wb") as f:
+            for chunk in resp.iter_content(chunk_size=65536):
+                if not chunk:
+                    continue
+                total += len(chunk)
+                if total > 10 * 1024 * 1024:
+                    break
+                f.write(chunk)
+        if total == 0 or total > 10 * 1024 * 1024:
+            if os.path.exists(cover_path):
+                os.remove(cover_path)
+            return ""
+        _trim_thumbnail_borders(cover_path)
+        return cover_path
+    except Exception:
+        return ""
+
+
 def download_mp3(
     url: str,
     output_dir: str,
     progress_hook: Optional[Callable] = None,
     postprocessor_hook: Optional[Callable] = None,
+    meta_out: Optional[Dict[str, Any]] = None,
 ) -> str:
     base_opts = {
         "format": "bestaudio/best",
@@ -785,7 +869,13 @@ def download_mp3(
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)
         title = info.get("title", "audio")
+        thumb_url = info.get("thumbnail") or ""
+        if not thumb_url and isinstance(info.get("thumbnails"), list) and info["thumbnails"]:
+            thumb_url = info["thumbnails"][-1].get("url") or ""
     clean = sanitize_title(title)
+    if meta_out is not None:
+        meta_out["thumbnail_url"] = thumb_url
+        meta_out["thumbnail_path"] = _download_thumbnail_file(thumb_url, output_dir, clean) if thumb_url else ""
     src = os.path.join(output_dir, "audio.mp3")
     dst = os.path.join(output_dir, f"{clean}.mp3")
     if os.path.exists(src):
@@ -1312,9 +1402,26 @@ def _save_project_to_vault(
                     "platform": platform,
                     "action": action,
                 }
-                for extra_k in ["score", "caption", "start_time", "end_time", "quality", "aspect_ratio"]:
-                    if extra_k in item:
+                for extra_k in ["score", "caption", "start_time", "end_time", "quality", "aspect_ratio", "thumbnail"]:
+                    if extra_k in item and item[extra_k] not in (None, ""):
                         file_record[extra_k] = item[extra_k]
+
+                thumb_src = item.get("thumbnail_path")
+                if thumb_src and os.path.isfile(thumb_src):
+                    covers_dir = os.path.join(target_vault_dir, "covers")
+                    os.makedirs(covers_dir, exist_ok=True)
+                    cover_fname = os.path.basename(thumb_src)
+                    cover_dst = os.path.join(covers_dir, cover_fname)
+                    if os.path.abspath(thumb_src) != os.path.abspath(cover_dst):
+                        if os.path.exists(cover_dst) and os.path.getsize(cover_dst) != os.path.getsize(thumb_src):
+                            c_stem, c_ext = os.path.splitext(cover_fname)
+                            cover_fname = f"{c_stem}_{uuid.uuid4().hex[:6]}{c_ext}"
+                            cover_dst = os.path.join(covers_dir, cover_fname)
+                        shutil.copy2(thumb_src, cover_dst)
+                    cover_rel = os.path.relpath(cover_dst, storage_root_path).replace("\\", "/")
+                    file_record["thumbnail"] = f"/media-vault/{cover_rel}"
+                    file_record["thumbnail_path"] = os.path.abspath(cover_dst)
+
                 saved_files.append(file_record)
 
         if not saved_files:
@@ -1753,15 +1860,23 @@ def _worker_process(job_id: str, req: ProcessRequest):
                     jobs[job_id]["download_eta"] = ""
                     jobs[job_id]["stage_detail"] = "Converting to 320 kbps MP3..."
 
+            mp3_meta: Dict[str, Any] = {}
             file_path = download_mp3(
                 url,
                 job_output_dir,
                 progress_hook=progress_hook,
                 postprocessor_hook=mp3_postprocessor_hook,
+                meta_out=mp3_meta,
             )
             if jobs.get(job_id, {}).get("cancelled"):
                 return
             filename = os.path.basename(file_path)
+            cover_path = mp3_meta.get("thumbnail_path") or ""
+            cover_url = (
+                f"/output/{job_id}/{os.path.basename(cover_path)}"
+                if cover_path and os.path.isfile(cover_path)
+                else (mp3_meta.get("thumbnail_url") or "")
+            )
 
             jobs[job_id]["results"] = [{
                 "type": "audio",
@@ -1769,6 +1884,7 @@ def _worker_process(job_id: str, req: ProcessRequest):
                 "url": f"/output/{job_id}/{filename}",
                 "filename": filename,
                 "download_url": f"/api/download-file/{job_id}/{filename}",
+                "thumbnail": cover_url,
             }]
 
             jobs[job_id]["stage"] = "saving"
@@ -1782,7 +1898,14 @@ def _worker_process(job_id: str, req: ProcessRequest):
                     action=action,
                     platform=platform if platform != "unknown" else "youtube",
                     source_title=filename,
-                    files_to_save=[{"file_path": file_path, "title": filename, "type": "audio"}],
+                    source_url=url,
+                    files_to_save=[{
+                        "file_path": file_path,
+                        "title": filename,
+                        "type": "audio",
+                        "thumbnail_path": cover_path,
+                        "thumbnail": cover_url,
+                    }],
                 )
                 if saved_proj:
                     jobs[job_id]["project_id"] = saved_proj.get("project_id")

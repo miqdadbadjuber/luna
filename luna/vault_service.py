@@ -547,6 +547,16 @@ def delete_vault_item(item_id: str) -> str:
             if not _safe_remove_path(file_path):
                 return "locked"
 
+        thumb_path = item_to_delete.get("thumbnail_path") if item_to_delete else None
+        if thumb_path and _is_inside_storage(thumb_path, root) and os.path.isfile(thumb_path):
+            _safe_remove_path(thumb_path)
+            thumb_parent = os.path.dirname(thumb_path)
+            try:
+                if os.path.basename(thumb_parent) == "covers" and not os.listdir(thumb_parent):
+                    os.rmdir(thumb_parent)
+            except OSError:
+                pass
+
         has_files_left = False
         for r in remaining_items:
             if isinstance(r, dict) and "files" in r:
@@ -592,6 +602,8 @@ def get_storage_stats() -> Dict[str, Any]:
 
     if os.path.exists(root):
         for dirpath, _, filenames in os.walk(root):
+            if os.path.basename(dirpath) == "covers":
+                continue
             for f in filenames:
                 if f == INDEX_FILE_NAME or f.startswith("."):
                     continue

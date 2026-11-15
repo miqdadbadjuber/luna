@@ -1552,8 +1552,27 @@ body.in-workspace main {
   animation: spinVinyl 6s linear infinite;
 }
 
+.audio-card-showcase.audio-has-thumb {
+  background-color: #0a0a0a;
+}
+
+.audio-thumb-img {
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.95) 35%, rgba(0, 0, 0, 0.5) 72%, transparent 100%);
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.95) 35%, rgba(0, 0, 0, 0.5) 72%, transparent 100%);
+}
+
 .waveform-bar {
-  transition: height 120ms ease;
+  background-color: rgba(235, 224, 198, 0.72);
+  transition: height 120ms ease, background-color 200ms ease;
+}
+
+.audio-card-showcase.audio-has-thumb .waveform-bar {
+  background-color: rgba(238, 226, 199, 0.88);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.65);
+}
+
+.waveform-bars.playing .waveform-bar {
+  background-color: #f5ebd4;
 }
 
 @keyframes barBounce {
