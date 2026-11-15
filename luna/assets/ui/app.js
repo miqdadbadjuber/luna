@@ -2804,25 +2804,28 @@ function renderOpusResults(data) {
       const fileId = `studio-aud-${idx}`;
       const showcaseHtml = renderAudioShowcaseHtml(fileId, item.url, item.thumbnail || '', false);
 
-      card.className = 't-rec-card flex flex-col justify-between';
+      card.className = 'vault-file-card rounded-2xl bg-[#171717] border border-white/[0.08] shadow-[0_4px_20px_-2px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col justify-between group';
       card.innerHTML = `
         ${showcaseHtml}
 
         <div class="p-4 flex-1 flex flex-col justify-between space-y-3">
           <div>
             <h4 class="text-xs sm:text-sm font-semibold font-sans text-white line-clamp-2 leading-snug mb-1">
-              ${escapeHtml(item.title)}
+              ${escapeHtml(item.title || item.filename || 'Audio')}
             </h4>
             <div class="flex items-center gap-2 text-[11px] text-zinc-400 font-mono">
-              <span>320 kbps MP3</span>
+              <span>320 kbps</span>
+              <span>• MP3</span>
             </div>
           </div>
 
-          <div class="pt-2.5 border-t border-white/[0.06]">
-            <a href="${downloadUrl}" download="${escapeHtml(item.filename || 'audio.mp3')}" class="h-8 px-4 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs font-semibold font-sans w-full flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm" aria-label="Download File">
-              <i data-lucide="download" class="w-3.5 h-3.5"></i>
-              <span>Download Audio MP3</span>
-            </a>
+          <div class="flex items-center justify-between pt-2.5 border-t border-white/[0.06]">
+            <span class="text-[10.5px] font-mono text-zinc-500">MP3 Audio</span>
+            <div class="vault-file-actions flex items-center gap-2">
+              <a href="${downloadUrl}" download="${escapeHtml(item.filename || 'audio.mp3')}" class="luna-download-icon-link" aria-label="Download File">
+                <i data-lucide="download" class="w-4 h-4"></i>
+              </a>
+            </div>
           </div>
         </div>
       `;
@@ -2837,26 +2840,34 @@ function renderOpusResults(data) {
       };
       const itemIsWide = itemMeta.kind === 'landscape';
 
-      const captionBox = item.caption ? `
-        <div class="mt-2.5">
-          <span class="text-[10px] font-mono text-zinc-400 block mb-1">Viral Hook & Caption:</span>
-          <p class="text-xs text-zinc-300 leading-relaxed bg-[#121212] p-2.5 rounded-lg border border-white/5 select-all line-clamp-3">
-            ${escapeHtml(item.caption)}
-          </p>
-        </div>
+      const metaBadges = [];
+      if (item.start_time) metaBadges.push(`Clip #${idx + 1}`);
+      if (item.quality) metaBadges.push(`${item.quality}p`);
+      if (hasRange) metaBadges.push(`${Math.round(endSec - startSec)}s`);
+      else if (!item.quality) metaBadges.push(durationLabel);
+
+      const captionSnippetHtml = item.caption ? `
+        <p class="mt-2 text-[11px] text-zinc-400 leading-relaxed line-clamp-2 select-all">
+          ${escapeHtml(item.caption)}
+        </p>
       ` : '';
 
       const copyBtn = item.caption ? `
-        <button 
+        <button
           type="button"
-          onclick="copyText('${escapeQuotes(item.caption)}', this)" 
-          class="t-btn t-btn-secondary h-8 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer">
-          <i data-lucide="copy" class="w-3.5 h-3.5 text-white"></i>
-          <span>Copy</span>
+          onclick="copyText('${escapeQuotes(item.caption)}', this)"
+          class="caption-copy-btn w-7 h-7 flex items-center justify-center text-zinc-400 hover:text-white cursor-pointer"
+          aria-label="Copy caption">
+          <i data-lucide="copy" class="w-3.5 h-3.5"></i>
         </button>
+        <span class="vault-card-action-sep" aria-hidden="true"></span>
       ` : '';
 
-      card.className = 't-rec-card flex flex-col justify-between';
+      const footerMetaLabel = (item.start_time && item.end_time)
+        ? `${item.start_time} - ${item.end_time}`
+        : 'MP4 Video';
+
+      card.className = 'vault-file-card rounded-2xl bg-[#171717] border border-white/[0.08] shadow-[0_4px_20px_-2px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col justify-between group';
       card.innerHTML = `
         <div class="video-preview-wrapper relative bg-[#09090b] w-full overflow-hidden border-b border-white/[0.06] flex items-center justify-center ${ratioAspectClass(itemMeta)} ${itemIsWide ? 'max-h-[520px]' : 'max-h-[500px]'}" style="aspect-ratio: ${ratioAspectStyle(itemMeta)}" data-file-id="${fileId}">
           <div class="ambient-glow absolute inset-0 opacity-15 pointer-events-none filter blur-2xl scale-125 bg-gradient-to-t from-white/10 via-white/5 to-transparent"></div>
@@ -2871,6 +2882,8 @@ function renderOpusResults(data) {
               slot="media"
               preload="metadata" 
               playsinline 
+              disablepictureinpicture
+              controlslist="nodownload nopictureinpicture"
               class="w-full h-full object-contain relative z-10" 
               src="${encodeMediaUrl(item.url)}" 
               onloadedmetadata="handleVaultVideoMetadata(this, '${fileId}')">
@@ -2880,28 +2893,34 @@ function renderOpusResults(data) {
 
         <div class="p-4 flex-1 flex flex-col justify-between space-y-3">
           <div>
-            <div class="flex items-center justify-between mb-1">
-              <span class="text-[11px] font-mono font-medium text-white">${item.start_time ? `Clip #${idx + 1}` : 'Video'}</span>
-              <span class="text-[11px] font-mono text-zinc-500">${durationLabel}</span>
-            </div>
             <h4 class="text-xs sm:text-sm font-semibold font-sans text-white line-clamp-2 leading-snug mb-1">
-              ${escapeHtml(item.title)}
+              ${escapeHtml(item.title || item.filename)}
             </h4>
-            ${captionBox}
+            <div class="flex items-center gap-2 text-[11px] text-zinc-400 font-mono">
+              ${metaBadges.map((m, i) => i === 0 ? `<span>${escapeHtml(m)}</span>` : `<span>• ${escapeHtml(m)}</span>`).join('\n              ')}
+            </div>
+            ${captionSnippetHtml}
           </div>
 
-          <div class="flex items-center gap-2 pt-2.5 border-t border-white/[0.06]">
-            ${copyBtn}
-            <a href="${downloadUrl}" download="${escapeHtml(item.filename || 'video.mp4')}" class="h-8 px-4 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs font-semibold font-sans flex-1 flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm" aria-label="Download File">
-              <i data-lucide="download" class="w-3.5 h-3.5"></i>
-              <span>Download MP4</span>
-            </a>
+          <div class="flex items-center justify-between pt-2.5 border-t border-white/[0.06]">
+            <span class="text-[10.5px] font-mono text-zinc-500">${escapeHtml(footerMetaLabel)}</span>
+            <div class="vault-file-actions flex items-center gap-2">
+              ${copyBtn}
+              <a href="${downloadUrl}" download="${escapeHtml(item.filename || 'video.mp4')}" class="luna-download-icon-link" aria-label="Download File">
+                <i data-lucide="download" class="w-4 h-4"></i>
+              </a>
+            </div>
           </div>
         </div>
       `;
     }
 
-    card.querySelectorAll('video, audio').forEach(attachMediaRecovery);
+    card.querySelectorAll('video, audio').forEach(el => {
+      if (el.tagName === 'VIDEO') {
+        try { el.disablePictureInPicture = true; } catch (e) {}
+      }
+      attachMediaRecovery(el);
+    });
     shortsGalleryGrid.appendChild(card);
   });
 
@@ -2917,13 +2936,19 @@ function renderOpusResults(data) {
 function copyText(text, btn) {
   navigator.clipboard.writeText(text).then(() => {
     const span = btn.querySelector('span');
-    const original = span.innerText;
-    span.innerText = 'Copied! ✓';
-    btn.classList.add('bg-white', 'text-white');
+    if (span) {
+      const original = span.innerText;
+      span.innerText = 'Copied! ✓';
+      setTimeout(() => { span.innerText = original; }, 2000);
+      return;
+    }
+    const prevHtml = btn.innerHTML;
+    btn.innerHTML = '<i data-lucide="check" class="w-3.5 h-3.5 text-emerald-400"></i>';
+    lucide.createIcons();
     setTimeout(() => {
-      span.innerText = original;
-      btn.classList.remove('bg-white', 'text-white');
-    }, 2000);
+      btn.innerHTML = prevHtml;
+      lucide.createIcons();
+    }, 1800);
   });
 }
 

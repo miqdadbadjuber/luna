@@ -161,6 +161,13 @@ class TestFrontendVaultUI(unittest.TestCase):
         self.assertNotIn('title="Settings"', source)
         self.assertNotIn('title="Back"', source)
 
+        # Studio results cards match modern Workspace cards (frameless icon download, no white pill button)
+        studio_results_block = source.split("function renderOpusResults(data)")[1].split("function copyText(")[0]
+        self.assertIn("vault-file-card", studio_results_block)
+        self.assertIn("luna-download-icon-link", studio_results_block)
+        self.assertNotIn("Download MP4", studio_results_block)
+        self.assertNotIn("Download Audio MP3", studio_results_block)
+
         self.assertIn("targetType === 'clip-title'", source)
         self.assertIn("title_only: true", source)
         self.assertIn("#clipperBranchingClipsWrapper.is-selecting", css)
