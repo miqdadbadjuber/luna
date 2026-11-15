@@ -163,13 +163,29 @@ os.makedirs(storage_root, exist_ok=True)
 
 class DynamicStorageStaticFiles(StaticFiles):
     def lookup_path(self, path: str):
+        # Resolve storage directories per call without mutating self.all_directories across requests.
+        if path.startswith(("/", "\\")):
+            return "", None
         curr_root = get_storage_root()
         dirs = [curr_root]
         fallback = os.path.abspath(OUTPUT_DIR)
         if fallback != os.path.abspath(curr_root) and os.path.exists(fallback):
             dirs.append(fallback)
-        self.all_directories = dirs
-        return super().lookup_path(path)
+        for directory in dirs:
+            joined_path = os.path.join(directory, path)
+            if self.follow_symlink:
+                full_path = os.path.abspath(joined_path)
+                base_dir = os.path.abspath(directory)
+            else:
+                full_path = os.path.realpath(joined_path)
+                base_dir = os.path.realpath(directory)
+            if os.path.commonpath([full_path, base_dir]) != str(base_dir):
+                continue
+            try:
+                return full_path, os.stat(full_path)
+            except (FileNotFoundError, NotADirectoryError):
+                continue
+        return "", None
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

@@ -2710,7 +2710,8 @@ function renderAudioShowcaseHtml(fileId, audioUrl, thumbnailUrl, isLarge = false
     .map(h => `<span class="waveform-bar w-[3.5px] rounded-full" style="height: ${h}%;"></span>`)
     .join('');
 
-  const safeThumb = thumbnailUrl ? escapeHtml(thumbnailUrl) : '';
+  const safeThumb = thumbnailUrl ? escapeHtml(encodeMediaUrl(thumbnailUrl)) : '';
+  const safeAudioUrl = encodeMediaUrl(audioUrl);
   const hasThumb = Boolean(safeThumb);
 
   const sutroAudioPlayerHtml = `
@@ -2722,7 +2723,7 @@ function renderAudioShowcaseHtml(fileId, audioUrl, thumbnailUrl, isLarge = false
       <audio
         id="audio-el-${fileId}"
         slot="media"
-        src="${audioUrl}"
+        src="${safeAudioUrl}"
         preload="metadata"
         style="position:absolute;width:0;height:0;opacity:0;pointer-events:none;">
       </audio>
@@ -2871,7 +2872,7 @@ function renderOpusResults(data) {
               preload="metadata" 
               playsinline 
               class="w-full h-full object-contain relative z-10" 
-              src="${item.url}" 
+              src="${encodeMediaUrl(item.url)}" 
               onloadedmetadata="handleVaultVideoMetadata(this, '${fileId}')">
             </video>
           </media-theme-sutro>
@@ -2900,6 +2901,7 @@ function renderOpusResults(data) {
       `;
     }
 
+    card.querySelectorAll('video, audio').forEach(attachMediaRecovery);
     shortsGalleryGrid.appendChild(card);
   });
 
@@ -2936,6 +2938,60 @@ function escapeQuotes(str) {
     .replace(/'/g, "\\'")
     .replace(/"/g, '&quot;')
     .replace(/[\r\n]+/g, ' ');
+}
+
+function encodeMediaUrl(rawUrl) {
+  if (!rawUrl || rawUrl === '#') return '#';
+  if (/^https?:\/\//i.test(rawUrl)) return encodeURI(rawUrl);
+  return rawUrl.split('/').map((seg, idx) => {
+    if (idx === 0 && seg === '') return '';
+    try {
+      return encodeURIComponent(decodeURIComponent(seg));
+    } catch (e) {
+      return encodeURIComponent(seg);
+    }
+  }).join('/');
+}
+
+// Automatically recovers <audio>/<video> elements (and clears Sutro's error dialog)
+// if a transient network abort or range glitch causes MEDIA_ERR_SRC_NOT_SUPPORTED.
+function attachMediaRecovery(mediaEl) {
+  if (!mediaEl || mediaEl.dataset.recoveryBound === '1') return;
+  const originalSrc = mediaEl.getAttribute('src');
+  if (!originalSrc || originalSrc === '#') return;
+  mediaEl.dataset.recoveryBound = '1';
+
+  const clearSutroErrorDialog = () => {
+    const sutro = mediaEl.closest('media-theme-sutro');
+    if (!sutro || !sutro.shadowRoot) return;
+    const dlg = sutro.shadowRoot.querySelector('media-error-dialog');
+    if (dlg) dlg.removeAttribute('open');
+  };
+
+  mediaEl.addEventListener('loadedmetadata', () => {
+    delete mediaEl.dataset.recoverCount;
+    clearSutroErrorDialog();
+  });
+  mediaEl.addEventListener('canplay', clearSutroErrorDialog);
+
+  mediaEl.addEventListener('error', () => {
+    if (mediaEl.dataset.intentionallyReleased === '1') return;
+    if (!mediaEl.isConnected || !mediaEl.getAttribute('src')) return;
+    const retries = Number(mediaEl.dataset.recoverCount || 0);
+    if (retries >= 2) return;
+    mediaEl.dataset.recoverCount = String(retries + 1);
+    const delay = retries === 0 ? 350 : 900;
+    setTimeout(() => {
+      if (mediaEl.dataset.intentionallyReleased === '1') return;
+      if (!mediaEl.isConnected || !mediaEl.getAttribute('src')) return;
+      try {
+        mediaEl.removeAttribute('src');
+        mediaEl.load();
+        mediaEl.setAttribute('src', originalSrc);
+        mediaEl.load();
+      } catch (e) {}
+    }, delay);
+  });
 }
 
 // Media vault methods
@@ -4661,8 +4717,11 @@ window.addEventListener('resize', () => {
   if (vaultCardMenuAnchor) closeVaultCardMenu();
 });
 
+let openProjectRequestSeq = 0;
+
 async function openProjectPage(projectId) {
   if (!projectId) return;
+  const reqSeq = ++openProjectRequestSeq;
   let proj = vaultProjects.find(p => p.project_id === projectId);
   if (!proj) {
     try {
@@ -4676,11 +4735,16 @@ async function openProjectPage(projectId) {
       console.warn('Error fetching projects in openProjectPage:', e);
     }
   }
-  if (!proj) return;
+  if (reqSeq !== openProjectRequestSeq || !proj) return;
   currentActiveProjectId = projectId;
   document.body.classList.add('in-workspace');
 
-  window.location.hash = `vault-project/${projectId}`;
+  // Use pushState instead of assigning location.hash so opening a card doesn't
+  // fire hashchange and double-render the workspace mid-media-load.
+  const targetHash = `#vault-project/${projectId}`;
+  if (window.location.hash !== targetHash) {
+    history.pushState(null, '', targetHash);
+  }
   document.title = `${proj.workspace_name} (${projectId}) | Luna`;
 
   const listView = document.getElementById('vaultProjectsListView');
@@ -4772,6 +4836,7 @@ async function openProjectPage(projectId) {
 window.initAudioEvents = function (fileId) {
   const audioEl = document.getElementById(`audio-el-${fileId}`);
   if (!audioEl) return;
+  attachMediaRecovery(audioEl);
 
   const setVisualPlaying = (isPlaying) => {
     const vinyl = document.getElementById(`vinyl-disc-${fileId}`);
@@ -4914,12 +4979,14 @@ window.handleVaultVideoMetadata = function (videoEl, fileId) {
 };
 
 function closeProjectPage() {
+  openProjectRequestSeq++;
   if (currentlyPlayingAudioId) {
     const otherEl = document.getElementById(`audio-el-${currentlyPlayingAudioId}`);
     if (otherEl) otherEl.pause();
     currentlyPlayingAudioId = null;
   }
-  document.querySelectorAll('video').forEach(v => v.pause());
+  const detailView = document.getElementById('vaultProjectDetailView');
+  releaseMediaLocks(detailView || document);
   currentActiveProjectId = null;
   document.body.classList.remove('in-workspace');
   if (window.location.hash) {
@@ -4928,9 +4995,12 @@ function closeProjectPage() {
   document.title = 'Luna: AI Video Clipper & Downloader';
 
   const listView = document.getElementById('vaultProjectsListView');
-  const detailView = document.getElementById('vaultProjectDetailView');
   const clipContainer = document.getElementById('clipperWorkflowContainer');
   const stdView = document.getElementById('vaultStandardDetailView');
+  const filesGrid = document.getElementById('projectFilesGrid');
+  const clipperNodes = document.getElementById('clipperCanvasNodesWrapper');
+  if (filesGrid) filesGrid.innerHTML = '';
+  if (clipperNodes) clipperNodes.innerHTML = '';
   if (clipContainer) clipContainer.classList.add('hidden');
   if (stdView) stdView.classList.add('hidden');
   if (detailView) detailView.classList.add('hidden');
@@ -5899,8 +5969,8 @@ function renderClipperWorkflow(proj) {
 
       const score = file.score || 90;
       const rawMediaUrl = file.url || (file.relative_path ? `/media-vault/${file.relative_path.replace(/\\/g, '/')}` : '#');
-      const mediaUrl = rawMediaUrl !== '#' ? encodeURI(rawMediaUrl) : '#';
-      const downloadUrl = file.download_url ? encodeURI(file.download_url) : mediaUrl;
+      const mediaUrl = encodeMediaUrl(rawMediaUrl);
+      const downloadUrl = file.download_url ? encodeMediaUrl(file.download_url) : mediaUrl;
 
       const hasCaption = !isTrimProject && Boolean(file.caption && file.caption.trim());
       const captionSnippet = hasCaption ? escapeHtml(file.caption.trim()) : '';
@@ -5965,18 +6035,7 @@ function renderClipperWorkflow(proj) {
       const clipVid = clipNode.querySelector('video');
       if (clipVid) {
         try { clipVid.disablePictureInPicture = true; } catch (e) {}
-        // Auto-recovery if browser momentarily drops source
-        clipVid.addEventListener('error', function () {
-          const el = this;
-          if (el.dataset.hasRecovered) return;
-          el.dataset.hasRecovered = 'true';
-          setTimeout(() => {
-            const prev = el.src;
-            el.src = '';
-            el.src = prev;
-            el.load();
-          }, 400);
-        });
+        attachMediaRecovery(clipVid);
       }
       initClipperDraggable(clipNode);
       clipsCol.appendChild(clipNode);
@@ -6259,7 +6318,7 @@ function renderProjectFiles(proj) {
     };
     const fSize = formatBytes(file.file_size);
     const rawMediaUrl = file.url || (file.relative_path ? `/media-vault/${file.relative_path.replace(/\\/g, '/')}` : '#');
-    const mediaUrl = rawMediaUrl !== '#' ? encodeURI(rawMediaUrl) : '#';
+    const mediaUrl = encodeMediaUrl(rawMediaUrl);
     const durStr = formatClipDuration(file);
     const dateStr = formatSavedDate(file.created_at || proj.created_at);
 
@@ -6327,6 +6386,7 @@ function renderProjectFiles(proj) {
       </div>
     `;
 
+    card.querySelectorAll('video, audio').forEach(attachMediaRecovery);
     grid.appendChild(card);
     if (isAud) {
       setTimeout(() => initAudioEvents(file.id), 20);
@@ -6458,10 +6518,11 @@ function confirmDeleteVaultProject(projectId, wsName, event) {
   openDeleteModalBox();
 }
 
-function releaseMediaLocks() {
+function releaseMediaLocks(scopeEl = document) {
   try {
-    document.querySelectorAll('video, audio').forEach(el => {
+    (scopeEl || document).querySelectorAll('video, audio').forEach(el => {
       try {
+        el.dataset.intentionallyReleased = '1';
         if (!el.paused) el.pause();
         el.removeAttribute('src');
         el.load();
@@ -6610,7 +6671,7 @@ async function executeDeleteVaultItem() {
 
   const idToDelete = deletingItemId;
 
-  releaseMediaLocks();
+  releaseMediaLocks(document.getElementById(`vault-card-${idToDelete}`) || document);
 
   try {
     const res = await fetch(`/api/vault/${encodeURIComponent(idToDelete)}`, {
@@ -6677,7 +6738,7 @@ window.addEventListener('hashchange', () => {
   if (hash.startsWith('#vault-project/')) {
     const pId = hash.replace('#vault-project/', '');
     if (currentMainTab !== 'vault') switchMainTab('vault');
-    openProjectPage(pId);
+    if (currentActiveProjectId !== pId) openProjectPage(pId);
   } else {
     if (currentActiveProjectId) {
       closeProjectPage();
@@ -6701,6 +6762,10 @@ window.addEventListener('popstate', () => {
   const hash = window.location.hash;
   if (!hash.startsWith('#vault-project/') && currentActiveProjectId) {
     closeProjectPage();
+  } else if (hash.startsWith('#vault-project/')) {
+    const pId = hash.replace('#vault-project/', '');
+    if (currentMainTab !== 'vault') switchMainTab('vault');
+    if (currentActiveProjectId !== pId) openProjectPage(pId);
   }
 });
 
