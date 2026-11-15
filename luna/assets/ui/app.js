@@ -1523,6 +1523,12 @@ let currentActionType = 'type_yt_video';
 let currentTaskRows = [];
 let highestJobProgress = 0;
 
+function isDownloadProgressRow(key, stage) {
+  if (key === 'download' || key === 'ingest' || key === 'extract') return true;
+  if (key === 'trim') return !stage || stage === 'queued' || stage === 'downloading';
+  return false;
+}
+
 function initTaskRows(action) {
   currentActionType = action || 'type_yt_video';
   highestJobProgress = 0;
@@ -1592,8 +1598,8 @@ function initTaskRows(action) {
         <div id="task-progress-box-${row.key}" class="px-3.5 pb-2.5 pt-0.5 ${row.status === 'running' ? '' : 'hidden'}">
           <div class="flex items-center justify-between text-[11px] mb-1.5 font-mono">
             <div class="flex items-center gap-2 min-w-0">
-              <span id="task-progress-pct-${row.key}" class="text-emerald-400 font-semibold tabular-nums text-[11.5px] ${row.key === 'download' || row.key === 'ingest' ? '' : 'hidden'}">0%</span>
-              <span id="task-progress-stage-${row.key}" class="text-zinc-300 text-[11px] font-sans truncate ${row.key === 'download' || row.key === 'ingest' ? 'hidden' : ''}">Preparing...</span>
+              <span id="task-progress-pct-${row.key}" class="text-emerald-400 font-semibold tabular-nums text-[11.5px] ${isDownloadProgressRow(row.key) ? '' : 'hidden'}">0%</span>
+              <span id="task-progress-stage-${row.key}" class="text-zinc-300 text-[11px] font-sans truncate ${isDownloadProgressRow(row.key) ? 'hidden' : ''}">Preparing...</span>
             </div>
             <div class="flex items-center gap-2.5 text-zinc-400 tabular-nums text-[11px] shrink-0">
               <span id="task-progress-meta-${row.key}">Connecting to stream...</span>
@@ -1607,7 +1613,7 @@ function initTaskRows(action) {
             </div>
           </div>
           <div class="w-full h-1.5 bg-white/[0.07] rounded-full overflow-hidden p-[1px] relative">
-            <div id="task-progress-fill-${row.key}" class="h-full bg-emerald-400 rounded-full transition-all duration-300 ${row.key === 'download' || row.key === 'ingest' ? '' : 'task-indeterminate-bar'}" style="width: ${row.key === 'download' || row.key === 'ingest' ? '0%' : '35%'};"></div>
+            <div id="task-progress-fill-${row.key}" class="h-full bg-emerald-400 rounded-full transition-all duration-300 ${isDownloadProgressRow(row.key) ? '' : 'task-indeterminate-bar'}" style="width: ${isDownloadProgressRow(row.key) ? '0%' : '35%'};"></div>
           </div>
         </div>
 
@@ -1756,7 +1762,7 @@ function setTaskStatuses(statusArr, progressData, computedProgressPct) {
     if (progressBoxEl) {
       if (newStatus === 'running') {
         progressBoxEl.classList.remove('hidden');
-        const isDownload = (row.key === 'download' || row.key === 'ingest');
+        const isDownload = isDownloadProgressRow(row.key, currentStage);
 
         if (isDownload) {
           if (progressPctEl) progressPctEl.classList.remove('hidden');
@@ -1769,7 +1775,7 @@ function setTaskStatuses(statusArr, progressData, computedProgressPct) {
 
           const speed = (progressData && progressData.download_speed) || '';
           const eta = (progressData && progressData.download_eta) ? `ETA ${progressData.download_eta}` : '';
-          const metaStr = [speed, eta].filter(Boolean).join(' • ') || 'Connecting to stream...';
+          const metaStr = [speed, eta].filter(Boolean).join(' • ') || (pctVal >= 99 ? 'Finalizing stream...' : 'Connecting to stream...');
           if (progressMetaEl) {
             progressMetaEl.innerText = metaStr;
             progressMetaEl.classList.remove('hidden');

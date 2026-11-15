@@ -765,7 +765,12 @@ def download_tiktok_video(url: str, output_dir: str, progress_hook: Optional[Cal
     raise RuntimeError("All TikTok download methods failed. Try another link.")
 
 
-def download_mp3(url: str, output_dir: str, progress_hook: Optional[Callable] = None) -> str:
+def download_mp3(
+    url: str,
+    output_dir: str,
+    progress_hook: Optional[Callable] = None,
+    postprocessor_hook: Optional[Callable] = None,
+) -> str:
     base_opts = {
         "format": "bestaudio/best",
         "outtmpl": os.path.join(output_dir, "audio.%(ext)s"),
@@ -774,6 +779,8 @@ def download_mp3(url: str, output_dir: str, progress_hook: Optional[Callable] = 
     }
     if progress_hook:
         base_opts["progress_hooks"] = [progress_hook]
+    if postprocessor_hook:
+        base_opts["postprocessor_hooks"] = [postprocessor_hook]
     opts = get_ytdl_base_opts(base_opts)
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)
@@ -1414,7 +1421,9 @@ def _worker_process(job_id: str, req: ProcessRequest):
     needs_conversion = action == "type_yt_video" and (
         req.aspect_ratio != "original" or (req.fps and req.fps != "auto")
     )
-    progress_hook = create_progress_hook(job_id, finished_pct=70.0 if needs_conversion else None)
+    is_audio_mp3 = action in ("type_yt_mp3", "type_tt_mp3", "mp3")
+    finished_pct = 70.0 if needs_conversion else (85.0 if is_audio_mp3 else None)
+    progress_hook = create_progress_hook(job_id, finished_pct=finished_pct)
     jobs[job_id]["progress"] = 0.0
     jobs[job_id]["download_speed"] = ""
     jobs[job_id]["download_eta"] = ""
@@ -1734,7 +1743,22 @@ def _worker_process(job_id: str, req: ProcessRequest):
             jobs[job_id]["stage"] = "downloading"
             jobs[job_id]["logs"].append("Extracting 320 kbps MP3 audio...")
 
-            file_path = download_mp3(url, job_output_dir, progress_hook=progress_hook)
+            def mp3_postprocessor_hook(d: dict):
+                if jobs.get(job_id, {}).get("cancelled"):
+                    raise RuntimeError("CANCELLED_BY_USER")
+                if d.get("status") == "started" and d.get("postprocessor") == "ExtractAudio":
+                    jobs[job_id]["stage"] = "saving"
+                    jobs[job_id]["progress"] = 90.0
+                    jobs[job_id]["download_speed"] = ""
+                    jobs[job_id]["download_eta"] = ""
+                    jobs[job_id]["stage_detail"] = "Converting to 320 kbps MP3..."
+
+            file_path = download_mp3(
+                url,
+                job_output_dir,
+                progress_hook=progress_hook,
+                postprocessor_hook=mp3_postprocessor_hook,
+            )
             if jobs.get(job_id, {}).get("cancelled"):
                 return
             filename = os.path.basename(file_path)
@@ -1749,6 +1773,7 @@ def _worker_process(job_id: str, req: ProcessRequest):
 
             jobs[job_id]["stage"] = "saving"
             jobs[job_id]["progress"] = 95.0
+            jobs[job_id]["stage_detail"] = "Saving to Media Vault..."
 
             # Register to Media Vault
             try:
