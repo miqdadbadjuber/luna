@@ -51,11 +51,33 @@ class TestFrontendVaultUI(unittest.TestCase):
         self.assertIn("The download was interrupted", html)
 
     def test_ratio_labels_cover_every_supported_ratio(self):
-        """3:4 and 1:1 must be labelled as themselves, not as 9:16 / 16:9."""
-        for label in ("16:9 Landscape", "9:16 Portrait", "3:4 Portrait", "1:1 Square"):
-            self.assertIn(label, self.source)
-        self.assertIn("filterCountSquare", self.source)
-        self.assertIn("ratioMetaFromSize", self.source)
+        """Video card ratio badges stay minimal: numeric ratios only, zero icons or orientation words."""
+        source = self.source
+        for label in ("'16:9'", "'9:16'", "'3:4'", "'4:5'", "'4:3'", "'1:1'"):
+            self.assertIn(label, source)
+        self.assertIn("renderRatioBadgeHtml", source)
+        self.assertIn("formatCompactRatio", source)
+        self.assertIn("filterCountSquare", source)
+        self.assertIn("ratioMetaFromSize", source)
+
+        # Badge helper & VAULT_RATIOS render text-only ratio pill (no lucide icon, no Landscape/Portrait/Square words)
+        ratios_block = source.split("const VAULT_RATIOS = [")[1].split("];")[0]
+        badge_block = source.split("function renderRatioBadgeHtml(label)")[1].split("function ratioAspectClass")[0]
+        self.assertNotIn("data-lucide", badge_block)
+        self.assertIn("ratio-text", badge_block)
+        for word in ("Landscape", "Portrait", "Square"):
+            self.assertNotIn(word, ratios_block)
+
+        # Applied consistently across Studio cards, Node Canvas cards, and Media Vault Grid cards
+        for section_fn in (
+            ("function renderOpusResults(data)", "function copyText("),
+            ("function renderClipperWorkflow(proj)", "(function initClipperCanvasControls()"),
+            ("function renderProjectFiles(proj)", "function toggleProjectDrawer"),
+        ):
+            block = source.split(section_fn[0])[1].split(section_fn[1])[0]
+            self.assertIn("renderRatioBadgeHtml(", block)
+            self.assertNotIn("9:16 Portrait", block)
+            self.assertNotIn("16:9 Landscape", block)
 
     def test_navbar_tabs_exist(self):
         """Check for tabBtnStudio and tabBtnVault."""

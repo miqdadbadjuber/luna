@@ -2833,11 +2833,7 @@ function renderOpusResults(data) {
     } else {
       const fileId = `studio-vid-${idx}`;
       const isPortraitDefault = currentPlatform === 'tiktok' || currentPlatform === 'instagram' || currentActionType === 'type_yt_ai_clip';
-      const itemMeta = ratioMetaFromValue(item.aspect_ratio) || ratioMetaFromFilename(item.filename) || {
-        label: isPortraitDefault ? '9:16 Portrait' : '16:9 Landscape',
-        kind: isPortraitDefault ? 'portrait' : 'landscape',
-        icon: isPortraitDefault ? 'smartphone' : 'tv',
-      };
+      const itemMeta = resolveMediaRatioMeta(item.aspect_ratio, item.filename, isPortraitDefault);
       const itemIsWide = itemMeta.kind === 'landscape';
 
       const metaBadges = [];
@@ -2872,10 +2868,7 @@ function renderOpusResults(data) {
         <div class="video-preview-wrapper relative bg-[#09090b] w-full overflow-hidden border-b border-white/[0.06] flex items-center justify-center ${ratioAspectClass(itemMeta)} ${itemIsWide ? 'max-h-[520px]' : 'max-h-[500px]'}" style="aspect-ratio: ${ratioAspectStyle(itemMeta)}" data-file-id="${fileId}">
           <div class="ambient-glow absolute inset-0 opacity-15 pointer-events-none filter blur-2xl scale-125 bg-gradient-to-t from-white/10 via-white/5 to-transparent"></div>
 
-          <div class="ratio-pill absolute top-2.5 left-2.5 z-20 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-[10px] font-mono text-zinc-300 pointer-events-none">
-            <i data-lucide="${itemMeta.icon}" class="w-3 h-3 ${itemIsWide ? 'text-zinc-400' : 'text-white'}"></i>
-            <span class="ratio-text">${itemMeta.label}</span>
-          </div>
+          ${renderRatioBadgeHtml(itemMeta.label)}
 
           <media-theme-sutro style="width:100%; height:100%;" data-player-size="medium">
             <video 
@@ -5196,15 +5189,40 @@ window.initAudioEvents = function (fileId) {
   }
 };
 
-// A workspace can hold 16:9, 9:16, 3:4, 4:3 and 1:1 files side by side, so the pill
-// has to describe the real ratio instead of "portrait or not".
+// Shared aspect ratio helpers across Studio and Media Vault video cards:
+// pill badges display pure numeric ratios (e.g. "16:9", "9:16") with no icon or text clutter.
 const VAULT_RATIOS = [
-  { ratio: 16 / 9, label: '16:9 Landscape', kind: 'landscape', icon: 'tv' },
-  { ratio: 4 / 3, label: '4:3 Landscape', kind: 'landscape', icon: 'tv' },
-  { ratio: 9 / 16, label: '9:16 Portrait', kind: 'portrait', icon: 'smartphone' },
-  { ratio: 3 / 4, label: '3:4 Portrait', kind: 'portrait', icon: 'smartphone' },
-  { ratio: 1, label: '1:1 Square', kind: 'square', icon: 'square' },
+  { ratio: 16 / 9, label: '16:9', kind: 'landscape' },
+  { ratio: 4 / 3, label: '4:3', kind: 'landscape' },
+  { ratio: 21 / 9, label: '21:9', kind: 'landscape' },
+  { ratio: 9 / 16, label: '9:16', kind: 'portrait' },
+  { ratio: 3 / 4, label: '3:4', kind: 'portrait' },
+  { ratio: 4 / 5, label: '4:5', kind: 'portrait' },
+  { ratio: 1, label: '1:1', kind: 'square' },
 ];
+
+function formatCompactRatio(width, height) {
+  const w = Math.max(1, Math.round(Number(width) || 0));
+  const h = Math.max(1, Math.round(Number(height) || 0));
+  const gcd = (a, b) => (b === 0 ? a : gcd(b, a % b));
+  const g = gcd(w, h);
+  const rw = Math.round(w / g);
+  const rh = Math.round(h / g);
+  if (rw <= 21 && rh <= 21) return `${rw}:${rh}`;
+  // Fallback continued-fraction search so odd "Original" dimensions still show a compact ratio.
+  const target = w / h;
+  let best = { num: rw, den: rh, err: Infinity };
+  for (let den = 1; den <= 16; den++) {
+    const num = Math.max(1, Math.round(target * den));
+    const err = Math.abs(target - num / den) / target;
+    if (err < best.err) {
+      best = { num, den, err };
+      if (err < 0.015) break;
+    }
+  }
+  const g2 = gcd(best.num, best.den);
+  return `${Math.round(best.num / g2)}:${Math.round(best.den / g2)}`;
+}
 
 function ratioMetaFromSize(width, height) {
   if (!width || !height) return null;
@@ -5217,9 +5235,8 @@ function ratioMetaFromSize(width, height) {
   if (best) return best;
   const kind = actual > 1.05 ? 'landscape' : (actual < 0.95 ? 'portrait' : 'square');
   return {
-    label: `${width}:${height}`,
+    label: formatCompactRatio(width, height),
     kind,
-    icon: kind === 'portrait' ? 'smartphone' : (kind === 'square' ? 'square' : 'tv'),
   };
 }
 
@@ -5234,34 +5251,53 @@ function ratioMetaFromFilename(name) {
   return match ? ratioMetaFromSize(Number(match[1]), Number(match[2])) : null;
 }
 
+function resolveMediaRatioMeta(ratioValue, filename, preferPortrait = false) {
+  return ratioMetaFromValue(ratioValue) || ratioMetaFromFilename(filename) || {
+    label: preferPortrait ? '9:16' : '16:9',
+    kind: preferPortrait ? 'portrait' : 'landscape',
+  };
+}
+
+function renderRatioBadgeHtml(label) {
+  const text = escapeHtml(label || '16:9');
+  return `<div class="ratio-pill absolute top-2.5 left-2.5 z-20 inline-flex items-center px-2 py-0.5 rounded-full bg-black/65 backdrop-blur-md border border-white/10 text-[10px] font-mono font-medium tracking-tight text-zinc-100 tabular-nums pointer-events-none select-none"><span class="ratio-text">${text}</span></div>`;
+}
+
 function ratioAspectClass(meta) {
   if (!meta) return 'aspect-video';
   if (meta.kind === 'square') return 'aspect-square';
-  if (meta.kind === 'portrait') return meta.label.indexOf('3:4') === 0 ? 'aspect-[3/4]' : 'aspect-[9/16]';
+  if (meta.label === '4:5') return 'aspect-[4/5]';
+  if (meta.label === '3:4') return 'aspect-[3/4]';
+  if (meta.kind === 'portrait') return 'aspect-[9/16]';
+  if (meta.label === '4:3') return 'aspect-[4/3]';
   return 'aspect-video';
 }
 
 // The class above is cosmetic; the inline style keeps the box correct even if the
 // utility for that ratio has not been generated yet.
 function ratioAspectStyle(meta) {
-  if (!meta) return '16 / 9';
-  if (meta.kind === 'square') return '1 / 1';
-  if (meta.kind === 'portrait') return meta.label.indexOf('3:4') === 0 ? '3 / 4' : '9 / 16';
-  return '16 / 9';
+  if (!meta || !meta.label) return '16 / 9';
+  const parts = String(meta.label).split(':');
+  if (parts.length === 2 && Number(parts[0]) > 0 && Number(parts[1]) > 0) {
+    return `${Number(parts[0])} / ${Number(parts[1])}`;
+  }
+  return meta.kind === 'portrait' ? '9 / 16' : (meta.kind === 'square' ? '1 / 1' : '16 / 9');
 }
 
 window.handleVaultVideoMetadata = function (videoEl, fileId) {
   if (!videoEl || !videoEl.videoWidth || !videoEl.videoHeight) return;
   const wrapper = videoEl.closest('.video-preview-wrapper');
   if (!wrapper) return;
-  const card = wrapper.closest('.t-rec-card') || wrapper.closest('[data-media-type]') || wrapper.parentElement;
   const meta = ratioMetaFromSize(videoEl.videoWidth, videoEl.videoHeight);
   const ratioText = wrapper.querySelector('.ratio-text');
-  const icon = wrapper.querySelector('.ratio-pill [data-lucide]');
+  if (ratioText && meta) ratioText.innerText = meta.label;
+  if (wrapper.dataset.lockLayout === 'true') return;
+
+  const card = wrapper.closest('.t-rec-card') || wrapper.closest('[data-media-type]') || wrapper.parentElement;
   const isSingleCard = card && card.classList.contains('single-result-card');
   const isWide = !meta || meta.kind === 'landscape';
 
-  wrapper.classList.remove('aspect-video', 'aspect-[4/5]', 'aspect-[9/16]', 'aspect-[3/4]', 'aspect-square');
+  wrapper.classList.remove('aspect-video', 'aspect-[4/3]', 'aspect-[4/5]', 'aspect-[9/16]', 'aspect-[3/4]', 'aspect-square');
   wrapper.classList.add(ratioAspectClass(meta));
   wrapper.style.aspectRatio = ratioAspectStyle(meta);
 
@@ -5282,12 +5318,6 @@ window.handleVaultVideoMetadata = function (videoEl, fileId) {
   }
 
   if (card) card.setAttribute('data-media-type', meta ? meta.kind : 'landscape');
-  if (ratioText) ratioText.innerText = meta ? meta.label : 'Video';
-  if (icon && meta) {
-    icon.setAttribute('data-lucide', meta.icon);
-    icon.className = isWide ? 'w-3 h-3 text-zinc-400' : 'w-3 h-3 text-white';
-  }
-  lucide.createIcons();
   if (typeof updateVaultFilterCounters === 'function') {
     updateVaultFilterCounters();
   }
@@ -6324,6 +6354,8 @@ function renderClipperWorkflow(proj) {
         </div>
       ` : '';
 
+      const clipRatioMeta = resolveMediaRatioMeta(file.aspect_ratio || detectedRatio, file.filename, !isTrimProject);
+
       clipNode.innerHTML = `
         ${captionPopover}
         <div id="vault-card-${file.id}" data-file-id="${file.id}" class="vault-file-card w-full rounded-[14px] bg-[#171717] border border-white/[0.08] shadow-[0_8px_24px_rgba(0,0,0,0.6)] overflow-hidden flex flex-col relative">
@@ -6333,7 +6365,8 @@ function renderClipperWorkflow(proj) {
             </svg>
           </span>
           <!-- Video Preview Area (Starts directly at top of card, no header bar above) -->
-          <div class="relative bg-black w-full overflow-hidden border-b border-white/[0.06]" style="aspect-ratio: 9/16; max-height: 230px;">
+          <div class="video-preview-wrapper relative bg-black w-full overflow-hidden border-b border-white/[0.06]" style="aspect-ratio: 9/16; max-height: 230px;" data-file-id="${file.id}" data-lock-layout="true">
+            ${renderRatioBadgeHtml(clipRatioMeta.label)}
             <media-theme-sutro style="width:100%; height:100%;" data-player-size="mini" disabled>
               <video
                 slot="media"
@@ -6342,6 +6375,7 @@ function renderClipperWorkflow(proj) {
                 disablepictureinpicture
                 controlslist="nodownload nopictureinpicture"
                 src="${mediaUrl}"
+                onloadedmetadata="handleVaultVideoMetadata(this, '${file.id}')"
                 style="width:100%; height:100%; object-fit:contain; pointer-events:none;">
               </video>
             </media-theme-sutro>
@@ -6682,14 +6716,9 @@ function renderProjectFiles(proj) {
 
   files.forEach(file => {
     const isAud = file.type === 'audio' || (file.filename || '').endsWith('.mp3');
-    const storedRatio = ratioMetaFromValue(file.aspect_ratio) || ratioMetaFromFilename(file.filename);
     const guessPortrait = isPortraitWorkspace || (file.quality && file.quality.includes('vertical')) ||
       (file.filename && (file.filename.includes('Reels') || file.filename.includes('Shorts')));
-    const mediaMeta = storedRatio || {
-      label: guessPortrait ? '9:16 Portrait' : '16:9 Landscape',
-      kind: guessPortrait ? 'portrait' : 'landscape',
-      icon: guessPortrait ? 'smartphone' : 'tv',
-    };
+    const mediaMeta = resolveMediaRatioMeta(file.aspect_ratio, file.filename, guessPortrait);
     const fSize = formatBytes(file.file_size);
     const rawMediaUrl = file.url || (file.relative_path ? `/media-vault/${file.relative_path.replace(/\\/g, '/')}` : '#');
     const mediaUrl = encodeMediaUrl(rawMediaUrl);
@@ -6717,10 +6746,7 @@ function renderProjectFiles(proj) {
         <div class="video-preview-wrapper relative bg-[#09090b] w-full overflow-hidden border-b border-white/[0.06] flex items-center justify-center ${ratioAspectClass(mediaMeta)} ${mediaMeta.kind === 'landscape' ? 'max-h-[520px]' : 'max-h-[500px]'}" style="aspect-ratio: ${ratioAspectStyle(mediaMeta)}" data-file-id="${file.id}">
           <div class="ambient-glow absolute inset-0 opacity-15 pointer-events-none filter blur-2xl scale-125 bg-gradient-to-t from-white/10 via-white/5 to-transparent"></div>
 
-          <div class="ratio-pill absolute top-2.5 left-2.5 z-20 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-[10px] font-mono text-zinc-300 pointer-events-none">
-            <i data-lucide="${mediaMeta.icon}" class="w-3 h-3 ${mediaMeta.kind === 'landscape' ? 'text-zinc-400' : 'text-white'}"></i>
-            <span class="ratio-text">${mediaMeta.label}</span>
-          </div>
+          ${renderRatioBadgeHtml(mediaMeta.label)}
 
           <media-theme-sutro style="width:100%; height:100%;" data-player-size="medium">
             <video 
