@@ -2713,50 +2713,26 @@ function renderAudioShowcaseHtml(fileId, audioUrl, thumbnailUrl, isLarge = false
   const safeThumb = thumbnailUrl ? escapeHtml(thumbnailUrl) : '';
   const hasThumb = Boolean(safeThumb);
 
-  const controlsHtml = `
-    <div class="relative z-10 w-full ${hasThumb ? `${isLarge ? 'px-6 pt-1 pb-4' : 'px-4 pt-1 pb-3.5'}` : `${isLarge ? 'mt-4 pt-4 border-t border-white/[0.06]' : 'mt-3 pt-3 border-t border-white/[0.06]'}`} ${isLarge ? 'space-y-2.5' : 'space-y-2'}">
-      <audio id="audio-el-${fileId}" src="${audioUrl}" preload="metadata" class="hidden"></audio>
-
-      <div class="flex items-center ${isLarge ? 'gap-2.5 text-xs' : 'gap-2 text-[11px]'} font-mono text-zinc-400">
-        <span id="audio-time-${fileId}">0:00</span>
-        <div
-          class="relative flex-1 ${isLarge ? 'h-2' : 'h-1.5'} rounded-full bg-white/10 hover:bg-white/20 transition cursor-pointer overflow-hidden group/scrubber"
-          onclick="seekCustomAudio(event, '${fileId}')"
-          title="Seek">
-          <div id="audio-progress-${fileId}" class="h-full bg-[#f5ebd4] rounded-full w-0 transition-[width] duration-75"></div>
-        </div>
-        <span id="audio-dur-${fileId}">--:--</span>
-      </div>
-
-      <div class="flex items-center justify-between ${isLarge ? 'pt-1' : 'pt-0.5'}">
-        <div class="flex items-center ${isLarge ? 'gap-2.5' : 'gap-2'}">
-          <button
-            type="button"
-            id="audio-play-btn-${fileId}"
-            onclick="toggleCustomAudioPlay('${fileId}')"
-            class="${isLarge ? 'w-8 h-8' : 'w-7 h-7'} rounded-full bg-white text-black hover:bg-zinc-200 active:scale-95 transition-all flex items-center justify-center shadow cursor-pointer"
-            title="Play / Pause">
-            <i data-lucide="play" class="${isLarge ? 'w-4 h-4' : 'w-3.5 h-3.5'} ml-0.5"></i>
-          </button>
-          <span class="${isLarge ? 'text-xs text-zinc-300' : 'text-[11px] text-zinc-400'} font-mono" id="audio-status-${fileId}">Audio Track</span>
-        </div>
-
-        <button
-          type="button"
-          onclick="toggleCustomAudioMute('${fileId}')"
-          id="audio-mute-btn-${fileId}"
-          class="${isLarge ? 'p-1.5 rounded-lg' : 'p-1 rounded-md'} text-zinc-400 hover:text-white hover:bg-white/[0.06] transition cursor-pointer"
-          title="Mute / Unmute">
-          <i data-lucide="volume-2" class="${isLarge ? 'w-4 h-4' : 'w-3.5 h-3.5'}"></i>
-        </button>
-      </div>
-    </div>
+  const sutroAudioPlayerHtml = `
+    <media-theme-sutro
+      data-player-size="medium"
+      data-audio-player="true"
+      class="absolute inset-0 z-20 block w-full h-full"
+      style="--media-background-color: transparent; background: transparent;">
+      <audio
+        id="audio-el-${fileId}"
+        slot="media"
+        src="${audioUrl}"
+        preload="metadata"
+        style="position:absolute;width:0;height:0;opacity:0;pointer-events:none;">
+      </audio>
+    </media-theme-sutro>
   `;
 
   if (hasThumb) {
     return `
-      <div class="audio-card-showcase audio-has-thumb bg-[#0a0a0a] border-b border-white/[0.06] overflow-hidden select-none">
-        <div class="relative w-full ${isLarge ? 'h-48' : 'h-40'} flex items-center justify-center overflow-hidden">
+      <div class="audio-card-showcase audio-has-thumb relative bg-[#0a0a0a] border-b border-white/[0.06] overflow-hidden select-none">
+        <div class="relative w-full ${isLarge ? 'h-48' : 'h-40'} flex items-center justify-center overflow-hidden pointer-events-none">
           <img src="${safeThumb}" alt="" loading="lazy" class="audio-thumb-img absolute inset-0 w-full h-full object-cover object-center brightness-[0.52] pointer-events-none" onerror="const s = this.closest('.audio-card-showcase'); if (s) s.classList.remove('audio-has-thumb'); this.remove();" />
           <div class="absolute inset-0 shadow-[inset_0_0_36px_rgba(10,10,10,0.8)] pointer-events-none"></div>
 
@@ -2764,16 +2740,17 @@ function renderAudioShowcaseHtml(fileId, audioUrl, thumbnailUrl, isLarge = false
             ${barsHtml}
           </div>
         </div>
-        ${controlsHtml}
+        <div class="relative w-full h-[46px] pointer-events-none"></div>
+        ${sutroAudioPlayerHtml}
       </div>
     `;
   }
 
   return `
-    <div class="audio-card-showcase relative bg-[#121212] border-b border-white/[0.06] ${isLarge ? 'p-7' : 'p-5'} flex flex-col items-center justify-center overflow-hidden select-none">
+    <div class="audio-card-showcase relative bg-[#121212] border-b border-white/[0.06] ${isLarge ? 'p-7 pb-14' : 'p-5 pb-12'} flex flex-col items-center justify-center overflow-hidden select-none">
       <div class="absolute inset-0 bg-radial from-white/[0.07] via-transparent to-transparent pointer-events-none"></div>
 
-      <div class="relative ${isLarge ? 'my-3' : 'my-2'} flex items-center justify-center">
+      <div class="relative ${isLarge ? 'my-3' : 'my-2'} flex items-center justify-center pointer-events-none">
         <div id="vinyl-disc-${fileId}" class="vinyl-disc ${isLarge ? 'w-28 h-28' : 'w-20 h-20'} rounded-full bg-[#0a0a0a] border border-zinc-700/60 ${isLarge ? 'shadow-[0_12px_32px_rgba(0,0,0,0.8)]' : 'shadow-[0_8px_25px_rgba(0,0,0,0.8)]'} relative flex items-center justify-center transition-transform">
           <div class="absolute ${isLarge ? 'inset-2' : 'inset-1.5'} rounded-full border border-white/[0.06]"></div>
           <div class="absolute ${isLarge ? 'inset-4' : 'inset-3'} rounded-full border border-white/[0.04]"></div>
@@ -2784,11 +2761,11 @@ function renderAudioShowcaseHtml(fileId, audioUrl, thumbnailUrl, isLarge = false
         </div>
       </div>
 
-      <div id="waveform-bars-${fileId}" class="waveform-bars flex items-end justify-center gap-[3.5px] ${isLarge ? 'h-8 max-w-[280px] mt-2 mb-2' : 'h-6 max-w-[200px] mt-1 mb-1'} w-full px-2">
+      <div id="waveform-bars-${fileId}" class="waveform-bars flex items-end justify-center gap-[3.5px] ${isLarge ? 'h-8 max-w-[280px] mt-2 mb-2' : 'h-6 max-w-[200px] mt-1 mb-2'} w-full px-2 pointer-events-none">
         ${barsHtml}
       </div>
 
-      ${controlsHtml}
+      ${sutroAudioPlayerHtml}
     </div>
   `;
 }
@@ -4472,113 +4449,48 @@ async function openProjectPage(projectId) {
   lucide.createIcons();
 }
 
-function formatAudioSeconds(sec) {
-  if (isNaN(sec) || sec === Infinity || sec < 0) return '0:00';
-  const m = Math.floor(sec / 60);
-  const s = Math.floor(sec % 60);
-  return `${m}:${s < 10 ? '0' : ''}${s}`;
-}
-
-window.toggleCustomAudioPlay = function (fileId) {
-  const audioEl = document.getElementById(`audio-el-${fileId}`);
-  const btn = document.getElementById(`audio-play-btn-${fileId}`);
-  const vinyl = document.getElementById(`vinyl-disc-${fileId}`);
-  const waveform = document.getElementById(`waveform-bars-${fileId}`);
-  const statusEl = document.getElementById(`audio-status-${fileId}`);
-  if (!audioEl) return;
-
-  if (currentlyPlayingAudioId && currentlyPlayingAudioId !== fileId) {
-    const prevEl = document.getElementById(`audio-el-${currentlyPlayingAudioId}`);
-    const prevBtn = document.getElementById(`audio-play-btn-${currentlyPlayingAudioId}`);
-    const prevVinyl = document.getElementById(`vinyl-disc-${currentlyPlayingAudioId}`);
-    const prevWaveform = document.getElementById(`waveform-bars-${currentlyPlayingAudioId}`);
-    const prevStatus = document.getElementById(`audio-status-${currentlyPlayingAudioId}`);
-    if (prevEl) prevEl.pause();
-    if (prevBtn) prevBtn.innerHTML = '<i data-lucide="play" class="w-3.5 h-3.5 ml-0.5"></i>';
-    if (prevVinyl) prevVinyl.classList.remove('spinning');
-    if (prevWaveform) prevWaveform.classList.remove('playing');
-    if (prevStatus) prevStatus.innerText = 'Audio Track';
-  }
-
-  if (audioEl.paused) {
-    audioEl.play().then(() => {
-      currentlyPlayingAudioId = fileId;
-      if (btn) btn.innerHTML = '<i data-lucide="pause" class="w-3.5 h-3.5"></i>';
-      if (vinyl) vinyl.classList.add('spinning');
-      if (waveform) waveform.classList.add('playing');
-      if (statusEl) statusEl.innerText = 'Playing';
-      lucide.createIcons();
-    }).catch(err => {
-      console.warn('Audio play error:', err);
-    });
-  } else {
-    audioEl.pause();
-    currentlyPlayingAudioId = null;
-    if (btn) btn.innerHTML = '<i data-lucide="play" class="w-3.5 h-3.5 ml-0.5"></i>';
-    if (vinyl) vinyl.classList.remove('spinning');
-    if (waveform) waveform.classList.remove('playing');
-    if (statusEl) statusEl.innerText = 'Paused';
-    lucide.createIcons();
-  }
-};
-
-window.seekCustomAudio = function (e, fileId) {
-  const audioEl = document.getElementById(`audio-el-${fileId}`);
-  if (!audioEl || !audioEl.duration) return;
-  const rect = e.currentTarget.getBoundingClientRect();
-  const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-  audioEl.currentTime = pos * audioEl.duration;
-  const progressEl = document.getElementById(`audio-progress-${fileId}`);
-  if (progressEl) progressEl.style.width = (pos * 100) + '%';
-};
-
-window.toggleCustomAudioMute = function (fileId) {
-  const audioEl = document.getElementById(`audio-el-${fileId}`);
-  const btn = document.getElementById(`audio-mute-btn-${fileId}`);
-  if (!audioEl) return;
-  audioEl.muted = !audioEl.muted;
-  if (btn) {
-    btn.innerHTML = audioEl.muted
-      ? '<i data-lucide="volume-x" class="w-3.5 h-3.5 text-red-400"></i>'
-      : '<i data-lucide="volume-2" class="w-3.5 h-3.5"></i>';
-    lucide.createIcons();
-  }
-};
-
 window.initAudioEvents = function (fileId) {
   const audioEl = document.getElementById(`audio-el-${fileId}`);
   if (!audioEl) return;
 
-  audioEl.ontimeupdate = () => {
-    const timeEl = document.getElementById(`audio-time-${fileId}`);
-    const progressEl = document.getElementById(`audio-progress-${fileId}`);
-    if (timeEl) timeEl.innerText = formatAudioSeconds(audioEl.currentTime);
-    if (progressEl && audioEl.duration) {
-      progressEl.style.width = ((audioEl.currentTime / audioEl.duration) * 100) + '%';
-    }
+  const setVisualPlaying = (isPlaying) => {
+    const vinyl = document.getElementById(`vinyl-disc-${fileId}`);
+    const waveform = document.getElementById(`waveform-bars-${fileId}`);
+    if (vinyl) vinyl.classList.toggle('spinning', isPlaying);
+    if (waveform) waveform.classList.toggle('playing', isPlaying);
   };
 
-  audioEl.onloadedmetadata = () => {
-    const durEl = document.getElementById(`audio-dur-${fileId}`);
-    if (durEl && audioEl.duration) {
-      durEl.innerText = formatAudioSeconds(audioEl.duration);
+  audioEl.onplay = () => {
+    if (currentlyPlayingAudioId && currentlyPlayingAudioId !== fileId) {
+      const prevEl = document.getElementById(`audio-el-${currentlyPlayingAudioId}`);
+      const prevVinyl = document.getElementById(`vinyl-disc-${currentlyPlayingAudioId}`);
+      const prevWaveform = document.getElementById(`waveform-bars-${currentlyPlayingAudioId}`);
+      if (prevEl) prevEl.pause();
+      if (prevVinyl) prevVinyl.classList.remove('spinning');
+      if (prevWaveform) prevWaveform.classList.remove('playing');
     }
+    currentlyPlayingAudioId = fileId;
+    setVisualPlaying(true);
+  };
+
+  audioEl.onpause = () => {
+    setVisualPlaying(false);
+    if (currentlyPlayingAudioId === fileId) currentlyPlayingAudioId = null;
   };
 
   audioEl.onended = () => {
-    const btn = document.getElementById(`audio-play-btn-${fileId}`);
-    const vinyl = document.getElementById(`vinyl-disc-${fileId}`);
-    const waveform = document.getElementById(`waveform-bars-${fileId}`);
-    const statusEl = document.getElementById(`audio-status-${fileId}`);
-    const progressEl = document.getElementById(`audio-progress-${fileId}`);
-    if (btn) btn.innerHTML = '<i data-lucide="play" class="w-3.5 h-3.5 ml-0.5"></i>';
-    if (vinyl) vinyl.classList.remove('spinning');
-    if (waveform) waveform.classList.remove('playing');
-    if (statusEl) statusEl.innerText = 'Completed';
-    if (progressEl) progressEl.style.width = '0%';
+    setVisualPlaying(false);
     if (currentlyPlayingAudioId === fileId) currentlyPlayingAudioId = null;
-    lucide.createIcons();
   };
+
+  if (typeof compactSutroPlayers === 'function') {
+    compactSutroPlayers();
+  }
+  if (window.customElements && customElements.whenDefined) {
+    customElements.whenDefined('media-theme-sutro').then(() => {
+      if (typeof compactSutroPlayers === 'function') compactSutroPlayers();
+    });
+  }
 };
 
 // A workspace can hold 16:9, 9:16, 3:4, 4:3 and 1:1 files side by side, so the pill
@@ -4814,6 +4726,25 @@ window.compactSutroPlayers = function () {
         }
         media-pip-button,
         [part~="pip-button"] {
+          display: none !important;
+          visibility: hidden !important;
+          opacity: 0 !important;
+          pointer-events: none !important;
+        }
+
+        /* Audio cards use Sutro medium controls over a transparent stage without fullscreen/cast/gradient */
+        :host([data-audio-player="true"]),
+        :host([data-audio-player="true"]) media-controller {
+          background: transparent !important;
+          --media-background-color: transparent !important;
+          width: 100% !important;
+          height: 100% !important;
+          display: block !important;
+        }
+        :host([data-audio-player="true"]) .media-gradient-bottom,
+        :host([data-audio-player="true"]) media-fullscreen-button,
+        :host([data-audio-player="true"]) media-airplay-button,
+        :host([data-audio-player="true"]) media-cast-button {
           display: none !important;
           visibility: hidden !important;
           opacity: 0 !important;

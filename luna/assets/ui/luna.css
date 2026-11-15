@@ -2040,6 +2040,16 @@ media-theme-sutro:fullscreen {
   font-size: 16px !important;
 }
 
+media-theme-sutro[data-audio-player="true"] {
+  --media-background-color: transparent !important;
+  background: transparent !important;
+  display: block;
+}
+
+media-theme-sutro[data-audio-player="true"] media-fullscreen-button {
+  display: none !important;
+}
+
 /* Hide settings gear button, menu, and button tooltips entirely */
 media-theme-sutro media-settings-menu-button,
 media-theme-sutro media-settings-menu,
