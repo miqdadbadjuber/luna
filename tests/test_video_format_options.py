@@ -85,6 +85,29 @@ class TestVideoFormatOptions(unittest.TestCase):
         cmd = mock_run.call_args[0][0]
         self.assertNotIn("-vf", cmd)
 
+    @patch("luna.app._get_encoder_flags", return_value=["-c:v", "h264_amf", "-quality", "speed"])
+    @patch("luna.app._run_ffmpeg")
+    def test_extract_clip_segment_uses_detected_hw_encoder(self, mock_run, mock_flags):
+        mock_run.return_value = MagicMock(returncode=0)
+        extract_clip_segment("/fake/full.mp4", "/fake/out.mp4", 10.0, 25.0, ratio="9:16")
+        mock_flags.assert_called_once()
+        cmd = mock_run.call_args[0][0]
+        self.assertIn("h264_amf", cmd)
+        self.assertIn("-quality", cmd)
+        self.assertNotIn("libx264", cmd)
+
+    @patch("luna.app._get_encoder_flags", return_value=["-c:v", "h264_amf", "-quality", "speed"])
+    @patch("luna.app._run_ffmpeg")
+    def test_format_video_target_uses_detected_hw_encoder(self, mock_run, mock_flags):
+        mock_run.return_value = MagicMock(returncode=0)
+        out = format_video_target("/fake/in.mp4", ratio="9:16", fps="60")
+        self.assertEqual(out.replace("\\", "/"), "/fake/in_9x16_60fps.mp4")
+        mock_flags.assert_called_once()
+        cmd = mock_run.call_args[0][0]
+        self.assertIn("h264_amf", cmd)
+        self.assertIn("-quality", cmd)
+        self.assertNotIn("libx264", cmd)
+
 
 if __name__ == "__main__":
     unittest.main()

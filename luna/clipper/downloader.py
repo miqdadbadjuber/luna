@@ -31,6 +31,18 @@ def _import_ytdlp():
 # was 290 MB against 132 MB, and face-tracked renders from it took up to 21% longer.
 YOUTUBE_FORMAT_SORT = ["res", "vcodec:h264"]
 
+# Single source of truth for yt-dlp network tuning across all downloaders:
+# 12 concurrent fragments, 10 MiB HTTP chunks (reduces YouTube range throttling),
+# and 64 KiB read buffer (yt-dlp HttpFD defaults to 1024 B).
+YTDLP_DOWNLOAD_TUNING = {
+    "socket_timeout": 15,
+    "retries": 5,
+    "fragment_retries": 5,
+    "concurrent_fragment_downloads": 12,
+    "http_chunk_size": 10 * 1024 * 1024,
+    "buffersize": 64 * 1024,
+}
+
 
 def _format_for(fmt: str) -> str:
     """Map our '720' / '1080' shorthand to a fast yt-dlp format selector."""
@@ -191,10 +203,7 @@ def download_youtube_local(
         "noprogress": False,
         "noplaylist": True,
         "playlist_items": "1",
-        "socket_timeout": 15,
-        "retries": 3,
-        "fragment_retries": 3,
-        "concurrent_fragment_downloads": 4,
+        **YTDLP_DOWNLOAD_TUNING,
     }
     if os.path.exists(cookie_file) and os.path.getsize(cookie_file) > 0:
         ydl_opts["cookiefile"] = cookie_file

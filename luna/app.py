@@ -58,6 +58,7 @@ from .ffmpeg_setup import ensure_ffmpeg
 ensure_ffmpeg()
 
 from .clipper import generate_shorts
+from .clipper.clipper import _get_encoder_flags
 from .clipper.config import (
     DEFAULT_OPENAI_BASE_URL,
     openai_base_url,
@@ -65,7 +66,7 @@ from .clipper.config import (
     transcribe_provider,
     transcribe_provider_label,
 )
-from .clipper.downloader import YOUTUBE_FORMAT_SORT
+from .clipper.downloader import YOUTUBE_FORMAT_SORT, YTDLP_DOWNLOAD_TUNING
 from .clipper.highlights import clean_caption
 from .storage_manager import (
     CATEGORY_MAP,
@@ -495,18 +496,6 @@ def _run_ffmpeg(cmd: List[str], timeout_sec: float, cancel_event: Optional[threa
         raise RuntimeError(f"ffmpeg failed (exit {proc.returncode}): {tail or 'no stderr output'}")
 
 
-# YouTube serves DASH fragments one request at a time by default. Measured on this
-# machine: ~0.5 MB/s that way, 30-48 MB/s for a plain ranged request. Parallel
-# fragments plus explicit retries recover most of that gap.
-YTDLP_DOWNLOAD_TUNING = {
-    "socket_timeout": 15,
-    "retries": 5,
-    "fragment_retries": 5,
-    "concurrent_fragment_downloads": 8,
-    "http_chunk_size": 10 * 1024 * 1024,
-}
-
-
 def get_ytdl_base_opts(extra_opts=None):
     opts = {
         # Warnings stay on: they are the only sign that the JS challenge failed and YouTube throttled the download.
@@ -690,6 +679,7 @@ def download_instagram_reels(url: str, output_dir: str, progress_hook: Optional[
         "merge_output_format": "mp4",
         "noplaylist": True,
         "quiet": True,
+        **YTDLP_DOWNLOAD_TUNING,
     }
     if progress_hook:
         opts["progress_hooks"] = [progress_hook]
@@ -726,6 +716,7 @@ def download_tiktok_video(url: str, output_dir: str, progress_hook: Optional[Cal
                 "noplaylist": True,
                 "quiet": True,
                 "impersonate": target,
+                **YTDLP_DOWNLOAD_TUNING,
             }
             if progress_hook:
                 opts["progress_hooks"] = [progress_hook]
@@ -931,8 +922,7 @@ def extract_clip_segment(
     if vf:
         cmd.extend(["-vf", vf])
     cmd.extend([
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
-        "-threads", "0",
+        *_get_encoder_flags(),
         "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "192k",
         "-movflags", "+faststart",
@@ -976,11 +966,10 @@ def format_video_target(input_path: str, ratio: str = "original", fps: str = "au
         cmd.extend(["-r", fps])
 
     cmd.extend([
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        *_get_encoder_flags(),
         "-c:a", "aac", "-b:a", "192k",
         "-movflags", "+faststart",
         "-pix_fmt", "yuv420p",
-        "-threads", "0",
         out_path
     ])
 
