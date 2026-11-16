@@ -3489,30 +3489,38 @@ const lunaToast = (() => {
     `;
 
     const actionsEl = card.querySelector('.luna-toast-actions');
-    if (normalized.actionProps && (normalized.actionProps.children || normalized.actionProps.label)) {
+    const actionItems = Array.isArray(normalized.actions)
+      ? normalized.actions
+      : (normalized.actionProps ? [normalized.actionProps] : []);
+
+    actionItems.forEach((item) => {
+      if (!item || !(item.children || item.label)) return;
       const actionBtn = document.createElement('button');
       actionBtn.type = 'button';
-      actionBtn.className = 'luna-toast-action-btn';
-      actionBtn.textContent = String(normalized.actionProps.children || normalized.actionProps.label);
+      if (item.id) actionBtn.id = String(item.id);
+      actionBtn.className = `luna-toast-action-btn${item.variant === 'primary' ? ' is-primary' : ''}`;
+      actionBtn.textContent = String(item.children || item.label);
       actionBtn.onclick = (e) => {
         e.stopPropagation();
-        if (typeof normalized.actionProps.onClick === 'function') {
-          normalized.actionProps.onClick(id);
+        if (typeof item.onClick === 'function') {
+          item.onClick(id, actionBtn);
         }
       };
       actionsEl.appendChild(actionBtn);
-    }
+    });
 
-    const closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.className = 'luna-toast-close';
-    closeBtn.setAttribute('aria-label', 'Close notification');
-    closeBtn.innerHTML = '<i data-lucide="x" class="w-3.5 h-3.5" aria-hidden="true"></i>';
-    closeBtn.onclick = (e) => {
-      e.stopPropagation();
-      close(id);
-    };
-    actionsEl.appendChild(closeBtn);
+    if (normalized.closable !== false) {
+      const closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.className = 'luna-toast-close';
+      closeBtn.setAttribute('aria-label', 'Close notification');
+      closeBtn.innerHTML = '<i data-lucide="x" class="w-3.5 h-3.5" aria-hidden="true"></i>';
+      closeBtn.onclick = (e) => {
+        e.stopPropagation();
+        close(id);
+      };
+      actionsEl.appendChild(closeBtn);
+    }
 
     viewport.appendChild(card);
     if (window.lucide && typeof window.lucide.createIcons === 'function') {
@@ -3534,7 +3542,7 @@ const lunaToast = (() => {
     return id;
   }
 
-  return { add, close };
+  return { add, close, has: (id) => active.has(id) };
 })();
 
 window.toast = lunaToast;
@@ -3916,7 +3924,7 @@ if (customModelInput) {
 }
 
 let savedSettingsSnapshot = null;
-let settingsSavedTimer = null;
+let settingsPromptToastId = null;
 
 function getSettingsSnapshot() {
   return {
@@ -3928,27 +3936,76 @@ function getSettingsSnapshot() {
   };
 }
 
-function syncSettingsDirtyState() {
-  const btn = document.getElementById('btnSaveHeader');
-  const label = document.getElementById('saveLabel');
-  if (!btn) return;
-  if (settingsSavedTimer) {
-    clearTimeout(settingsSavedTimer);
-    settingsSavedTimer = null;
+function dismissSettingsPromptToast() {
+  if (settingsPromptToastId) {
+    lunaToast.close(settingsPromptToastId);
+    settingsPromptToastId = null;
   }
+}
+
+function revertSettingsToSnapshot() {
+  if (!savedSettingsSnapshot) return;
+  const fields = {
+    inputStorage: savedSettingsSnapshot.storage_dir,
+    selectLlmProvider: savedSettingsSnapshot.llm_provider,
+    selectTranscribeProvider: savedSettingsSnapshot.transcribe_provider,
+    inputOpenaiBase: savedSettingsSnapshot.openai_base_url,
+    inputOpenaiModel: savedSettingsSnapshot.openai_model,
+  };
+  for (const [id, val] of Object.entries(fields)) {
+    const el = document.getElementById(id);
+    if (el) el.value = val ?? '';
+  }
+  if (typeof syncLlmProviderUI === 'function') syncLlmProviderUI();
+  if (typeof syncTranscribeUI === 'function') syncTranscribeUI();
+  const hiddenModel = document.getElementById('selectOpenaiModel');
+  if (hiddenModel) {
+    const optionValues = Array.from(document.querySelectorAll('#openaiModelItems [data-value]'))
+      .map((el) => el.dataset.value);
+    const targetModel = savedSettingsSnapshot.openai_model;
+    hiddenModel.value = targetModel && optionValues.includes(targetModel) ? targetModel : CUSTOM_MODEL;
+    const wrap = document.getElementById('wrapOpenaiModelCustom');
+    if (wrap) wrap.classList.toggle('hidden', hiddenModel.value !== CUSTOM_MODEL);
+    if (typeof syncModelMenu === 'function') syncModelMenu();
+  }
+  dismissSettingsPromptToast();
+}
+
+function syncSettingsDirtyState() {
   if (!savedSettingsSnapshot) {
-    btn.classList.remove('is-dirty', 'is-saved');
-    btn.disabled = true;
+    dismissSettingsPromptToast();
     return;
   }
   const cur = getSettingsSnapshot();
   const isDirty = Object.keys(savedSettingsSnapshot).some(
     (key) => cur[key] !== savedSettingsSnapshot[key]
   );
-  btn.classList.remove('is-saved');
-  btn.classList.toggle('is-dirty', isDirty);
-  btn.disabled = !isDirty;
-  if (label) label.textContent = 'Save Changes';
+  if (isDirty) {
+    if (!settingsPromptToastId || !lunaToast.has(settingsPromptToastId)) {
+      settingsPromptToastId = lunaToast.add({
+        type: 'default',
+        title: 'Save changes?',
+        description: 'Unsaved settings.',
+        timeout: 0,
+        closable: false,
+        actions: [
+          {
+            id: 'btnToastCancelSettings',
+            children: 'Cancel',
+            onClick: () => revertSettingsToSnapshot()
+          },
+          {
+            id: 'btnToastSaveSettings',
+            children: 'Save',
+            variant: 'primary',
+            onClick: () => saveSettings()
+          }
+        ]
+      });
+    }
+  } else {
+    dismissSettingsPromptToast();
+  }
 }
 
 function captureSettingsSnapshot() {
@@ -4102,6 +4159,14 @@ async function saveSettings() {
     openai_model: document.getElementById('inputOpenaiModel')?.value.trim(),
   };
 
+  const toastSaveBtn = document.getElementById('btnToastSaveSettings');
+  const toastCancelBtn = document.getElementById('btnToastCancelSettings');
+  if (toastSaveBtn) {
+    toastSaveBtn.disabled = true;
+    toastSaveBtn.textContent = 'Saving...';
+  }
+  if (toastCancelBtn) toastCancelBtn.disabled = true;
+
   try {
     const res = await fetch('/api/settings', {
       method: 'POST',
@@ -4115,20 +4180,7 @@ async function saveSettings() {
 
     currentStorageDir = storageInput.value.trim();
     savedSettingsSnapshot = getSettingsSnapshot();
-
-    const saveBtn = document.getElementById('btnSaveHeader');
-    const label = document.getElementById('saveLabel');
-
-    if (settingsSavedTimer) {
-      clearTimeout(settingsSavedTimer);
-      settingsSavedTimer = null;
-    }
-    if (saveBtn) {
-      saveBtn.classList.remove('is-dirty');
-      saveBtn.classList.add('is-saved');
-      saveBtn.disabled = true;
-    }
-    if (label) label.textContent = 'Saved';
+    dismissSettingsPromptToast();
 
     if (data.migrated && data.migrated.migrated_files > 0) {
       showToast(`Settings saved. ${data.migrated.migrated_files} files moved to the new folder.`);
@@ -4143,18 +4195,17 @@ async function saveSettings() {
       if (sizeEl) sizeEl.innerText = `${data.stats.total_size_mb || 0} MB`;
     }
 
-    settingsSavedTimer = setTimeout(() => {
-      settingsSavedTimer = null;
-      if (saveBtn) saveBtn.classList.remove('is-saved');
-      syncSettingsDirtyState();
-    }, 2500);
-
     // Update local vaultStats storage root if changed
     if (payload.storage_dir && vaultStats) {
       vaultStats.storage_root = payload.storage_dir;
       updateVaultStatsUI();
     }
   } catch (err) {
+    if (toastSaveBtn) {
+      toastSaveBtn.disabled = false;
+      toastSaveBtn.textContent = 'Save';
+    }
+    if (toastCancelBtn) toastCancelBtn.disabled = false;
     if (err.message && err.message.toLowerCase().includes('directory')) {
       triggerInputError('wrapStorage', 'errStorage', err.message);
     }

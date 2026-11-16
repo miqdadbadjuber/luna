@@ -348,24 +348,27 @@ class TestFrontendVaultUI(unittest.TestCase):
         self.assertIn("drawerQualityPill.classList.remove('hidden')", ai_branch)
 
     def test_settings_and_empty_vault_use_coss_button_variants(self):
-        """Empty Vault CTA uses coss default button; Settings header uses slim dirty-state save and Check/Change match Test Connection."""
+        """Empty Vault CTA uses coss default button; Settings uses toast Save/Cancel prompt and Check/Change match Test Connection."""
         html = self.source
         self.assertNotIn("button-wrapper", html)
+        self.assertNotIn("settings-save-btn", html)
 
         for expected in (
             'id="btnOpenStudioEmpty"',
             "coss-btn coss-btn-default",
-            'id="btnSaveHeader"',
-            "settings-save-btn",
             'id="btnCheckSystem"',
             'id="btnChangeCookies"',
             'id="checkSystemIcon"',
+            "btnToastSaveSettings",
+            "btnToastCancelSettings",
+            "revertSettingsToSnapshot",
         ):
             self.assertIn(expected, html)
 
         css = self.client.get("/assets/ui/luna.css").text
         self.assertIn(".coss-btn-default", css)
-        self.assertIn(".settings-save-btn.is-dirty", css)
+        self.assertIn(".luna-toast-action-btn.is-primary", css)
+        self.assertNotIn(".settings-save-btn", css)
         self.assertNotIn(".coss-btn-outline", css)
         self.assertNotIn(".button-wrapper", css)
 

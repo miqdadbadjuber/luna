@@ -111,7 +111,7 @@ class BrowserSmokeTest(unittest.TestCase):
         self.page.wait_for_timeout(300)
         self.page.click("#transcribeTrigger")
         self.page.click("#transcribeMenu [data-value='gemini']")
-        self.page.click("#btnSaveHeader")
+        self.page.click("#btnToastSaveSettings")
         expect(self.page.locator("#toastMessage")).to_contain_text("Settings saved")
         with open(os.path.join(self.tmp.name, ".env"), encoding="utf-8") as f:
             self.assertIn("LOCAL_TRANSCRIBE_PROVIDER=gemini", f.read())
