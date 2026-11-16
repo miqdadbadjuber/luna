@@ -1,5 +1,6 @@
 // Global application and navigation state
 var currentMainTab = 'studio';
+var currentGuideTab = 'wf-youtube';
 var currentActiveProjectId = null;
 var vaultItems = [];
 var vaultProjects = [];
@@ -3219,9 +3220,31 @@ function activateStudioBackground() {
   }
 }
 
-function switchMainTab(tab) {
+function syncLocationHash(targetHash, options = {}) {
+  const normalized = targetHash || '';
+  const current = window.location.hash || '';
+  if (current === normalized) return;
+  const method = options.replace ? 'replaceState' : 'pushState';
+  const nextUrl = normalized || window.location.pathname;
+  history[method](null, '', nextUrl);
+}
+
+function getMainTabHash(tab) {
+  if (tab === 'vault') return '#vault';
+  if (tab === 'settings') return '#settings';
+  if (tab === 'guide') {
+    return currentGuideTab && currentGuideTab !== 'wf-youtube'
+      ? `#guide/${currentGuideTab}`
+      : '#guide';
+  }
+  return '';
+}
+
+function switchMainTab(tab, options = {}) {
   try {
     const previousTab = currentMainTab;
+    const updateUrl = options.updateUrl !== false;
+    const replaceUrl = Boolean(options.replaceUrl);
     currentMainTab = tab;
     if (studioBgResumeTimer) {
       clearTimeout(studioBgResumeTimer);
@@ -3232,12 +3255,12 @@ function switchMainTab(tab) {
       else if (typeof exitVaultSelectionMode === 'function') exitVaultSelectionMode();
     }
 
-    document.body.classList.remove('tab-studio', 'tab-vault', 'tab-settings');
+    document.body.classList.remove('tab-studio', 'tab-vault', 'tab-settings', 'tab-guide');
     document.body.classList.add('tab-' + tab);
     if (tab !== 'vault') {
       document.body.classList.remove('in-workspace');
       if (currentActiveProjectId) {
-        closeProjectPage();
+        closeProjectPage({ preserveHash: true });
       }
     } else if (!currentActiveProjectId) {
       document.body.classList.remove('in-workspace');
@@ -3254,9 +3277,6 @@ function switchMainTab(tab) {
     const curtainsCanvas = document.getElementById('curtains-canvas');
     const shouldDeferStudioBg = tab === 'studio' && previousTab !== 'studio';
     if (tab === 'studio') {
-      if (window.location.hash) {
-        history.replaceState(null, '', window.location.pathname);
-      }
       if (!shouldDeferStudioBg) {
         activateStudioBackground();
       }
@@ -3370,6 +3390,10 @@ function switchMainTab(tab) {
     }
 
     updateTabsPill(false);
+
+    if (updateUrl) {
+      syncLocationHash(getMainTabHash(tab), { replace: replaceUrl });
+    }
 
     if (shouldDeferStudioBg) {
       studioBgResumeTimer = setTimeout(() => {
@@ -6101,7 +6125,7 @@ window.handleVaultVideoMetadata = function (videoEl, fileId) {
   }
 };
 
-function closeProjectPage() {
+function closeProjectPage(options = {}) {
   openProjectRequestSeq++;
   closeVaultCardMenu();
   exitFileSelectionMode();
@@ -6117,10 +6141,10 @@ function closeProjectPage() {
   releaseMediaLocks(detailView || document);
   currentActiveProjectId = null;
   document.body.classList.remove('in-workspace');
-  if (window.location.hash) {
-    history.replaceState(null, '', window.location.pathname);
+  if (!options.preserveHash) {
+    syncLocationHash(currentMainTab === 'vault' ? '#vault' : '', { replace: true });
   }
-  document.title = 'Luna: AI Video Clipper & Downloader';
+  document.title = currentMainTab === 'vault' ? 'Luna: Media Vault' : 'Luna: AI Video Clipper & Downloader';
 
   const listView = document.getElementById('vaultProjectsListView');
   const clipContainer = document.getElementById('clipperWorkflowContainer');
@@ -8230,43 +8254,47 @@ async function executeDeleteVaultItem() {
 // Auto-load vault badge count immediately on load
 updateVaultBadge();
 
-// Handle hash navigation (e.g. #vault-project/{id})
-// Handle hash navigation (e.g. #vault-project/{id}) and trackpad back swipes
-window.addEventListener('hashchange', () => {
-  const hash = window.location.hash;
+function applyRouteFromHash(rawHash = window.location.hash, options = {}) {
+  const hash = String(rawHash || '');
+  const isInitial = Boolean(options.isInitial);
+
   if (hash.startsWith('#vault-project/')) {
-    const pId = hash.replace('#vault-project/', '');
-    if (currentMainTab !== 'vault') switchMainTab('vault');
-    if (currentActiveProjectId !== pId) openProjectPage(pId);
+    const pId = hash.slice('#vault-project/'.length);
+    if (isInitial) document.body.classList.add('in-workspace');
+    if (currentMainTab !== 'vault') switchMainTab('vault', { updateUrl: false });
+    if (isInitial) {
+      setTimeout(() => openProjectPage(pId), 300);
+    } else if (currentActiveProjectId !== pId) {
+      openProjectPage(pId);
+    }
+    return;
+  }
+
+  if (currentActiveProjectId) {
+    closeProjectPage({ preserveHash: true });
   } else {
-    if (currentActiveProjectId) {
-      closeProjectPage();
-    } else {
-      document.body.classList.remove('in-workspace');
-    }
-
-    if (hash === '#vault') {
-      if (currentMainTab !== 'vault') switchMainTab('vault');
-    } else if (hash === '#settings') {
-      if (currentMainTab !== 'settings') switchMainTab('settings');
-    } else if (hash === '#studio') {
-      if (currentMainTab !== 'studio') switchMainTab('studio');
-    } else if (hash === '#guide') {
-      if (currentMainTab !== 'guide') switchMainTab('guide');
-    }
+    document.body.classList.remove('in-workspace');
   }
-});
 
-window.addEventListener('popstate', () => {
-  const hash = window.location.hash;
-  if (!hash.startsWith('#vault-project/') && currentActiveProjectId) {
-    closeProjectPage();
-  } else if (hash.startsWith('#vault-project/')) {
-    const pId = hash.replace('#vault-project/', '');
-    if (currentMainTab !== 'vault') switchMainTab('vault');
-    if (currentActiveProjectId !== pId) openProjectPage(pId);
+  if (hash === '#vault') {
+    if (currentMainTab !== 'vault') switchMainTab('vault', { updateUrl: false });
+  } else if (hash === '#settings') {
+    if (currentMainTab !== 'settings') switchMainTab('settings', { updateUrl: false });
+  } else if (hash === '#guide' || hash.startsWith('#guide/')) {
+    const subTab = hash.startsWith('#guide/') ? hash.slice('#guide/'.length) : '';
+    if (currentMainTab !== 'guide') switchMainTab('guide', { updateUrl: false });
+    if (subTab && typeof switchGuideTab === 'function') {
+      const targetBtn = document.querySelector(`#guideTabsBar [data-guide-tab="${CSS.escape(subTab)}"]`);
+      if (targetBtn) switchGuideTab(subTab, targetBtn, false, { updateUrl: false });
+    }
+  } else if (!isInitial && (hash === '' || hash === '#studio')) {
+    if (currentMainTab !== 'studio') switchMainTab('studio', { updateUrl: false });
   }
-});
+}
+
+// Handle hash navigation and browser back/forward history
+window.addEventListener('hashchange', () => applyRouteFromHash());
+window.addEventListener('popstate', () => applyRouteFromHash());
 
 // Remove error states when user types in settings inputs
 document.addEventListener('input', (e) => {
@@ -8357,19 +8385,7 @@ renderTrimSegments();
     }
   } catch (e) {}
 
-  const hash = window.location.hash;
-  if (hash.startsWith('#vault-project/')) {
-    document.body.classList.add('in-workspace');
-    const pId = hash.replace('#vault-project/', '');
-    switchMainTab('vault');
-    setTimeout(() => openProjectPage(pId), 300);
-  } else if (hash === '#settings') {
-    switchMainTab('settings');
-  } else if (hash === '#vault') {
-    switchMainTab('vault');
-  } else if (hash === '#guide') {
-    switchMainTab('guide');
-  }
+  applyRouteFromHash(window.location.hash, { isInitial: true });
 });
 if (document.fonts && document.fonts.ready) {
   document.fonts.ready.then(() => {

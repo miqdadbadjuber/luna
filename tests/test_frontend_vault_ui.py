@@ -386,6 +386,18 @@ class TestFrontendVaultUI(unittest.TestCase):
         ):
             self.assertIn(expected, html)
 
+    def test_main_tabs_and_guide_subtabs_sync_url_hash(self):
+        """Main tabs and Guide sub-tabs must sync location.hash so refreshes keep the active route."""
+        html = self.source
+        for expected in (
+            "function syncLocationHash",
+            "function getMainTabHash",
+            "function applyRouteFromHash",
+            "window.addEventListener('popstate', () => applyRouteFromHash())",
+            "currentGuideTab",
+        ):
+            self.assertIn(expected, html)
+
 
 if __name__ == "__main__":
     unittest.main()

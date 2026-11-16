@@ -1140,7 +1140,7 @@ function updateGuidePill(tab, immediate = false) {
   }
 }
 
-function switchGuideTab(tabId, btn, shouldScroll = false) {
+function switchGuideTab(tabId, btn, shouldScroll = false, options = {}) {
   const bar = document.getElementById('guideTabsBar');
   let targetBtn = btn;
   if (bar) {
@@ -1152,6 +1152,10 @@ function switchGuideTab(tabId, btn, shouldScroll = false) {
       b.setAttribute('aria-selected', isSelected ? 'true' : 'false');
       b.classList.toggle('active', isSelected);
     });
+  }
+  window.currentGuideTab = tabId;
+  if (options.updateUrl !== false && typeof currentMainTab !== 'undefined' && currentMainTab === 'guide' && typeof syncLocationHash === 'function') {
+    syncLocationHash(tabId === 'wf-youtube' ? '#guide' : `#guide/${tabId}`);
   }
   updateGuidePill(targetBtn, false);
 
