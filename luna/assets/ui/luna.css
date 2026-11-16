@@ -3323,9 +3323,65 @@ body.tab-settings [data-us-project] canvas {
 }
 
 .vault-u-tab:focus-visible,
-#vaultFilterToolbar .pill-control:focus-visible {
+.vault-inline-trigger:focus-visible {
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.45);
-  border-radius: 8px;
+  border-radius: 6px;
+}
+
+/* Frameless inline Filter & Sort triggers (no pill/card surface) */
+.vault-inline-trigger {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 4px 2px;
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #a1a1aa;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: color 160ms ease;
+}
+
+.vault-inline-trigger:hover,
+.vault-inline-trigger[aria-expanded="true"],
+.vault-inline-trigger.active {
+  color: #ffffff;
+}
+
+.vault-inline-trigger .vault-trigger-icon {
+  color: inherit;
+  flex-shrink: 0;
+}
+
+.vault-inline-trigger .vault-trigger-chevron {
+  color: inherit;
+  flex-shrink: 0;
+  transition: transform var(--morph-open-dur) var(--morph-ease);
+}
+
+.vault-inline-trigger[aria-expanded="true"] .vault-trigger-chevron,
+.vault-inline-trigger.active .vault-trigger-chevron {
+  transform: rotate(var(--morph-rotate));
+}
+
+@media (min-width: 1024px) {
+  .vault-header-bar {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .vault-header-bar .vault-underline-tabs {
+    border-bottom: 0;
+  }
+
+  .vault-header-bar .vault-underline-indicator {
+    bottom: -1px;
+  }
 }
 
 .vault-u-count {
@@ -3356,8 +3412,12 @@ body.tab-settings [data-us-project] canvas {
     gap: 16px;
   }
 
-  .vault-u-tab {
+  .vault-u-tab,
+  .vault-inline-trigger {
     min-height: 44px;
+  }
+
+  .vault-u-tab {
     padding-bottom: 10px;
   }
 }
@@ -3365,7 +3425,9 @@ body.tab-settings [data-us-project] canvas {
 @media (prefers-reduced-motion: reduce) {
   .vault-underline-indicator,
   .vault-u-tab,
-  .vault-u-count {
+  .vault-u-count,
+  .vault-inline-trigger,
+  .vault-inline-trigger .vault-trigger-chevron {
     transition: none !important;
   }
 }

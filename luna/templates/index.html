@@ -534,9 +534,9 @@
           </div>
         </div>
 
-        <!-- Platform Underline Tabs + Contextual Mode/Sort Dropdowns & Live Search -->
-        <div class="space-y-3.5">
-          <!-- Primary Underline Tabs (Platform) -->
+        <!-- Single-Row Platform Tabs + Frameless Mode/Sort Triggers & Live Search -->
+        <div id="vaultFilterToolbar" class="vault-header-bar relative z-20 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
+          <!-- Left: Platform Underline Tabs -->
           <div class="vault-underline-tabs" role="tablist" aria-label="Filter projects by platform" id="vaultPlatformTabs">
             <span class="vault-underline-indicator" id="vaultPlatformUnderline" aria-hidden="true"></span>
             <button type="button" role="tab" aria-selected="true" onclick="setVaultFilter('all', this)"
@@ -561,16 +561,17 @@
             </button>
           </div>
 
-          <!-- Secondary Strip: Mode & Sort Dropdown Pills + Instant Live Search -->
-          <div id="vaultFilterToolbar" class="relative z-20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div class="flex items-center gap-1.5 flex-wrap" id="vaultFilterChips">
-              <!-- Contextual Output Mode Dropdown Pill -->
+          <!-- Right: Frameless Filter & Sort Dropdowns + Search Input -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between lg:justify-end gap-3 sm:gap-4 pb-0 lg:pb-2 flex-shrink-0">
+            <div class="flex items-center gap-4 flex-shrink-0" id="vaultFilterChips">
+              <!-- Frameless Output Mode Dropdown -->
               <div id="vaultModeDropdownWrap" class="relative flex-shrink-0">
                 <button type="button" id="vaultModeDropdownBtn" aria-expanded="false"
-                  onclick="toggleVaultDropdown('vaultModeMenu', event)" class="pill-control">
+                  onclick="toggleVaultDropdown('vaultModeMenu', event)" class="vault-inline-trigger">
+                  <i data-lucide="list-filter" class="w-3.5 h-3.5 vault-trigger-icon" aria-hidden="true"></i>
                   <span id="vaultModeLabel">All Types</span>
-                  <i data-lucide="chevron-down" class="w-2.5 h-2.5 text-zinc-400 transition-transform duration-200"
-                    id="vaultModeChevron"></i>
+                  <i data-lucide="chevron-down" class="w-2.5 h-2.5 vault-trigger-chevron"
+                    id="vaultModeChevron" aria-hidden="true"></i>
                 </button>
                 <div id="vaultModeMenu" data-open="false"
                   class="popover-menu absolute left-0 top-full mt-1.5 w-[132px] z-50">
@@ -593,13 +594,14 @@
                 </div>
               </div>
 
-              <!-- Sort Order Dropdown Pill -->
+              <!-- Frameless Sort Order Dropdown -->
               <div id="vaultSortDropdownWrap" class="relative flex-shrink-0">
                 <button type="button" id="vaultSortDropdownBtn" aria-expanded="false"
-                  onclick="toggleVaultDropdown('vaultSortMenu', event)" class="pill-control">
+                  onclick="toggleVaultDropdown('vaultSortMenu', event)" class="vault-inline-trigger">
+                  <i data-lucide="arrow-up-down" class="w-3.5 h-3.5 vault-trigger-icon" aria-hidden="true"></i>
                   <span id="vaultSortLabel">Newest</span>
-                  <i data-lucide="chevron-down" class="w-2.5 h-2.5 text-zinc-400 transition-transform duration-200"
-                    id="vaultSortChevron"></i>
+                  <i data-lucide="chevron-down" class="w-2.5 h-2.5 vault-trigger-chevron"
+                    id="vaultSortChevron" aria-hidden="true"></i>
                 </button>
                 <div id="vaultSortMenu" data-open="false"
                   class="popover-menu absolute left-0 top-full mt-1.5 w-[124px] z-50">
@@ -621,7 +623,7 @@
             </div>
 
             <!-- Instant Live Search Input -->
-            <div class="relative w-full sm:w-64 flex-shrink-0">
+            <div class="relative w-full sm:w-56 flex-shrink-0">
               <i data-lucide="search"
                 class="w-3.5 h-3.5 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
               <input type="text" id="vaultSearchInput" placeholder="Search videos, titles, captions..."
