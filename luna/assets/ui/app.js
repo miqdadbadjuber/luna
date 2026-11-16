@@ -4062,17 +4062,11 @@ async function saveSettings() {
 
     currentStorageDir = storageInput.value.trim();
 
+    const saveBtn = document.getElementById('btnSaveHeader');
     const label = document.getElementById('saveLabel');
-    const iconContainer = document.getElementById('saveIconContainer');
 
     if (label) label.innerText = 'Saved';
-    if (iconContainer) {
-      iconContainer.innerHTML = `
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-emerald-400">
-          <polyline points="20 6 9 17 4 12"></polyline>
-        </svg>
-      `;
-    }
+    if (saveBtn) saveBtn.disabled = true;
 
     if (data.migrated && data.migrated.migrated_files > 0) {
       showToast(`Settings saved. ${data.migrated.migrated_files} files moved to the new folder.`);
@@ -4089,15 +4083,7 @@ async function saveSettings() {
 
     setTimeout(() => {
       if (label) label.innerText = 'Save';
-      if (iconContainer) {
-        iconContainer.innerHTML = `
-          <svg id="saveIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-zinc-200">
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-            <polyline points="17 21 17 13 7 13 7 21"></polyline>
-            <polyline points="7 3 7 8 15 8"></polyline>
-          </svg>
-        `;
-      }
+      if (saveBtn) saveBtn.disabled = false;
     }, 2500);
 
     // Update local vaultStats storage root if changed
@@ -4218,8 +4204,9 @@ async function testApiKey(provider, wrapId, inputId, statusElId, btn) {
 }
 
 async function runSystemCheck(btn) {
-  const icon = document.getElementById('refreshIcon');
-  if (icon) icon.classList.add('animate-spin');
+  const label = document.getElementById('checkSystemLabel');
+  if (btn) btn.disabled = true;
+  if (label) label.innerText = 'Checking...';
 
   const chkFfmpeg = document.getElementById('chkFfmpeg');
   const statusFfmpeg = document.getElementById('statusFfmpeg');
@@ -4282,7 +4269,8 @@ async function runSystemCheck(btn) {
   } catch (e) {
     showToast(`Dependency check failed: ${e.message}`, true);
   } finally {
-    if (icon) icon.classList.remove('animate-spin');
+    if (btn) btn.disabled = false;
+    if (label) label.innerText = 'Check';
   }
 }
 

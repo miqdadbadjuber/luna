@@ -2750,81 +2750,84 @@ body.tab-settings [data-us-project] canvas {
   100%    { transform: translateX(0); }
 }
 
-/* From Uiverse.io by JaydipPrajapati1910 */
-.button {
-  --width: 58px;
-  --height: 22px;
-  --button-color: #141414;
-  width: var(--width);
-  height: var(--height);
-  background: var(--button-color);
-  position: relative;
-  text-align: center;
-  border-radius: 4px;
-  font-family: "Arial", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  transition: background 0.25s ease;
+/* coss.com/ui Button Variants */
+button:not(:disabled),
+[role="button"]:not(:disabled) {
   cursor: pointer;
+}
+
+.coss-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 12px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.005em;
+  border-radius: 8px;
+  border: 1px solid transparent;
   user-select: none;
   outline: none;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  display: inline-block;
-  vertical-align: middle;
+  transition: background-color 150ms cubic-bezier(0.22, 1, 0.36, 1),
+              color 150ms cubic-bezier(0.22, 1, 0.36, 1),
+              border-color 150ms cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 150ms cubic-bezier(0.22, 1, 0.36, 1),
+              transform 100ms ease;
 }
 
-.text {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.coss-btn-sm {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  border-radius: 7px;
 }
 
-.button-wrapper,
-.button .text,
-.button .icon {
-  overflow: hidden;
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  left: 0;
-  color: #fff;
+.coss-btn:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
-.button-wrapper {
-  top: 0;
-  border-radius: inherit;
+.coss-btn:disabled,
+.coss-btn[aria-disabled="true"] {
+  opacity: 0.6;
+  pointer-events: none;
 }
 
-.button .text {
-  top: 0;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  transition: top 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+.coss-btn-default {
+  background: #fafafa;
+  color: #09090b;
+  border-color: #fafafa;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
-.button .icon {
-  top: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: top 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+.coss-btn-default:hover:not(:disabled) {
+  background: rgba(250, 250, 250, 0.9);
+  border-color: rgba(250, 250, 250, 0.9);
+  color: #09090b;
 }
 
-.button .icon svg {
-  width: 12px;
-  height: 12px;
-}
-
-.button:hover {
-  background: #1c1c1c;
+.coss-btn-outline {
+  background: rgba(255, 255, 255, 0.04);
+  color: #fafafa;
   border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
-.button:hover .text {
-  top: -100%;
+.coss-btn-outline:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
 }
 
-.button:hover .icon {
-  top: 0;
+.coss-btn-default:focus-visible,
+.coss-btn-outline:focus-visible {
+  box-shadow: 0 0 0 2px #09090b, 0 0 0 4px rgba(255, 255, 255, 0.45);
 }
 
 /* Integrated Guide Styles */

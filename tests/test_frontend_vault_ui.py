@@ -347,6 +347,26 @@ class TestFrontendVaultUI(unittest.TestCase):
         ai_branch = drawer_fn.split("feat.drawer === 'ai-clip'")[1].split("feat.drawer === 'quality'")[0]
         self.assertIn("drawerQualityPill.classList.remove('hidden')", ai_branch)
 
+    def test_settings_and_empty_vault_use_coss_button_variants(self):
+        """Settings actions and Empty Vault CTA must use semantic coss.com/ui button variants."""
+        html = self.source
+        self.assertNotIn("button-wrapper", html)
+
+        for expected in (
+            'id="btnOpenStudioEmpty"',
+            'id="btnSaveHeader"',
+            'id="btnCheckSystem"',
+            'id="btnChangeCookies"',
+            "coss-btn coss-btn-default",
+            "coss-btn coss-btn-outline coss-btn-sm",
+        ):
+            self.assertIn(expected, html)
+
+        css = (self.client.get("/assets/ui/luna.css").text)
+        self.assertIn(".coss-btn-default", css)
+        self.assertIn(".coss-btn-outline", css)
+        self.assertNotIn(".button-wrapper", css)
+
 
 if __name__ == "__main__":
     unittest.main()
