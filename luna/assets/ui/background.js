@@ -96,13 +96,13 @@ const GUIDE_DOCS_ORDER = [
     id: 'wf-youtube',
     label: 'YouTube',
     title: 'YouTube Workflow',
-    subtitle: 'Select a YouTube mode below to trace every node from URL input to Media Vault output.',
+    subtitle: 'Select a YouTube mode below to trace every node from URL input to Workspace output.',
   },
   {
     id: 'wf-instagram',
     label: 'Instagram Reels',
     title: 'Instagram Reels Workflow',
-    subtitle: 'How Luna validates and downloads Instagram Reels directly to your local Media Vault.',
+    subtitle: 'How Luna validates and downloads Instagram Reels directly to your local Workspace.',
   },
   {
     id: 'wf-tiktok',
@@ -124,8 +124,8 @@ const GUIDE_DOCS_ORDER = [
   },
   {
     id: 'vault',
-    label: 'Media Vault',
-    title: 'Media Vault',
+    label: 'Workspace',
+    title: 'Workspace',
     subtitle: 'Luna organizes outputs into structured category folders, customizable anytime from Move Folder in Settings.',
   },
   {
@@ -243,7 +243,7 @@ const GUIDE_WORKFLOWS = {
           },
           {
             tag: 'Storage + UI',
-            title: 'Save to Media Vault & Clipper Canvas',
+            title: 'Save to Workspace & Clipper Canvas',
             detail: 'Finished clips are indexed atomically and handed back to the Studio UI so you can inspect results right away.',
             points: [
               '<strong>Folder Structure:</strong> Saves every rendered MP4 along with meta.json (score, timestamps, summary, and provider metadata) into 01-AI-Clips\\{Workspace}.',
@@ -269,7 +269,7 @@ const GUIDE_WORKFLOWS = {
             nodes: [
               { id: 'u-open', kind: 'pill', label: 'Open Folder', step: 2 },
               { id: 'u-prev', kind: 'pill', label: 'Preview MP4', step: 2 },
-              { id: 'u-vault', kind: 'box', label: 'Media Vault', step: 2 },
+              { id: 'u-vault', kind: 'box', label: 'Workspace', step: 2 },
             ],
           },
         ],
@@ -331,11 +331,11 @@ const GUIDE_WORKFLOWS = {
           },
           {
             tag: 'Storage + UI',
-            title: 'Save to 02-YouTube-Full & Media Vault',
-            detail: 'Completed files are organized inside your storage root and surfaced immediately inside Studio and Media Vault.',
+            title: 'Save to 02-YouTube-Full & Workspace',
+            detail: 'Completed files are organized inside your storage root and surfaced immediately inside Studio and Workspace.',
             points: [
               '<strong>Destination & Metadata:</strong> Stores the final MP4 and meta.json inside 02-YouTube-Full\\{Workspace}.',
-              '<strong>Quick Actions:</strong> Play inline in Media Vault, trigger browser download, or jump straight to the local folder.',
+              '<strong>Quick Actions:</strong> Play inline in Workspace, trigger browser download, or jump straight to the local folder.',
             ],
           },
         ],
@@ -357,7 +357,7 @@ const GUIDE_WORKFLOWS = {
             nodes: [
               { id: 'u-open', kind: 'pill', label: 'Open Folder', step: 2 },
               { id: 'u-play', kind: 'pill', label: 'Play Audio', step: 2 },
-              { id: 'u-vault', kind: 'box', label: 'Media Vault', step: 2 },
+              { id: 'u-vault', kind: 'box', label: 'Workspace', step: 2 },
             ],
           },
         ],
@@ -416,8 +416,8 @@ const GUIDE_WORKFLOWS = {
           },
           {
             tag: 'Storage + UI',
-            title: 'Save to 05-Audio-MP3 & Media Vault',
-            detail: 'Once conversion finishes, the audio file is registered in your workspace vault.',
+            title: 'Save to 05-Audio-MP3 & Workspace',
+            detail: 'Once conversion finishes, the audio file is registered in your workspace.',
             points: [
               '<strong>Destination & Playback:</strong> Saves the .mp3 alongside meta.json inside 05-Audio-MP3\\{Workspace} for instant audio playback or folder access.',
             ],
@@ -441,7 +441,7 @@ const GUIDE_WORKFLOWS = {
             nodes: [
               { id: 'u-zip', kind: 'pill', label: 'Download .ZIP', step: 2 },
               { id: 'u-prev', kind: 'pill', label: 'Preview Clips', step: 2 },
-              { id: 'u-vault', kind: 'box', label: 'Media Vault', step: 2 },
+              { id: 'u-vault', kind: 'box', label: 'Workspace', step: 2 },
             ],
           },
         ],
@@ -535,7 +535,7 @@ const GUIDE_WORKFLOWS = {
             nodes: [
               { id: 'u-open', kind: 'pill', label: 'Open Folder', step: 2 },
               { id: 'u-prev', kind: 'pill', label: 'Preview Reel', step: 2 },
-              { id: 'u-vault', kind: 'box', label: 'Media Vault', step: 2 },
+              { id: 'u-vault', kind: 'box', label: 'Workspace', step: 2 },
             ],
           },
         ],
@@ -594,10 +594,10 @@ const GUIDE_WORKFLOWS = {
           },
           {
             tag: 'Storage + UI',
-            title: 'Save to 03-Instagram-Reels & Media Vault',
+            title: 'Save to 03-Instagram-Reels & Workspace',
             detail: 'Completed Reels are organized under a dedicated platform directory so they never mix with YouTube or TikTok downloads.',
             points: [
-              '<strong>Destination & Access:</strong> Writes the MP4 alongside meta.json into 03-Instagram-Reels\\{Workspace} with immediate Media Vault preview, download, and Open Folder buttons.',
+              '<strong>Destination & Access:</strong> Writes the MP4 alongside meta.json into 03-Instagram-Reels\\{Workspace} with immediate Workspace preview, download, and Open Folder buttons.',
             ],
           },
         ],
@@ -626,7 +626,7 @@ const GUIDE_WORKFLOWS = {
             nodes: [
               { id: 'u-open', kind: 'pill', label: 'Open Folder', step: 2 },
               { id: 'u-prev', kind: 'pill', label: 'Preview Video', step: 2 },
-              { id: 'u-vault', kind: 'box', label: 'Media Vault', step: 2 },
+              { id: 'u-vault', kind: 'box', label: 'Workspace', step: 2 },
             ],
           },
         ],
@@ -684,8 +684,8 @@ const GUIDE_WORKFLOWS = {
           },
           {
             tag: 'Storage + UI',
-            title: 'Save to 04-TikTok-Clean & Media Vault',
-            detail: 'Finished downloads are indexed automatically inside your local TikTok vault.',
+            title: 'Save to 04-TikTok-Clean & Workspace',
+            detail: 'Finished downloads are indexed automatically inside your local TikTok workspace.',
             points: [
               '<strong>Destination & Quick Actions:</strong> Saves the clean MP4 and meta.json inside 04-TikTok-Clean\\{Workspace} so you can preview, download, or open the folder immediately.',
             ],
@@ -709,7 +709,7 @@ const GUIDE_WORKFLOWS = {
             nodes: [
               { id: 'u-open', kind: 'pill', label: 'Open Folder', step: 2 },
               { id: 'u-play', kind: 'pill', label: 'Play Audio', step: 2 },
-              { id: 'u-vault', kind: 'box', label: 'Media Vault', step: 2 },
+              { id: 'u-vault', kind: 'box', label: 'Workspace', step: 2 },
             ],
           },
         ],
@@ -767,8 +767,8 @@ const GUIDE_WORKFLOWS = {
           },
           {
             tag: 'Storage + UI',
-            title: 'Save to 05-Audio-MP3 & Media Vault',
-            detail: 'Completed MP3 tracks share the central audio vault across platforms, separated cleanly by Workspace.',
+            title: 'Save to 05-Audio-MP3 & Workspace',
+            detail: 'Completed MP3 tracks share the central audio folder across platforms, separated cleanly by Workspace.',
             points: [
               '<strong>Destination & Playback:</strong> Stores the .mp3 file + meta.json inside 05-Audio-MP3\\{Workspace} for built-in playback and instant folder access.',
             ],

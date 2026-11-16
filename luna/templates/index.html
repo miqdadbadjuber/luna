@@ -70,7 +70,7 @@
         </button>
         <button type="button" id="tabBtnVault" role="tab" aria-selected="false" aria-controls="section-vault"
           onclick="switchMainTab('vault')" class="t-tab">
-          <span>Media Vault</span>
+          <span>Workspace</span>
         </button>
       </div>
 
@@ -484,7 +484,7 @@
               class="luna-expand-btn sm:absolute sm:right-0 sm:top-0"
               style="--expand-width: 136px;"
               data-label="Open Workspace"
-              aria-label="Open Workspace in Media Vault">
+              aria-label="Open Workspace">
               <svg viewBox="0 0 512 512" class="luna-expand-icon" aria-hidden="true">
                 <path d="M464 128H272l-64-64H48C21.5 64 0 85.5 0 112v288c0 26.5 21.5 48 48 48h416c26.5 0 48-21.5 48-48V176c0-26.5-21.5-48-48-48z"></path>
               </svg>
@@ -533,7 +533,7 @@
         <!-- Vault Header -->
         <div class="flex items-center justify-between pb-1">
           <h2 class="font-sans text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-            Media Vault
+            Workspace
           </h2>
           <div class="hidden" aria-hidden="true">
             <span id="vaultStoragePath"></span>
@@ -650,10 +650,10 @@
 
         <!-- Polished Empty State -->
         <div id="vaultEmptyState" class="hidden text-center py-16 px-4 flex flex-col items-center justify-center">
-          <h3 class="font-sans text-base font-semibold text-white mb-1" id="vaultEmptyTitle">Empty Vault
+          <h3 class="font-sans text-base font-semibold text-white mb-1" id="vaultEmptyTitle">Empty Workspace
           </h3>
           <p class="font-sans text-xs text-zinc-400 max-w-sm mb-5 leading-relaxed" id="vaultEmptyDesc">
-            No projects in the vault yet.
+            No projects in Workspace yet.
           </p>
           <button type="button" id="btnOpenStudioEmpty" onclick="switchMainTab('studio')"
             class="coss-btn coss-btn-default">
@@ -666,7 +666,7 @@
           <div
             class="inline-flex items-center gap-3 px-5 py-2.5 rounded-2xl bg-white/[0.04] border border-white/10 text-zinc-300 text-xs">
             <i data-lucide="loader-2" class="w-4 h-4 text-white animate-spin"></i>
-            <span>Loading Media Vault...</span>
+            <span>Loading Workspace...</span>
           </div>
         </div>
       </div>
@@ -1128,7 +1128,7 @@
 
                 <div class="w-full md:w-2/3 space-y-3">
           <div class="flex items-center justify-between text-xs">
-            <label class="font-medium text-zinc-200">Media Vault Directory</label>
+            <label class="font-medium text-zinc-200">Workspace Directory</label>
             <div class="flex items-center gap-3">
               <button type="button" onclick="browseStorageFolder()" id="btnBrowseFolder"
                 class="text-[11px] text-zinc-400 hover:text-white transition flex items-center gap-1.5 font-sans cursor-pointer group">
@@ -1289,7 +1289,7 @@
                 <span>Setup &amp; Requirements</span>
               </button>
               <button type="button" class="docs-nav-item" role="tab" aria-selected="false" data-guide-tab="vault" onclick="switchGuideTab('vault', this)">
-                <span>Media Vault</span>
+                <span>Workspace</span>
               </button>
             </div>
 
@@ -1316,7 +1316,7 @@
               YouTube Workflow
             </h1>
             <p id="guidePageSubtitle" class="guide-subtitle text-sm text-zinc-400 leading-relaxed max-w-2xl">
-              Select a YouTube mode below to trace every node from URL input to Media Vault output.
+              Select a YouTube mode below to trace every node from URL input to Workspace output.
             </p>
           </div>
 
@@ -1573,7 +1573,7 @@
         <div class="py-3.5 grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 sm:gap-6 text-xs">
           <span class="font-semibold text-white">Rename Workspace</span>
           <p class="text-zinc-400 leading-relaxed">
-            Click the pencil icon on any workspace to update its display name in <code class="font-mono text-zinc-300">meta.json</code> and refresh the Media Vault gallery instantly without breaking file links.
+            Click the pencil icon on any workspace to update its display name in <code class="font-mono text-zinc-300">meta.json</code> and refresh the Workspace gallery instantly without breaking file links.
           </p>
         </div>
 
@@ -1587,7 +1587,7 @@
         <div class="py-3.5 grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 sm:gap-6 text-xs">
           <span class="font-semibold text-white">Open Folder &amp; Preview</span>
           <p class="text-zinc-400 leading-relaxed">
-            Play MP4 clips or 320 kbps MP3s directly inside Media Vault, download individual files or batch <code class="font-mono text-zinc-300">.ZIP</code> archives, or open the workspace folder straight in your OS file explorer.
+            Play MP4 clips or 320 kbps MP3s directly inside Workspace, download individual files or batch <code class="font-mono text-zinc-300">.ZIP</code> archives, or open the workspace folder straight in your OS file explorer.
           </p>
         </div>
 
@@ -1738,10 +1738,10 @@
           <div id="wsDuplicateNotice"
             class="hidden p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] flex items-center gap-2">
             <i data-lucide="info" class="w-3.5 h-3.5 shrink-0 text-amber-400"></i>
-            <span>This name already exists in Media Vault. New files will be added to that workspace.</span>
+            <span>This name already exists in Workspace. New files will be added to that workspace.</span>
           </div>
           <p class="font-sans text-[11px] text-zinc-500">Defaults to the video title, and you can type any name. A new folder will be created for this download
-            in Media Vault.</p>
+            in Workspace.</p>
         </div>
 
         <!-- 2. Use Existing mode container -->

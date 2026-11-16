@@ -1519,7 +1519,7 @@ const TASK_CONFIGS = {
     },
     {
       key: 'vault',
-      label: 'Saving to Media Vault',
+      label: 'Saving to Workspace',
       amount: 'Waiting',
       details: [
         { label: 'Adding to the local storage catalog', meta: 'Waiting' },
@@ -1544,7 +1544,7 @@ const TASK_CONFIGS = {
       amount: 'Waiting',
       details: [
         { label: 'High-quality FFmpeg LAME encoding', meta: 'CBR 320k' },
-        { label: 'Saving to the local Media Vault', meta: 'Waiting' }
+        { label: 'Saving to the local Workspace', meta: 'Waiting' }
       ]
     }
   ],
@@ -1561,7 +1561,7 @@ const TASK_CONFIGS = {
     },
     {
       key: 'vault',
-      label: 'Saving to Media Vault',
+      label: 'Saving to Workspace',
       amount: 'Waiting',
       details: [
         { label: 'Adding the trimmed video to the library', meta: 'Waiting' },
@@ -1582,7 +1582,7 @@ const TASK_CONFIGS = {
     },
     {
       key: 'vault',
-      label: 'Saving to Media Vault',
+      label: 'Saving to Workspace',
       amount: 'Waiting',
       details: [
         { label: 'Saving to the Instagram folder', meta: 'Waiting' },
@@ -1603,7 +1603,7 @@ const TASK_CONFIGS = {
     },
     {
       key: 'vault',
-      label: 'Saving to Media Vault',
+      label: 'Saving to Workspace',
       amount: 'Waiting',
       details: [
         { label: 'Saving to the TikTok folder', meta: 'Waiting' },
@@ -1628,7 +1628,7 @@ const TASK_CONFIGS = {
       amount: 'Waiting',
       details: [
         { label: 'Encoding FFmpeg LAME 320kbps', meta: 'MP3' },
-        { label: 'Saving to the local Media Vault', meta: 'Waiting' }
+        { label: 'Saving to the local Workspace', meta: 'Waiting' }
       ]
     }
   ]
@@ -2235,13 +2235,13 @@ window.populateExistingWorkspacesSelect = function (preselectedName = null) {
 
   if (vaultProjects.length === 0) {
     if (hiddenInput) hiddenInput.value = '';
-    if (selectedText) selectedText.innerText = 'No workspaces in Media Vault yet';
+    if (selectedText) selectedText.innerText = 'No projects in Workspace yet';
     if (selectedBadge) selectedBadge.classList.add('hidden');
     if (triggerBtn) triggerBtn.disabled = true;
 
     const emptyItem = document.createElement('div');
     emptyItem.className = 'px-3 py-3 text-center text-xs text-zinc-500 font-sans';
-    emptyItem.innerText = 'No workspaces in Media Vault yet';
+    emptyItem.innerText = 'No projects in Workspace yet';
     listContainer.appendChild(emptyItem);
     return;
   }
@@ -2735,8 +2735,8 @@ function updateProgressUI(stage, data) {
       stageSubTitle.innerText = 'Encoding 9:16 clips';
       setTaskStatuses(['done', 'done', 'done', 'done', 'running'], pData, 0);
     } else if (stage === 'saving') {
-      stageMainTitle.innerText = 'Saving to Media Vault';
-      stageSubTitle.innerText = 'Adding clips to the Media Vault workspace';
+      stageMainTitle.innerText = 'Saving to Workspace';
+      stageSubTitle.innerText = 'Adding clips to the selected workspace';
       setTaskStatuses(['done', 'done', 'done', 'done', 'running'], pData, 0);
     } else if (stage === 'done') {
       stageMainTitle.innerText = 'Clip generation complete';
@@ -2772,7 +2772,7 @@ function updateProgressUI(stage, data) {
       if (vaultRow && vaultLabel) vaultLabel.innerText = 'Re-encoding video';
       setTaskStatuses(['done', 'running'], pData, 100);
     } else if (stage === 'saving') {
-      stageMainTitle.innerText = 'Saving to Media Vault';
+      stageMainTitle.innerText = 'Saving to Workspace';
       stageSubTitle.innerText = 'Finishing processing and organizing media';
       const vaultRow = currentTaskRows[1];
       const vaultLabel = document.getElementById('task-label-vault');
@@ -2813,7 +2813,7 @@ async function goToCurrentJobWorkspace() {
   if (targetProject) {
     await openProjectPage(targetProject.project_id);
   } else {
-    showToast('Saved to Media Vault');
+    showToast('Saved to Workspace');
   }
 }
 
@@ -3373,7 +3373,7 @@ function switchMainTab(tab, options = {}) {
       } else if (tab === 'vault') {
         if (sectionStudio) sectionStudio.classList.add('hidden');
         if (sectionVault) sectionVault.classList.remove('hidden');
-        document.title = 'Luna: Media Vault';
+        document.title = 'Luna: Workspace';
 
         if (!currentActiveProjectId && !document.body.classList.contains('in-workspace')) {
           const listView = document.getElementById('vaultProjectsListView');
@@ -4539,7 +4539,7 @@ async function browseStorageFolder() {
           lucide.createIcons({ root: btn });
         }
 
-        showToast(`Moving Media Vault to ${newPath}...`, 'info');
+        showToast(`Moving Workspace folder to ${newPath}...`, 'info');
 
         const saveRes = await fetch('/api/settings', {
           method: 'POST',
@@ -4635,7 +4635,7 @@ async function loadVaultItems() {
 
   try {
     const res = await fetch('/api/vault/projects');
-    if (!res.ok) throw new Error('Could not load Media Vault');
+    if (!res.ok) throw new Error('Could not load Workspace');
     const data = await res.json();
     vaultProjects = data.projects || [];
     nextWorkspaceIndex = data.next_workspace_index || 1;
@@ -5126,7 +5126,7 @@ function getProjectMeter(proj) {
   if (act.includes('mp3') || plat.includes('audio')) {
     return { signal: 3, tone: '#f59e0b', label: 'Audio MP3' };
   }
-  return { signal: 2, tone: '#a1a1aa', label: 'Media Vault' };
+  return { signal: 2, tone: '#a1a1aa', label: 'Workspace' };
 }
 
 function renderVaultGallery() {
@@ -5164,8 +5164,8 @@ function renderVaultGallery() {
         if (emptyTitle) emptyTitle.innerText = 'Empty Category';
         if (emptyDesc) emptyDesc.innerText = 'No projects match this filter yet.';
       } else {
-        if (emptyTitle) emptyTitle.innerText = 'Empty Vault';
-        if (emptyDesc) emptyDesc.innerText = 'No projects in the vault yet.';
+        if (emptyTitle) emptyTitle.innerText = 'Empty Workspace';
+        if (emptyDesc) emptyDesc.innerText = 'No projects in Workspace yet.';
       }
     }
     return;
@@ -6141,7 +6141,7 @@ function closeProjectPage(options = {}) {
   if (!options.preserveHash) {
     syncLocationHash(currentMainTab === 'vault' ? '#vault' : '', { replace: true });
   }
-  document.title = currentMainTab === 'vault' ? 'Luna: Media Vault' : 'Luna: AI Video Clipper & Downloader';
+  document.title = currentMainTab === 'vault' ? 'Luna: Workspace' : 'Luna: AI Video Clipper & Downloader';
 
   const listView = document.getElementById('vaultProjectsListView');
   const clipContainer = document.getElementById('clipperWorkflowContainer');

@@ -1722,7 +1722,7 @@ def _worker_process(job_id: str, req: ProcessRequest):
                     jobs[job_id]["stage_detail"] = "Rendering 9:16 clips (vertical crop)..."
                 elif stage == "saving":
                     _set_progress(96.0)
-                    jobs[job_id]["stage_detail"] = "Saving to Media Vault..."
+                    jobs[job_id]["stage_detail"] = "Saving to Workspace..."
                 elif stage == "done":
                     _set_progress(100.0)
                     jobs[job_id]["stage_detail"] = "Complete"
@@ -1804,10 +1804,10 @@ def _worker_process(job_id: str, req: ProcessRequest):
                 if saved_proj:
                     jobs[job_id]["project_id"] = saved_proj.get("project_id")
                     jobs[job_id]["workspace_name"] = saved_proj.get("workspace_name")
-                jobs[job_id]["logs"].append(f"Saved to Media Vault ({ws_name}).")
+                jobs[job_id]["logs"].append(f"Saved to Workspace ({ws_name}).")
             except Exception as v_err:
                 print(f"[Vault AI Clips Error] {v_err}", flush=True)
-                jobs[job_id]["logs"].append(f"Media Vault warning: {v_err}")
+                jobs[job_id]["logs"].append(f"Workspace warning: {v_err}")
 
             if not _cancelled():
                 jobs[job_id]["status"] = "completed"
@@ -1870,10 +1870,10 @@ def _worker_process(job_id: str, req: ProcessRequest):
                 if saved_proj:
                     jobs[job_id]["project_id"] = saved_proj.get("project_id")
                     jobs[job_id]["workspace_name"] = saved_proj.get("workspace_name")
-                jobs[job_id]["logs"].append(f"Saved to Media Vault ({ws_name}).")
+                jobs[job_id]["logs"].append(f"Saved to Workspace ({ws_name}).")
             except Exception as v_err:
                 print(f"[Vault Error] {v_err}", flush=True)
-                jobs[job_id]["logs"].append(f"Media Vault warning: {v_err}")
+                jobs[job_id]["logs"].append(f"Workspace warning: {v_err}")
 
             if not _cancelled():
                 jobs[job_id]["status"] = "completed"
@@ -1914,10 +1914,10 @@ def _worker_process(job_id: str, req: ProcessRequest):
                 if saved_proj:
                     jobs[job_id]["project_id"] = saved_proj.get("project_id")
                     jobs[job_id]["workspace_name"] = saved_proj.get("workspace_name")
-                jobs[job_id]["logs"].append(f"Saved to Media Vault ({ws_name}).")
+                jobs[job_id]["logs"].append(f"Saved to Workspace ({ws_name}).")
             except Exception as v_err:
                 print(f"[Vault Error] {v_err}", flush=True)
-                jobs[job_id]["logs"].append(f"Media Vault warning: {v_err}")
+                jobs[job_id]["logs"].append(f"Workspace warning: {v_err}")
 
             if not _cancelled():
                 jobs[job_id]["status"] = "completed"
@@ -1958,10 +1958,10 @@ def _worker_process(job_id: str, req: ProcessRequest):
                 if saved_proj:
                     jobs[job_id]["project_id"] = saved_proj.get("project_id")
                     jobs[job_id]["workspace_name"] = saved_proj.get("workspace_name")
-                jobs[job_id]["logs"].append(f"Saved to Media Vault ({ws_name}).")
+                jobs[job_id]["logs"].append(f"Saved to Workspace ({ws_name}).")
             except Exception as v_err:
                 print(f"[Vault Error] {v_err}", flush=True)
-                jobs[job_id]["logs"].append(f"Media Vault warning: {v_err}")
+                jobs[job_id]["logs"].append(f"Workspace warning: {v_err}")
 
             if not _cancelled():
                 jobs[job_id]["status"] = "completed"
@@ -2013,7 +2013,7 @@ def _worker_process(job_id: str, req: ProcessRequest):
 
             jobs[job_id]["stage"] = "saving"
             jobs[job_id]["progress"] = 95.0
-            jobs[job_id]["stage_detail"] = "Saving to Media Vault..."
+            jobs[job_id]["stage_detail"] = "Saving to Workspace..."
 
             # Register to Media Vault
             try:
@@ -2034,10 +2034,10 @@ def _worker_process(job_id: str, req: ProcessRequest):
                 if saved_proj:
                     jobs[job_id]["project_id"] = saved_proj.get("project_id")
                     jobs[job_id]["workspace_name"] = saved_proj.get("workspace_name")
-                jobs[job_id]["logs"].append(f"Saved to Media Vault ({ws_name}).")
+                jobs[job_id]["logs"].append(f"Saved to Workspace ({ws_name}).")
             except Exception as v_err:
                 print(f"[Vault Error] {v_err}", flush=True)
-                jobs[job_id]["logs"].append(f"Media Vault warning: {v_err}")
+                jobs[job_id]["logs"].append(f"Workspace warning: {v_err}")
 
             if not _cancelled():
                 jobs[job_id]["status"] = "completed"
@@ -2175,7 +2175,7 @@ def _worker_process(job_id: str, req: ProcessRequest):
                 )
             except Exception as v_err:
                 print(f"[Vault Trimmer Error] {v_err}", flush=True)
-                jobs[job_id]["logs"].append(f"Media Vault warning: {v_err}")
+                jobs[job_id]["logs"].append(f"Workspace warning: {v_err}")
 
             if not _cancelled():
                 jobs[job_id]["status"] = "completed"
@@ -2426,7 +2426,7 @@ async def api_delete_vault_project(project_id: str):
 async def api_delete_vault(item_id: str):
     result = await asyncio.to_thread(delete_vault_item, item_id)
     if result == "not_found":
-        raise HTTPException(status_code=404, detail="Item not found in Media Vault")
+        raise HTTPException(status_code=404, detail="Item not found in Workspace")
     if result == "locked":
         raise HTTPException(status_code=409, detail="The file is open elsewhere. Close it and try again.")
     return {"status": "deleted", "item_id": item_id}
@@ -2438,7 +2438,7 @@ async def api_vault_open_file(req: OpenFileRequest):
     if not os.path.exists(norm_path):
         raise HTTPException(status_code=404, detail="File not found")
     if not _path_is_inside(norm_path, [get_storage_root(), OUTPUT_DIR]):
-        raise HTTPException(status_code=400, detail="File is outside the Media Vault")
+        raise HTTPException(status_code=400, detail="File is outside Workspace")
 
     if sys.platform == "win32":
         try:
@@ -2459,7 +2459,7 @@ async def api_vault_open_folder(payload: Optional[Dict[str, Any]] = None):
 
     folder_to_open = os.path.abspath(os.path.normpath(str(folder_to_open).strip()))
     if not _path_is_inside(folder_to_open, [get_storage_root(), OUTPUT_DIR]):
-        raise HTTPException(status_code=400, detail="Folder is outside the Media Vault")
+        raise HTTPException(status_code=400, detail="Folder is outside Workspace")
     os.makedirs(folder_to_open, exist_ok=True)
 
     try:
@@ -2493,7 +2493,7 @@ def _browse_folder_dialog() -> str:
             "root = tk.Tk()\n"
             "root.withdraw()\n"
             "root.wm_attributes('-topmost', 1)\n"
-            f"p = fd.askdirectory(initialdir={repr(current_root)}, title='Select Media Vault Folder')\n"
+            f"p = fd.askdirectory(initialdir={repr(current_root)}, title='Select Workspace Folder')\n"
             "print(p)\n"
         )
         proc = subprocess.run([sys.executable, "-c", py_cmd], capture_output=True, text=True, timeout=120)
