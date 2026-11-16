@@ -66,7 +66,7 @@ from .clipper.config import (
     transcribe_provider,
     transcribe_provider_label,
 )
-from .clipper.downloader import YOUTUBE_FORMAT_SORT, YTDLP_DOWNLOAD_TUNING, create_youtube_dl
+from .clipper.downloader import CLIPPER_FORMAT_SORT, YOUTUBE_FORMAT_SORT, YTDLP_DOWNLOAD_TUNING, create_youtube_dl
 from .clipper.highlights import clean_caption
 from .storage_manager import (
     CATEGORY_MAP,
@@ -1985,6 +1985,7 @@ def _worker_process(job_id: str, req: ProcessRequest):
 
             base_opts = {
                 "format": "bestvideo[height<=1080]+bestaudio/best",
+                "format_sort": CLIPPER_FORMAT_SORT,
                 "outtmpl": os.path.join(job_output_dir, "full.%(ext)s"),
                 "merge_output_format": "mp4",
                 "noplaylist": True,
