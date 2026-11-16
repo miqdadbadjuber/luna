@@ -293,6 +293,8 @@ class TestFrontendVaultUI(unittest.TestCase):
             "function updateVaultTabCounts",
             "function getProjectOutputMode",
             "function sortVaultProjects",
+            "function showToast",
+            "const lunaToast =",
             "function onVaultSearchInput",
             "function clearVaultSearch",
             "function renderVaultGallery",

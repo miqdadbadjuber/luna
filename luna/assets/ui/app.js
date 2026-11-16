@@ -3311,31 +3311,247 @@ function triggerInputError(wrapId, msgId, message) {
   }, 3000);
 }
 
-function showToast(message, isError = false) {
-  const toast = document.getElementById('toastNotification');
-  const msgEl = document.getElementById('toastMessage');
-  const icon = document.getElementById('toastIcon');
-  if (!toast || !msgEl) return;
-  msgEl.innerText = message;
+const TOAST_ICON_BY_TYPE = {
+  success: 'circle-check',
+  info: 'info',
+  warning: 'triangle-alert',
+  error: 'circle-alert',
+};
 
-  if (isError) {
-    if (icon) {
-      icon.setAttribute('data-lucide', 'alert-circle');
-      icon.className = 'w-3.5 h-3.5 text-red-400 shrink-0';
-    }
-  } else {
-    if (icon) {
-      icon.setAttribute('data-lucide', 'check');
-      icon.className = 'w-3.5 h-3.5 text-emerald-400 shrink-0';
-    }
+const lunaToast = (() => {
+  let seq = 0;
+  const active = new Map();
+  const MAX_VISIBLE = 3;
+  const PEEK_STEP = 7;
+  const EXPAND_GAP = 7;
+  let isExpanded = false;
+  let listenersBound = false;
+
+  function pauseAllTimers() {
+    active.forEach(entry => {
+      if (entry.timer) {
+        clearTimeout(entry.timer);
+        entry.timer = null;
+        entry.remaining = Math.max(800, entry.remaining - (performance.now() - entry.startedAt));
+      }
+    });
   }
-  lucide.createIcons();
 
-  toast.classList.remove('translate-y-12', 'opacity-0', 'pointer-events-none');
-  if (toast._hideTimer) clearTimeout(toast._hideTimer);
-  toast._hideTimer = setTimeout(() => {
-    toast.classList.add('translate-y-12', 'opacity-0', 'pointer-events-none');
-  }, 2400);
+  function resumeAllTimers() {
+    active.forEach(entry => {
+      if (!entry.timer && entry.remaining > 0) {
+        scheduleClose(entry, entry.remaining);
+      }
+    });
+  }
+
+  function bindViewportHover(viewport) {
+    if (listenersBound || !viewport) return;
+    listenersBound = true;
+    viewport.addEventListener('mouseenter', () => {
+      if (active.size === 0) return;
+      isExpanded = true;
+      viewport.classList.add('is-expanded');
+      pauseAllTimers();
+      layoutStack();
+    });
+    viewport.addEventListener('mouseleave', () => {
+      isExpanded = false;
+      viewport.classList.remove('is-expanded');
+      resumeAllTimers();
+      layoutStack();
+    });
+    // Tap on stacked mobile toast expands stack cleanly
+    viewport.addEventListener('touchstart', () => {
+      if (active.size > 1 && !isExpanded) {
+        isExpanded = true;
+        viewport.classList.add('is-expanded');
+        pauseAllTimers();
+        layoutStack();
+      }
+    }, { passive: true });
+  }
+
+  function layoutStack() {
+    const viewport = document.getElementById('toastNotification');
+    if (!viewport) return;
+    const entries = Array.from(active.values()).reverse(); // newest index 0 (front) -> oldest (back)
+
+    if (entries.length === 0) {
+      isExpanded = false;
+      viewport.classList.remove('is-expanded');
+      viewport.style.height = '0px';
+      return;
+    }
+
+    let expandedOffset = 0;
+    let totalHeight = 0;
+
+    entries.forEach((entry, index) => {
+      const el = entry.el;
+      const h = el.offsetHeight || 40;
+      el.style.zIndex = String(100 - index);
+
+      if (isExpanded) {
+        el.dataset.stackedHidden = 'false';
+        el.style.opacity = '1';
+        el.style.transform = `translate3d(0, -${expandedOffset}px, 0) scale(1)`;
+        expandedOffset += h + EXPAND_GAP;
+        totalHeight = expandedOffset - EXPAND_GAP;
+      } else {
+        const scale = Math.max(0.84, 1 - index * 0.06);
+        const y = -(index * PEEK_STEP);
+        el.dataset.stackedHidden = index > 0 ? 'true' : 'false';
+        el.style.opacity = index >= MAX_VISIBLE ? '0' : '1';
+        el.style.transform = `translate3d(0, ${y}px, 0) scale(${scale})`;
+        if (index === 0) {
+          totalHeight = h + (entries.length - 1) * PEEK_STEP;
+        }
+      }
+    });
+
+    viewport.style.height = `${Math.max(0, totalHeight)}px`;
+  }
+
+  function close(id) {
+    const entry = active.get(id);
+    if (!entry) return;
+    if (entry.timer) clearTimeout(entry.timer);
+    active.delete(id);
+    const el = entry.el;
+    el.classList.add('is-leaving');
+    el.style.transform = 'translate3d(0, 14px, 0) scale(0.95)';
+    layoutStack();
+    setTimeout(() => {
+      if (el.parentNode) el.parentNode.removeChild(el);
+    }, 300);
+  }
+
+  function scheduleClose(entry, duration) {
+    if (entry.timer) clearTimeout(entry.timer);
+    if (duration <= 0) return;
+    entry.remaining = duration;
+    entry.startedAt = performance.now();
+    entry.timer = setTimeout(() => close(entry.id), duration);
+  }
+
+  function add(opts = {}) {
+    const viewport = document.getElementById('toastNotification');
+    if (!viewport) return null;
+    bindViewportHover(viewport);
+
+    const normalized = typeof opts === 'string' ? { description: opts } : (opts || {});
+    const type = ['success', 'info', 'warning', 'error', 'default'].includes(normalized.type)
+      ? normalized.type
+      : 'default';
+    const title = normalized.title ? String(normalized.title) : '';
+    const description = normalized.description ? String(normalized.description) : '';
+    const priority = normalized.priority === 'high' || type === 'error' ? 'high' : 'normal';
+    const timeout = typeof normalized.timeout === 'number'
+      ? normalized.timeout
+      : (priority === 'high' || normalized.actionProps ? 4500 : 3200);
+
+    const id = `toast_${++seq}`;
+
+    // Keep #toastMessage unique on the newest active toast so browser E2E selectors keep working cleanly.
+    viewport.querySelectorAll('#toastMessage').forEach(node => node.removeAttribute('id'));
+
+    while (active.size >= MAX_VISIBLE) {
+      const oldestId = active.keys().next().value;
+      close(oldestId);
+    }
+
+    const card = document.createElement('div');
+    card.className = `luna-toast-card${title && description ? ' has-title-layout' : ''}`;
+    card.dataset.toastId = id;
+    card.dataset.type = type;
+    card.dataset.stackedHidden = 'false';
+    card.setAttribute('role', priority === 'high' ? 'alert' : 'status');
+
+    const iconName = TOAST_ICON_BY_TYPE[type];
+    const iconHtml = iconName
+      ? `<i data-lucide="${iconName}" class="luna-toast-icon" aria-hidden="true"></i>`
+      : '';
+    const titleHtml = title
+      ? `<div class="luna-toast-title">${escapeHtml(title)}</div>`
+      : '';
+    const descHtml = description
+      ? `<div id="toastMessage" class="luna-toast-desc${title ? ' has-title' : ''}">${escapeHtml(description)}</div>`
+      : `<div id="toastMessage" class="luna-toast-desc sr-only">${escapeHtml(title)}</div>`;
+
+    card.innerHTML = `
+      ${iconHtml}
+      <div class="luna-toast-body">
+        ${titleHtml}
+        ${descHtml}
+      </div>
+      <div class="luna-toast-actions"></div>
+    `;
+
+    const actionsEl = card.querySelector('.luna-toast-actions');
+    if (normalized.actionProps && (normalized.actionProps.children || normalized.actionProps.label)) {
+      const actionBtn = document.createElement('button');
+      actionBtn.type = 'button';
+      actionBtn.className = 'luna-toast-action-btn';
+      actionBtn.textContent = String(normalized.actionProps.children || normalized.actionProps.label);
+      actionBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (typeof normalized.actionProps.onClick === 'function') {
+          normalized.actionProps.onClick(id);
+        }
+      };
+      actionsEl.appendChild(actionBtn);
+    }
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'luna-toast-close';
+    closeBtn.setAttribute('aria-label', 'Close notification');
+    closeBtn.innerHTML = '<i data-lucide="x" class="w-3.5 h-3.5" aria-hidden="true"></i>';
+    closeBtn.onclick = (e) => {
+      e.stopPropagation();
+      close(id);
+    };
+    actionsEl.appendChild(closeBtn);
+
+    viewport.appendChild(card);
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      window.lucide.createIcons({ root: card });
+    }
+
+    const entry = { id, el: card, timer: null, remaining: timeout, startedAt: 0 };
+    active.set(id, entry);
+
+    requestAnimationFrame(() => {
+      layoutStack();
+    });
+
+    if (!isExpanded) {
+      scheduleClose(entry, timeout);
+    } else {
+      entry.remaining = timeout;
+    }
+    return id;
+  }
+
+  return { add, close };
+})();
+
+window.toast = lunaToast;
+
+function showToast(message, typeOrIsError = false) {
+  if (message && typeof message === 'object') {
+    return lunaToast.add(message);
+  }
+  let type = 'success';
+  let priority = 'normal';
+  if (typeOrIsError === true || typeOrIsError === 'error') {
+    type = 'error';
+    priority = 'high';
+  } else if (['info', 'warning', 'success', 'default'].includes(typeOrIsError)) {
+    type = typeOrIsError;
+  }
+  return lunaToast.add({ type, description: String(message || ''), priority });
 }
 
 function toggleSecret(inputId, iconId) {
@@ -4094,7 +4310,7 @@ async function browseStorageFolder() {
           lucide.createIcons({ root: btn });
         }
 
-        showToast(`Moving Media Vault to ${newPath}...`);
+        showToast(`Moving Media Vault to ${newPath}...`, 'info');
 
         const saveRes = await fetch('/api/settings', {
           method: 'POST',
@@ -4147,7 +4363,7 @@ async function openExplorer() {
       body: JSON.stringify({ folder: folderVal })
     });
     if (res.ok) {
-      showToast('Opening the storage folder');
+      showToast('Opening the storage folder', 'info');
     } else {
       showToast('Could not open the folder in Explorer', true);
     }
