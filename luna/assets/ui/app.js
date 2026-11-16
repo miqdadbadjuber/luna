@@ -1456,7 +1456,7 @@ function setLang(lang) {
 switchPlatform('youtube', false);
 setLang('id');
 
-// Transitions.dev task configurations and dynamic task rows
+// Task configurations and step rows per workflow action
 const TASK_CONFIGS = {
   type_yt_ai_clip: [
     {
@@ -8278,7 +8278,7 @@ document.addEventListener('input', (e) => {
   }
 });
 
-// Wire up Transitions.dev sliding tabs pill & redraw flowchart on resize
+// Keep sliding tab indicators and flowchart connectors aligned on resize
 window.addEventListener('resize', () => {
   updateTabsPill(true);
   if (currentMainTab === 'vault' && typeof updateVaultPlatformUnderline === 'function') {

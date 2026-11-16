@@ -23,7 +23,6 @@
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@0.469.0"></script>
 
-  <!-- player.style Sutro Theme (AI Clipper video player) -->
   <script type="module" src="https://cdn.jsdelivr.net/npm/player.style/sutro/+esm"></script>
 
   <script src="/assets/ui/tailwind-config.js?v={{ASSET_VERSION}}"></script>
@@ -33,7 +32,6 @@
 
 <body class="min-h-screen w-full relative bg-[#0d0d0d] text-zinc-100 selection:bg-white/20 selection:text-white">
 
-  <!-- Unicorn Studio Animated WebGL Background (Project N9XzvQXu7fA5SY2ewADJ - Smooth Autonomous Loop, No Mouse Parallax) -->
   <div id="studioBackgroundContainer">
     <div data-us-project="N9XzvQXu7fA5SY2ewADJ" data-us-dpi="1" data-us-fps="35" data-us-scale="1" data-us-production="true" data-us-disablemouse="true" data-us-disablemobile="true"></div>
   </div>
@@ -52,7 +50,7 @@
 
       <div class="pill-divider"></div>
 
-      <!-- Center: Switcher Studio & Media Vault (Transitions.dev Compact Sliding Tabs) -->
+      <!-- Primary workspace tabs -->
       <div class="t-tabs" role="tablist" id="mainTabList">
         <span class="t-tabs-pill" id="mainTabsPill" aria-hidden="true"></span>
         <button type="button" id="tabBtnStudio" role="tab" aria-selected="true" aria-controls="section-studio"
@@ -457,10 +455,9 @@
           </div>
         </div>
 
-        <!-- Transitions.dev Dynamic Task Rows Component -->
         <div id="taskRowsContainer" class="flex flex-col gap-2.5 mb-4 w-full"></div>
 
-        <!-- Transitions.dev Completion Notice & Workspace Action (Below Task Rows, Frameless) -->
+        <!-- Completion banner shown after all tasks finish -->
         <div id="progressCompletionBanner"
           class="hidden mt-6 pt-5 border-t border-white/[0.08] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div class="text-left min-w-0 sm:pr-[108px]">
@@ -729,7 +726,6 @@
               <div class="flex items-center gap-3">
                 <h3 class="text-xs font-semibold font-sans text-zinc-300 tracking-wide">Media File List</h3>
                 
-                <!-- Transitions.dev Sliding Filter Tabs -->
                 <div class="t-tabs" role="tablist" id="vaultMediaFilterGroup">
                   <span class="t-tabs-pill" id="vaultMediaFilterPill" aria-hidden="true"></span>
                   <button type="button" class="t-tab" role="tab" aria-selected="true" onclick="setVaultMediaFilter('all')" id="btn-vault-filter-all">
@@ -807,7 +803,7 @@
                 id="clipperWorkspaceId">ID: -</span>
             </div>
 
-            <!-- Redesigned Vertical Toolbar: Actions + Zoom (Transitions.dev aesthetic) -->
+            <!-- Vertical canvas action and zoom toolbar -->
             <div class="t-clipper-toolbar" role="toolbar" aria-label="Canvas controls">
               <!-- Workspace Actions -->
               <button type="button" onclick="resetClipperCanvasLayout()" class="t-bar-btn" data-tooltip="Reset Card Positions" aria-label="Reset Card Positions">
@@ -972,7 +968,6 @@
               </div>
             </div>
 
-            <!-- Transitions.dev Input Wrap with Shake -->
             <div class="t-input-wrap" id="wrapGemini">
               <div class="t-input">
                 <input type="password" id="inputGemini" value="" oninput="providerKeyInputChanged('gemini')"
@@ -1017,7 +1012,6 @@
               </div>
             </div>
 
-            <!-- Transitions.dev Input Wrap with Shake -->
             <div class="t-input-wrap" id="wrapGroq">
               <div class="t-input">
                 <input type="password" id="inputGroq" value="" oninput="providerKeyInputChanged('groq')"
@@ -1139,7 +1133,6 @@
             </div>
           </div>
 
-          <!-- Transitions.dev Input Wrap with Shake -->
           <div class="t-input-wrap" id="wrapStorage">
             <div class="t-input">
               <input type="text" id="inputStorage" value=""
@@ -1948,10 +1941,8 @@
   <!-- JavaScript Logic -->
   <script src="/assets/ui/app.js?v={{ASSET_VERSION}}"></script>
 
-  <!-- Toast Notification Viewport (coss UI stacked cards matching #171717 surface) -->
   <div id="toastNotification" class="luna-toast-viewport" aria-live="polite" aria-label="Notifications"></div>
 
-  <!-- Unicorn Studio WebGL Background Loader (Project N9XzvQXu7fA5SY2ewADJ - Autonomous Fluid Loop) -->
   <script src="/assets/ui/background.js?v={{ASSET_VERSION}}"></script>
 </body>
 

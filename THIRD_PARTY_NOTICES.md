@@ -24,6 +24,21 @@ The license does not grant trademark rights. The Luna name and logo remain with 
 
 Dependencies are installed from `requirements.txt` under their own licenses, and Luna does not relicense them. Published Docker images also include FFmpeg and FFprobe from Debian, under FFmpeg's own license terms. The optional local Whisper provider installs `faster-whisper` from `requirements-whisper.txt`, also under its own license.
 
+## UI, agent skills, and frontend libraries
+
+`AGENTS.md` integrates external coding agent skills for UI, copy, accessibility, layout, and comment review, and the browser interface in `luna/templates/` and `luna/assets/ui/` loads third-party frontend packages from public CDNs or adapts external UI interaction patterns. Each component stays under its respective upstream terms.
+
+| Component | Role in Luna | Source |
+| --- | --- | --- |
+| antislop (`MIT`) | Coding agent rules (`antislop`, `antislop-ui`, `antislop-copywriting`, `antislop-code`) referenced in `AGENTS.md` | `https://github.com/miqdadbadjuber/anti-slop` |
+| Tailwind CSS (`cdn.tailwindcss.com`) | Layout and utility styling | `https://cdn.tailwindcss.com` |
+| Lucide Icons (`0.469.0`) | Interface icons | `https://unpkg.com/lucide@0.469.0` |
+| Google Fonts (`Inter`, `Sora`) | Body and heading typefaces | `https://fonts.googleapis.com` |
+| player.style (`sutro`) | Video and audio player web component (`media-theme-sutro`) | `https://cdn.jsdelivr.net/npm/player.style/sutro/+esm` |
+| Unicorn Studio (`1.4.30`) | Desktop animated WebGL background runtime | `https://cdn.jsdelivr.net/gh/hiunicornstudio/unicornstudio.js@v1.4.30/dist/unicornStudio.umd.js` |
+| Transitions.dev | Reference patterns for sliding tabs, collapsible task rows, shake validation, and clipper tooltips | `https://transitions.dev` |
+| coss UI | Reference patterns for primary buttons and stacked toast notifications | `https://coss.com/ui` |
+
 ## Icons and media
 
 The platform logos in `luna/assets/` are trademarks of their respective owners (YouTube/Google, Instagram/Meta, TikTok/ByteDance) and are used only to identify the supported services. They are not covered by Luna's license.

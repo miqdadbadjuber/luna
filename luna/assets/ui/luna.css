@@ -4,7 +4,7 @@
   --color-obsidian-card: #111113;
   --color-accent: #ffffff;
 
-  /* Transitions.dev Tabs sliding */
+  /* Sliding tab bar tokens */
   --tabs-dur: 250ms;
   --tabs-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --tabs-text-muted: rgba(193, 193, 193, 0.8);
@@ -39,7 +39,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* OpusClip-style Glass Surfaces */
+/* Frosted dark surface cards */
 .opus-card {
   background: rgba(18, 18, 18, 0.85) !important;
   backdrop-filter: none;
@@ -76,7 +76,7 @@ body {
     inset 0 1px 0 0 rgba(255, 255, 255, 0.22);
 }
 
-/* Transitions.dev plus-to-menu morph */
+/* Plus-to-menu morph tokens */
 :root {
   --morph-open-dur: 180ms;
   --morph-close-dur: 140ms;
@@ -542,7 +542,7 @@ body {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-/* Transitions.dev solid pill buttons for the delete modal (option 1) */
+/* Solid pill buttons for modals */
 .pill-btn {
   border-radius: 9999px !important;
   transition: all 180ms ease;
@@ -723,7 +723,7 @@ body.in-workspace main {
   background: rgba(255, 255, 255, 0.18);
 }
 
-/* Transitions.dev — Tabs sliding (Compact) */
+/* Compact sliding tabs */
 .t-tabs {
   position: relative;
   display: inline-flex;
@@ -893,7 +893,7 @@ body.in-workspace main {
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
 
-/* Transitions.dev task rows (progress state) */
+/* Task progress color tokens */
 :root {
   --task-line: rgba(255, 255, 255, 0.10);
   --task-ink: #ffffff;
@@ -929,7 +929,7 @@ body.in-workspace main {
   }
 }
 
-/* Transitions.dev Task Rows (Capsules) */
+/* Expandable task capsules */
 .task-row {
   transition: border-radius 300ms cubic-bezier(0.23, 1, 0.32, 1), background-color 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
   border-radius: 22px;
@@ -970,7 +970,7 @@ body.in-workspace main {
   transform: rotate(180deg);
 }
 
-/* Transitions.dev success check */
+/* Animated completion check tokens */
 :root {
   --check-opacity-dur: 500ms;
   --check-rotate-dur: 500ms;
@@ -1075,7 +1075,7 @@ body.in-workspace main {
   }
 }
 
-/* Transitions.dev learn more hover */
+/* Expanding chevron link animation tokens */
 :root {
   --learn-shift: 3px;
   --learn-spread: 8deg;
@@ -1151,7 +1151,7 @@ body.in-workspace main {
   transform: rotate(calc(var(--learn-spread) * -1));
 }
 
-/* Transitions.dev recommendation cards and buttons */
+/* Neutral obsidian card and action button tokens */
 :root {
   --rec-bg-surface: #171717;
   --rec-border-line: rgba(255, 255, 255, 0.08);
@@ -1260,7 +1260,7 @@ body.in-workspace main {
   border-color: rgba(239, 68, 68, 0.6);
 }
 
-/* Transitions.dev: Learn more hover Pill Style */
+/* Rounded pill variant for secondary actions */
 .t-learn-pill {
   height: 32px;
   padding: 0 14px;
@@ -1460,7 +1460,7 @@ body.in-workspace main {
   background-color: #1f1f22 !important;
 }
 
-/* Transitions.dev: Learn more hover (Open & Back buttons) */
+/* Chevron hover tokens for Open and Back actions */
 :root {
   --learn-shift: 2px;
   --learn-spread: 8deg;
@@ -2187,7 +2187,7 @@ body.is-in-fullscreen media-control-bar button * {
   cursor: pointer !important;
 }
 
-/* Transitions.dev Vertical Toolbar for AI Clipper */
+/* Floating vertical toolbar on the clipper canvas */
 .t-clipper-toolbar {
   position: fixed;
   right: 18px;
@@ -2307,7 +2307,7 @@ body.is-in-fullscreen media-control-bar button * {
   margin: 2px 0;
 }
 
-/* Transitions.dev sleek left-floating tooltip */
+/* Left-floating hover tooltip on canvas toolbar */
 .t-clipper-toolbar [data-tooltip] {
   position: relative;
 }
@@ -2391,7 +2391,7 @@ media-theme-sutro media-pip-button,
   pointer-events: none !important;
 }
 
-/* Sutro player default settings - Consistent across all cards */
+/* Keep player size rules consistent across card variants */
 media-theme-sutro {
   --media-accent-color: #ffffff;
   --media-tooltip-display: none !important;
@@ -2629,7 +2629,7 @@ media-theme-sutro ::-webkit-scrollbar {
   }
 }
 
-/* Unicorn Studio Animated WebGL Background: Active in Studio */
+/* Studio animated WebGL background container */
 #studioBackgroundContainer {
   position: fixed;
   inset: 0;
@@ -2685,7 +2685,7 @@ body.tab-settings [data-us-project] canvas {
   pointer-events: none !important;
 }
 
-/* Transitions.dev: Error state shake tokens */
+/* Input validation shake timing tokens */
 :root {
   --shake-distance: 6px;
   --shake-overshoot: 4px;
@@ -2696,7 +2696,7 @@ body.tab-settings [data-us-project] canvas {
   --revert-dur: 280ms;
 }
 
-/* Transitions.dev: Error state shake & input styling */
+/* Input field wrapper with shake feedback */
 .t-input-wrap {
   position: relative;
   width: 100%;
@@ -2774,7 +2774,7 @@ body.tab-settings [data-us-project] canvas {
   100%    { transform: translateX(0); }
 }
 
-/* coss.com/ui Button Variants */
+/* Primary CTA button variants */
 button:not(:disabled),
 [role="button"]:not(:disabled) {
   cursor: pointer;
@@ -3264,7 +3264,7 @@ button:not(:disabled),
   font-weight: 500;
 }
 
-/* Media Vault Concept C: Output Mode Underline Tabs (matches Transitions.dev motion & theme tokens) */
+/* Media Vault platform underline tabs */
 .vault-underline-tabs {
   position: relative;
   display: flex;
@@ -3460,7 +3460,7 @@ button:not(:disabled),
   }
 }
 
-/* coss UI stacked Toast notifications matching Luna #171717 obsidian card surface */
+/* Stacked bottom-right toast notifications on #171717 surface */
 .luna-toast-viewport {
   position: fixed;
   bottom: 20px;
