@@ -3370,6 +3370,16 @@ body.tab-settings [data-us-project] canvas {
   transform: rotate(var(--morph-rotate));
 }
 
+/* Match Media Vault dropdown card surface color to Settings & .vault-card-menu (#171717) */
+#vaultModeMenu.popover-menu,
+#vaultSortMenu.popover-menu {
+  background: #171717 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75) !important;
+}
+
 @media (min-width: 1024px) {
   .vault-header-bar {
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
