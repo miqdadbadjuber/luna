@@ -584,6 +584,39 @@ body.in-workspace main {
   padding-top: 1.5rem !important;
 }
 
+/* Pre-paint hash route guards to eliminate initial Studio flicker before JS mounts */
+html[data-init-route] #section-studio,
+html[data-init-route] #studioBackgroundContainer,
+html[data-init-route] #curtains-canvas {
+  display: none !important;
+}
+
+html[data-init-route="vault"] #section-vault,
+html[data-init-route="workspace"] #section-vault {
+  display: block !important;
+}
+
+html[data-init-route="workspace"] .pill-nav-container,
+html[data-init-route="workspace"] #vaultProjectsListView {
+  display: none !important;
+}
+
+html[data-init-route="workspace"] #vaultProjectDetailView {
+  display: block !important;
+}
+
+html[data-init-route="workspace"] main {
+  padding-top: 1.5rem !important;
+}
+
+html[data-init-route="settings"] #section-settings {
+  display: block !important;
+}
+
+html[data-init-route="guide"] #section-guide {
+  display: block !important;
+}
+
 /* Indeterminate progress beam for AI & rendering tasks (no misleading percentage) */
 @keyframes taskBeamSlide {
   0% {

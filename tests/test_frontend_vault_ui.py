@@ -395,8 +395,13 @@ class TestFrontendVaultUI(unittest.TestCase):
             "function applyRouteFromHash",
             "window.addEventListener('popstate', () => applyRouteFromHash())",
             "currentGuideTab",
+            "data-init-route",
         ):
             self.assertIn(expected, html)
+
+        css = self.client.get("/assets/ui/luna.css").text
+        self.assertIn('html[data-init-route="workspace"] #vaultProjectsListView', css)
+        self.assertIn("html[data-init-route] #section-studio", css)
 
 
 if __name__ == "__main__":

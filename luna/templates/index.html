@@ -28,6 +28,17 @@
   <script src="/assets/ui/tailwind-config.js?v={{ASSET_VERSION}}"></script>
 
   <link rel="stylesheet" href="/assets/ui/luna.css?v={{ASSET_VERSION}}" />
+  <script>
+    (function () {
+      var h = window.location.hash || '';
+      var r = '';
+      if (h.indexOf('#vault-project/') === 0) r = 'workspace';
+      else if (h === '#vault') r = 'vault';
+      else if (h === '#settings') r = 'settings';
+      else if (h === '#guide' || h.indexOf('#guide/') === 0) r = 'guide';
+      if (r) document.documentElement.setAttribute('data-init-route', r);
+    })();
+  </script>
 </head>
 
 <body class="min-h-screen w-full relative bg-[#0d0d0d] text-zinc-100 selection:bg-white/20 selection:text-white">

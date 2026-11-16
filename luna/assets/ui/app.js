@@ -3369,7 +3369,7 @@ function switchMainTab(tab, options = {}) {
         if (sectionVault) sectionVault.classList.remove('hidden');
         document.title = 'Luna: Media Vault';
 
-        if (!currentActiveProjectId) {
+        if (!currentActiveProjectId && !document.body.classList.contains('in-workspace')) {
           const listView = document.getElementById('vaultProjectsListView');
           const detailView = document.getElementById('vaultProjectDetailView');
           if (listView) listView.classList.remove('hidden');
@@ -5847,7 +5847,12 @@ async function openProjectPage(projectId) {
       console.warn('Error fetching projects in openProjectPage:', e);
     }
   }
-  if (reqSeq !== openProjectRequestSeq || !proj) return;
+  if (reqSeq !== openProjectRequestSeq) return;
+  if (!proj) {
+    document.documentElement.removeAttribute('data-init-route');
+    closeProjectPage();
+    return;
+  }
   exitActiveSelectionMode();
   closeVaultCardMenu();
   for (const k in clipperNodeOffsets) {
@@ -5855,6 +5860,7 @@ async function openProjectPage(projectId) {
   }
   currentActiveProjectId = projectId;
   document.body.classList.add('in-workspace');
+  document.documentElement.removeAttribute('data-init-route');
 
   // Use pushState instead of assigning location.hash so opening a card doesn't
   // fire hashchange and double-render the workspace mid-media-load.
@@ -8262,10 +8268,10 @@ function applyRouteFromHash(rawHash = window.location.hash, options = {}) {
     const pId = hash.slice('#vault-project/'.length);
     if (isInitial) document.body.classList.add('in-workspace');
     if (currentMainTab !== 'vault') switchMainTab('vault', { updateUrl: false });
-    if (isInitial) {
-      setTimeout(() => openProjectPage(pId), 300);
-    } else if (currentActiveProjectId !== pId) {
+    if (currentActiveProjectId !== pId) {
       openProjectPage(pId);
+    } else if (isInitial) {
+      document.documentElement.removeAttribute('data-init-route');
     }
     return;
   }
@@ -8289,6 +8295,9 @@ function applyRouteFromHash(rawHash = window.location.hash, options = {}) {
     }
   } else if (!isInitial && (hash === '' || hash === '#studio')) {
     if (currentMainTab !== 'studio') switchMainTab('studio', { updateUrl: false });
+  }
+  if (isInitial) {
+    document.documentElement.removeAttribute('data-init-route');
   }
 }
 
