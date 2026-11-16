@@ -591,6 +591,23 @@ html[data-init-route] #curtains-canvas {
   display: none !important;
 }
 
+html[data-init-route] #mainTabsPill {
+  transition: none !important;
+  opacity: 0 !important;
+}
+
+html[data-init-route="vault"] #tabBtnStudio,
+html[data-init-route="settings"] #tabBtnStudio,
+html[data-init-route="guide"] #tabBtnStudio {
+  color: var(--tabs-text-muted) !important;
+}
+
+html[data-init-route="vault"] #tabBtnVault,
+html[data-init-route="settings"] #btnNavSettings,
+html[data-init-route="guide"] #btnNavGuide {
+  color: #ffffff !important;
+}
+
 html[data-init-route="vault"] #section-vault,
 html[data-init-route="workspace"] #section-vault {
   display: block !important;

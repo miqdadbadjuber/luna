@@ -1157,7 +1157,7 @@ function switchGuideTab(tabId, btn, shouldScroll = false, options = {}) {
   if (options.updateUrl !== false && typeof currentMainTab !== 'undefined' && currentMainTab === 'guide' && typeof syncLocationHash === 'function') {
     syncLocationHash(tabId === 'wf-youtube' ? '#guide' : `#guide/${tabId}`);
   }
-  updateGuidePill(targetBtn, false);
+  updateGuidePill(targetBtn, Boolean(options.immediate));
 
   document.querySelectorAll('.guide-tab-pane').forEach(p => p.classList.add('hidden'));
   const activePane = document.getElementById(`tab-${tabId}`);

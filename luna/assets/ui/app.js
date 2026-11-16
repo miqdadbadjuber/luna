@@ -3159,8 +3159,13 @@ function updateTabsPill(immediate = false) {
   if (!pill) return;
 
   if (currentMainTab === 'settings' || currentMainTab === 'guide') {
+    if (immediate) pill.style.transition = 'none';
     pill.style.opacity = '0';
     pill.style.width = '0px';
+    if (immediate) {
+      void pill.offsetHeight;
+      pill.style.transition = '';
+    }
     if (btnStudio) {
       btnStudio.classList.remove('active');
       btnStudio.setAttribute('aria-selected', 'false');
@@ -3245,6 +3250,7 @@ function switchMainTab(tab, options = {}) {
     const previousTab = currentMainTab;
     const updateUrl = options.updateUrl !== false;
     const replaceUrl = Boolean(options.replaceUrl);
+    const immediatePill = Boolean(options.immediate);
     currentMainTab = tab;
     if (studioBgResumeTimer) {
       clearTimeout(studioBgResumeTimer);
@@ -3389,7 +3395,7 @@ function switchMainTab(tab, options = {}) {
       }
     }
 
-    updateTabsPill(false);
+    updateTabsPill(immediatePill);
 
     if (updateUrl) {
       syncLocationHash(getMainTabHash(tab), { replace: replaceUrl });
@@ -8267,7 +8273,7 @@ function applyRouteFromHash(rawHash = window.location.hash, options = {}) {
   if (hash.startsWith('#vault-project/')) {
     const pId = hash.slice('#vault-project/'.length);
     if (isInitial) document.body.classList.add('in-workspace');
-    if (currentMainTab !== 'vault') switchMainTab('vault', { updateUrl: false });
+    if (currentMainTab !== 'vault') switchMainTab('vault', { updateUrl: false, immediate: isInitial });
     if (currentActiveProjectId !== pId) {
       openProjectPage(pId);
     } else if (isInitial) {
@@ -8283,15 +8289,15 @@ function applyRouteFromHash(rawHash = window.location.hash, options = {}) {
   }
 
   if (hash === '#vault') {
-    if (currentMainTab !== 'vault') switchMainTab('vault', { updateUrl: false });
+    if (currentMainTab !== 'vault') switchMainTab('vault', { updateUrl: false, immediate: isInitial });
   } else if (hash === '#settings') {
-    if (currentMainTab !== 'settings') switchMainTab('settings', { updateUrl: false });
+    if (currentMainTab !== 'settings') switchMainTab('settings', { updateUrl: false, immediate: isInitial });
   } else if (hash === '#guide' || hash.startsWith('#guide/')) {
     const subTab = hash.startsWith('#guide/') ? hash.slice('#guide/'.length) : '';
-    if (currentMainTab !== 'guide') switchMainTab('guide', { updateUrl: false });
+    if (currentMainTab !== 'guide') switchMainTab('guide', { updateUrl: false, immediate: isInitial });
     if (subTab && typeof switchGuideTab === 'function') {
       const targetBtn = document.querySelector(`#guideTabsBar [data-guide-tab="${CSS.escape(subTab)}"]`);
-      if (targetBtn) switchGuideTab(subTab, targetBtn, false, { updateUrl: false });
+      if (targetBtn) switchGuideTab(subTab, targetBtn, false, { updateUrl: false, immediate: isInitial });
     }
   } else if (!isInitial && (hash === '' || hash === '#studio')) {
     if (currentMainTab !== 'studio') switchMainTab('studio', { updateUrl: false });
@@ -8380,10 +8386,11 @@ async function checkAndResumeSavedJob(savedJobId) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  applyRouteFromHash(window.location.hash, { isInitial: true });
   updateTabsPill(true);
   if (typeof initAllGlidingIndicators === 'function') {
     initAllGlidingIndicators();
-renderTrimSegments();
+    renderTrimSegments();
   }
 
   // Check and resume running background job if page was refreshed
@@ -8393,8 +8400,6 @@ renderTrimSegments();
       checkAndResumeSavedJob(savedJobId);
     }
   } catch (e) {}
-
-  applyRouteFromHash(window.location.hash, { isInitial: true });
 });
 if (document.fonts && document.fonts.ready) {
   document.fonts.ready.then(() => {

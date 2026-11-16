@@ -402,6 +402,8 @@ class TestFrontendVaultUI(unittest.TestCase):
         css = self.client.get("/assets/ui/luna.css").text
         self.assertIn('html[data-init-route="workspace"] #vaultProjectsListView', css)
         self.assertIn("html[data-init-route] #section-studio", css)
+        self.assertIn("html[data-init-route] #mainTabsPill", css)
+        self.assertIn("updateTabsPill(immediatePill)", html)
 
 
 if __name__ == "__main__":
