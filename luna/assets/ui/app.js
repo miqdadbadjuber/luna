@@ -988,16 +988,19 @@ function selectSubFeature(subId, closeMenu = true) {
 function updateDrawer(feat) {
   const drawerAi = document.getElementById('drawer-ai-clip');
   const drawerQuality = document.getElementById('drawer-quality');
+  const drawerQualityPill = document.getElementById('drawer-quality-pill');
   const drawerTrimmer = document.getElementById('drawer-trimmer');
   const extraTrimmer = document.getElementById('trimExtraSegmentsWrapper');
 
-  [drawerAi, drawerQuality, drawerTrimmer, extraTrimmer].forEach(el => {
+  [drawerAi, drawerQuality, drawerQualityPill, drawerTrimmer, extraTrimmer].forEach(el => {
     if (el) el.classList.add('hidden');
   });
 
   if (feat.drawer === 'ai-clip') {
+    if (drawerQualityPill) drawerQualityPill.classList.remove('hidden');
     if (drawerAi) drawerAi.classList.remove('hidden');
   } else if (feat.drawer === 'quality') {
+    if (drawerQualityPill) drawerQualityPill.classList.remove('hidden');
     if (drawerQuality) drawerQuality.classList.remove('hidden');
   } else if (feat.drawer === 'trimmer') {
     if (drawerTrimmer) drawerTrimmer.classList.remove('hidden');

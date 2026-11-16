@@ -312,6 +312,16 @@ class TestFrontendVaultUI(unittest.TestCase):
         self.assertIn("t-btn-primary", rename_modal_snippet)
         self.assertIn("t-btn-secondary", rename_modal_snippet)
 
+    def test_ai_clipper_shows_quality_pill_with_1080p_default(self):
+        """AI Short Clips must expose the quality dropdown while keeping 1080p as default."""
+        html = self.source
+        self.assertIn('id="drawer-quality-pill"', html)
+        self.assertIn("var selectedQuality = '1080';", html)
+        self.assertIn('<span id="currentQualityLabel">1080p FHD</span>', html)
+        drawer_fn = html.split("function updateDrawer(feat)")[1].split("function closeAllDropdowns(")[0]
+        ai_branch = drawer_fn.split("feat.drawer === 'ai-clip'")[1].split("feat.drawer === 'quality'")[0]
+        self.assertIn("drawerQualityPill.classList.remove('hidden')", ai_branch)
+
 
 if __name__ == "__main__":
     unittest.main()

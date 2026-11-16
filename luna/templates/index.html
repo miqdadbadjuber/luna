@@ -173,6 +173,32 @@
 
             <!-- Dynamic Contextual Options Pills -->
 
+            <!-- Shared Video Quality Pill (used by AI Short Clips & Full HD Video) -->
+            <div id="drawer-quality-pill" class="relative flex-shrink-0">
+              <button type="button" id="qualityDropdownBtn" aria-expanded="false"
+                onclick="toggleQualityDropdown(event)" class="pill-control">
+                <span id="currentQualityLabel">1080p FHD</span>
+                <i data-lucide="chevron-down" class="w-2.5 h-2.5 text-zinc-400 transition-transform duration-200"
+                  id="qualityChevron"></i>
+              </button>
+
+              <!-- Quality Popover Menu -->
+              <div id="qualityMenu" data-open="false"
+                class="popover-menu absolute left-0 top-full mt-1.5 w-[90px] z-50">
+                <span class="gliding-menu-indicator pointer-events-none absolute left-[3px] right-[3px] rounded-[6px] bg-white/[0.08] z-[1]" style="opacity: 0; transition: top 220ms cubic-bezier(0.23,1,0.32,1), height 220ms cubic-bezier(0.23,1,0.32,1), opacity 150ms ease;"></span>
+                <div onclick="selectQualityFromMenu('1080', '1080p FHD')" class="quality-menu-item active"
+                  data-quality="1080">
+                  <span class="quality-item-title truncate">1080p FHD</span>
+                </div>
+                <div onclick="selectQualityFromMenu('720', '720p HD')" class="quality-menu-item" data-quality="720">
+                  <span class="quality-item-title truncate">720p HD</span>
+                </div>
+                <div onclick="selectQualityFromMenu('480', '480p SD')" class="quality-menu-item" data-quality="480">
+                  <span class="quality-item-title truncate">480p SD</span>
+                </div>
+              </div>
+            </div>
+
             <!-- 1. AI Short Clips Options -->
             <div id="drawer-ai-clip" class="flex items-center gap-1.5 flex-shrink-0">
 
@@ -260,34 +286,8 @@
 
             </div>
 
-            <!-- 2. Video Quality, Ratio & FPS Dropdown Options -->
+            <!-- 2. Video Ratio & FPS Dropdown Options -->
             <div id="drawer-quality" class="hidden flex items-center gap-1.5 flex-shrink-0">
-              <!-- Quality Dropdown -->
-              <div class="relative flex-shrink-0">
-                <button type="button" id="qualityDropdownBtn" aria-expanded="false"
-                  onclick="toggleQualityDropdown(event)" class="pill-control">
-                  <span id="currentQualityLabel">1080p FHD</span>
-                  <i data-lucide="chevron-down" class="w-2.5 h-2.5 text-zinc-400 transition-transform duration-200"
-                    id="qualityChevron"></i>
-                </button>
-
-                <!-- Quality Popover Menu -->
-                <div id="qualityMenu" data-open="false"
-                  class="popover-menu absolute left-0 top-full mt-1.5 w-[90px] z-50">
-                  <span class="gliding-menu-indicator pointer-events-none absolute left-[3px] right-[3px] rounded-[6px] bg-white/[0.08] z-[1]" style="opacity: 0; transition: top 220ms cubic-bezier(0.23,1,0.32,1), height 220ms cubic-bezier(0.23,1,0.32,1), opacity 150ms ease;"></span>
-                  <div onclick="selectQualityFromMenu('1080', '1080p FHD')" class="quality-menu-item active"
-                    data-quality="1080">
-                    <span class="quality-item-title truncate">1080p FHD</span>
-                  </div>
-                  <div onclick="selectQualityFromMenu('720', '720p HD')" class="quality-menu-item" data-quality="720">
-                    <span class="quality-item-title truncate">720p HD</span>
-                  </div>
-                  <div onclick="selectQualityFromMenu('480', '480p SD')" class="quality-menu-item" data-quality="480">
-                    <span class="quality-item-title truncate">480p SD</span>
-                  </div>
-                </div>
-              </div>
-
               <!-- Aspect Ratio for Full Video -->
               <div class="relative flex-shrink-0">
                 <button type="button" id="videoRatioDropdownBtn" aria-expanded="false"

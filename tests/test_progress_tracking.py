@@ -49,6 +49,35 @@ class TestProgressTracking(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             hook({"status": "downloading"})
 
+    def test_progress_hook_splits_video_and_audio_streams(self):
+        hook = create_progress_hook(self.job_id, finished_pct=95.0)
+        v_info = {"vcodec": "avc1", "acodec": "none"}
+        a_info = {"vcodec": "none", "acodec": "opus"}
+
+        hook({
+            "status": "downloading",
+            "downloaded_bytes": 5000,
+            "total_bytes": 10000,
+            "speed": 2000,
+            "info_dict": v_info,
+        })
+        self.assertEqual(jobs[self.job_id]["progress"], 44.0)
+
+        hook({"status": "finished", "info_dict": v_info})
+        self.assertEqual(jobs[self.job_id]["progress"], 88.0)
+
+        hook({
+            "status": "downloading",
+            "downloaded_bytes": 500,
+            "total_bytes": 1000,
+            "speed": 1000,
+            "info_dict": a_info,
+        })
+        self.assertEqual(jobs[self.job_id]["progress"], 93.5)
+
+        hook({"status": "finished", "info_dict": a_info})
+        self.assertEqual(jobs[self.job_id]["progress"], 95.0)
+
 
 if __name__ == "__main__":
     unittest.main()

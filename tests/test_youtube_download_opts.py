@@ -18,9 +18,9 @@ class TestYoutubeDownloadOpts(unittest.TestCase):
         self.assertEqual(opts["socket_timeout"], 15)
         self.assertEqual(opts["retries"], 5)
         self.assertEqual(opts["fragment_retries"], 5)
-        self.assertEqual(opts["concurrent_fragment_downloads"], 12)
-        self.assertEqual(opts["http_chunk_size"], 10 * 1024 * 1024)
-        self.assertEqual(opts["buffersize"], 64 * 1024)
+        self.assertEqual(opts["concurrent_fragment_downloads"], 4)
+        self.assertNotIn("http_chunk_size", opts)
+        self.assertNotIn("buffersize", opts)
 
     def test_app_downloads(self):
         self.assert_h264_with_warnings(get_ytdl_base_opts({"format": "best"}))
@@ -37,6 +37,12 @@ class TestYoutubeDownloadOpts(unittest.TestCase):
             with self.assertRaises(_Captured):
                 downloader.download_youtube_local("https://www.youtube.com/watch?v=aqz-KE-bpKQ", out_dir=out)
         self.assert_h264_with_warnings(seen)
+        self.assertIn("height<=1080", seen["format"])
+
+    def test_format_for_defaults_to_1080_and_honors_explicit_choice(self):
+        self.assertIn("height<=1080", downloader._format_for("1080"))
+        self.assertIn("height<=1080", downloader._format_for("invalid"))
+        self.assertIn("height<=720", downloader._format_for("720"))
 
 
 if __name__ == "__main__":

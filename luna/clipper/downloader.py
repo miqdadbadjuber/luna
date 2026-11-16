@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 from typing import Callable, Dict, Optional, Tuple
 
 from .config import ROOT_DIR, local_output_dir
+from .fast_http import create_youtube_dl
 
 
 def _import_ytdlp():
@@ -32,15 +33,14 @@ def _import_ytdlp():
 YOUTUBE_FORMAT_SORT = ["res", "vcodec:h264"]
 
 # Single source of truth for yt-dlp network tuning across all downloaders:
-# 12 concurrent fragments, 10 MiB HTTP chunks (reduces YouTube range throttling),
-# and 64 KiB read buffer (yt-dlp HttpFD defaults to 1024 B).
+# 4 concurrent fragments beats 12 under congested links, and dropping forced
+# http_chunk_size / 64 KiB buffersize avoids HttpFD stalls when falling back
+# from FastHttpFD.
 YTDLP_DOWNLOAD_TUNING = {
     "socket_timeout": 15,
     "retries": 5,
     "fragment_retries": 5,
-    "concurrent_fragment_downloads": 12,
-    "http_chunk_size": 10 * 1024 * 1024,
-    "buffersize": 64 * 1024,
+    "concurrent_fragment_downloads": 4,
 }
 
 
@@ -49,7 +49,7 @@ def _format_for(fmt: str) -> str:
     try:
         height = int(fmt)
     except ValueError:
-        height = 720
+        height = 1080
     return (
         f"bestvideo[height<={height}]+bestaudio/best[height<={height}]/best"
     )
@@ -118,7 +118,7 @@ def _existing_download(out_dir: str, video_id: str, fmt: str) -> Optional[str]:
     try:
         requested = int(fmt)
     except (TypeError, ValueError):
-        requested = 720
+        requested = 1080
 
     pattern = re.compile(rf"^{re.escape(stem)}_(\d+)p\.(?:mp4|mkv|webm)$", re.IGNORECASE)
     best: Optional[Tuple[int, str]] = None
@@ -162,7 +162,7 @@ def get_last_download_info() -> Dict:
 
 def download_youtube_local(
     video_url: str,
-    fmt: str = "720",
+    fmt: str = "1080",
     out_dir: Optional[str] = None,
     progress_hook: Optional[Callable] = None,
 ) -> str:
@@ -210,7 +210,7 @@ def download_youtube_local(
     if progress_hook:
         ydl_opts["progress_hooks"] = [progress_hook]
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+    with create_youtube_dl(ydl_opts, ytdlp_mod=yt_dlp) as ydl:
         info = ydl.extract_info(video_url, download=True)
         # noplaylist should prevent this, but a bare playlist link can still slip through
         if info.get("_type") == "playlist":

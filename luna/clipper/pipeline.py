@@ -16,7 +16,7 @@ def generate_shorts(
     youtube_url: str,
     num_clips: int = 3,
     aspect_ratio: str = "9:16",
-    download_format: str = "720",
+    download_format: str = "1080",
     language: Optional[str] = None,
     use_face_detect: bool = True,
     on_status: Optional[Callable[[str], None]] = None,

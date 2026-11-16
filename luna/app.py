@@ -66,7 +66,7 @@ from .clipper.config import (
     transcribe_provider,
     transcribe_provider_label,
 )
-from .clipper.downloader import YOUTUBE_FORMAT_SORT, YTDLP_DOWNLOAD_TUNING
+from .clipper.downloader import YOUTUBE_FORMAT_SORT, YTDLP_DOWNLOAD_TUNING, create_youtube_dl
 from .clipper.highlights import clean_caption
 from .storage_manager import (
     CATEGORY_MAP,
@@ -573,6 +573,8 @@ def _path_is_inside(path: str, roots: List[str]) -> bool:
 
 # Progress hook factory for yt-dlp & streaming downloads
 def create_progress_hook(job_id: str, finished_pct: Optional[float] = None):
+    stream_state = {"seen_video_only": False}
+
     def hook(d: dict):
         if job_id not in jobs:
             return
@@ -581,6 +583,14 @@ def create_progress_hook(job_id: str, finished_pct: Optional[float] = None):
         event = job_cancel_events.get(job_id)
         if event is not None and event.is_set():
             raise RuntimeError("CANCELLED_BY_USER")
+        info_d = d.get("info_dict") or {}
+        vcodec = info_d.get("vcodec")
+        acodec = info_d.get("acodec")
+        is_video_only = bool(vcodec and vcodec != "none" and acodec == "none")
+        is_audio_only = bool(acodec and acodec != "none" and vcodec == "none")
+        if is_video_only:
+            stream_state["seen_video_only"] = True
+
         status = d.get("status")
         if status == "downloading":
             downloaded = d.get("downloaded_bytes", 0)
@@ -599,6 +609,10 @@ def create_progress_hook(job_id: str, finished_pct: Optional[float] = None):
                         pct = round((frags / frag_total) * 100, 1)
 
             pct = min(max(pct, 0.0), 99.9)
+            if is_video_only:
+                pct = round(pct * 0.88, 1)
+            elif stream_state["seen_video_only"] and is_audio_only:
+                pct = round(88.0 + (pct * 0.11), 1)
 
             speed = d.get("speed")
             speed_str = ""
@@ -633,6 +647,10 @@ def create_progress_hook(job_id: str, finished_pct: Optional[float] = None):
             jobs[job_id]["download_speed"] = ""
             jobs[job_id]["download_eta"] = ""
             jobs[job_id]["download_frags"] = ""
+            if is_video_only:
+                # Audio stream runs next for video+audio formats; avoid marking 100% early.
+                jobs[job_id]["progress"] = max(float(jobs[job_id].get("progress") or 0.0), 88.0)
+                return
             if finished_pct is not None:
                 # A job that still has to re-encode is not done when bytes stop.
                 jobs[job_id]["progress"] = finished_pct
@@ -655,7 +673,7 @@ def download_youtube_video(url: str, output_dir: str, quality: str = "1080", pro
     if progress_hook:
         base_opts["progress_hooks"] = [progress_hook]
     opts = get_ytdl_base_opts(base_opts)
-    with yt_dlp.YoutubeDL(opts) as ydl:
+    with create_youtube_dl(opts) as ydl:
         info = ydl.extract_info(url, download=True)
         title = info.get("title", "video")
         clean = sanitize_title(title)
@@ -683,7 +701,7 @@ def download_instagram_reels(url: str, output_dir: str, progress_hook: Optional[
     }
     if progress_hook:
         opts["progress_hooks"] = [progress_hook]
-    with yt_dlp.YoutubeDL(opts) as ydl:
+    with create_youtube_dl(opts) as ydl:
         info = ydl.extract_info(url, download=True)
         title = info.get("title", "instagram_reels")
         clean = sanitize_title(title)
@@ -720,7 +738,7 @@ def download_tiktok_video(url: str, output_dir: str, progress_hook: Optional[Cal
             }
             if progress_hook:
                 opts["progress_hooks"] = [progress_hook]
-            with yt_dlp.YoutubeDL(opts) as ydl:
+            with create_youtube_dl(opts) as ydl:
                 info = ydl.extract_info(url, download=True)
                 title = info.get("title", "tiktok")
                 clean = sanitize_title(title)
@@ -874,7 +892,7 @@ def download_mp3(
     if postprocessor_hook:
         base_opts["postprocessor_hooks"] = [postprocessor_hook]
     opts = get_ytdl_base_opts(base_opts)
-    with yt_dlp.YoutubeDL(opts) as ydl:
+    with create_youtube_dl(opts) as ydl:
         info = ydl.extract_info(url, download=True)
         title = info.get("title", "audio")
         thumb_url = info.get("thumbnail") or ""
@@ -1216,7 +1234,7 @@ async def api_info(req: InfoRequest):
     def _extract_ydl():
         opts = get_ytdl_base_opts({"skip_download": True, "noplaylist": True})
         opts["socket_timeout"] = 6
-        with yt_dlp.YoutubeDL(opts) as ydl:
+        with create_youtube_dl(opts) as ydl:
             return ydl.extract_info(url, download=False)
 
     try:
@@ -1536,7 +1554,15 @@ def _worker_process(job_id: str, req: ProcessRequest):
         req.aspect_ratio != "original" or (req.fps and req.fps != "auto")
     )
     is_audio_mp3 = action in ("type_yt_mp3", "type_tt_mp3", "mp3")
-    finished_pct = 70.0 if needs_conversion else (85.0 if is_audio_mp3 else None)
+    is_video_dl = action in (
+        "type_yt_video", "type_yt_short",
+        "type_ig_reels", "ig_reels",
+        "type_tt_video", "tt_video",
+    )
+    finished_pct = (
+        70.0 if needs_conversion
+        else (85.0 if is_audio_mp3 else (95.0 if is_video_dl else None))
+    )
     progress_hook = create_progress_hook(job_id, finished_pct=finished_pct)
     jobs[job_id]["progress"] = 0.0
     jobs[job_id]["download_speed"] = ""
@@ -1966,7 +1992,7 @@ def _worker_process(job_id: str, req: ProcessRequest):
             if progress_hook:
                 base_opts["progress_hooks"] = [progress_hook]
             opts = get_ytdl_base_opts(base_opts)
-            with yt_dlp.YoutubeDL(opts) as ydl:
+            with create_youtube_dl(opts) as ydl:
                 info = ydl.extract_info(url, download=True)
                 title = info.get("title", "video")
                 channel = info.get("uploader") or info.get("channel") or ""
