@@ -3228,11 +3228,11 @@ button:not(:disabled),
 
 .guide-flow-step-item {
   display: flex;
-  align-items: flex-start;
-  gap: 1rem;
-  padding: 1.1rem 0 1.1rem 0.75rem;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 1.15rem 0 1.15rem 0.9rem;
   border-left: 2px solid transparent;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   transition: border-left-color 0.16s ease;
 }
 
@@ -3241,27 +3241,84 @@ button:not(:disabled),
 }
 
 .guide-flow-step-item.active {
-  border-left-color: #d4d4d4;
+  border-left-color: #ffffff;
+}
+
+.guide-flow-step-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.45;
+  letter-spacing: -0.015em;
+  color: #ffffff;
+}
+
+.guide-flow-step-detail {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #ffffff;
 }
 
 .guide-flow-step-points {
-  margin-top: 0.45rem;
-  padding-left: 1rem;
+  margin-top: 0.25rem;
+  padding-left: 1.15rem;
   list-style-type: disc;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.35rem;
 }
 
 .guide-flow-step-points li {
-  font-size: 12px;
-  line-height: 1.6;
-  color: #a1a1aa;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: #ffffff;
 }
 
 .guide-flow-step-points strong {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* Scoped Guide readability: white titles & body text, dimmed subtitle only */
+.guide-docs-content .guide-subtitle,
+.guide-docs-content #wfYoutubeSummary,
+.guide-docs-content #wfInstagramSummary,
+.guide-docs-content #wfTiktokSummary {
+  font-size: 14px;
+  line-height: 1.65;
   color: #a1a1aa;
-  font-weight: 500;
+}
+
+.guide-docs-content #guidePageTitle,
+.guide-docs-content h3,
+.guide-docs-content #tab-setup .text-sm.font-semibold,
+.guide-docs-content #tab-vault .font-semibold.text-white,
+.guide-docs-content #tab-modes .font-semibold.text-white,
+.guide-docs-content #tab-faq span.font-medium.text-white {
+  color: #ffffff;
+  letter-spacing: -0.015em;
+}
+
+.guide-docs-content #tab-modes p,
+.guide-docs-content #tab-setup p,
+.guide-docs-content #tab-vault p,
+.guide-docs-content #tab-faq p,
+.guide-docs-content #tab-modes td {
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: #ffffff;
+}
+
+.guide-docs-content #tab-modes table span.text-\[11px\] {
+  color: #a1a1aa;
+}
+
+.guide-docs-content code:not(.subpage-cmd-code) {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 0.08em 0.35em;
 }
 
 /* Media Vault platform underline tabs */

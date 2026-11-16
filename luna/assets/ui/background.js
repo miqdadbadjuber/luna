@@ -1030,21 +1030,15 @@ function renderGuideWorkflow(platform) {
 
   if (stepsEl) {
     stepsEl.innerHTML = mode.steps.map((s, idx) => {
-      const num = String(idx + 1).padStart(2, '0');
+      const stepNum = idx + 1;
       const pointsHtml = Array.isArray(s.points) && s.points.length
         ? `<ul class="guide-flow-step-points">${s.points.map(pt => `<li>${pt}</li>`).join('')}</ul>`
         : '';
       return `
         <div class="guide-flow-step-item">
-          <span class="text-xs font-mono text-zinc-500 pt-0.5 shrink-0">${num}</span>
-          <div class="flex-1 min-w-0 space-y-1.5">
-            <div class="flex items-center gap-2.5 flex-wrap">
-              <span class="text-sm font-semibold text-white">${s.title}</span>
-              <span class="text-[11px] font-mono text-zinc-500">${s.tag}</span>
-            </div>
-            <p class="text-xs text-zinc-300 leading-relaxed">${s.detail}</p>
-            ${pointsHtml}
-          </div>
+          <h3 class="guide-flow-step-title">${stepNum}. ${s.title}</h3>
+          <p class="guide-flow-step-detail">${s.detail}</p>
+          ${pointsHtml}
         </div>
       `;
     }).join('');
