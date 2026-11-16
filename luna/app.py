@@ -1277,9 +1277,39 @@ async def api_info(req: InfoRequest):
         }
 
 
+def _is_definitive_no_transcript_error(exc: Exception) -> bool:
+    """Return True only when YouTube explicitly says a video has no transcripts."""
+    return type(exc).__name__ in ("TranscriptsDisabled", "NoTranscriptFound")
+
+
+def _ytdlp_has_subtitles(url: str) -> Optional[bool]:
+    """Fast subtitle-availability fallback via yt-dlp without solving JS challenges.
+
+    Returns ``True``/``False`` when YouTube answers cleanly, or ``None`` if the
+    fallback lookup itself fails or times out.
+    """
+    try:
+        opts = get_ytdl_base_opts({
+            "skip_download": True,
+            "noplaylist": True,
+            "quiet": True,
+            "no_warnings": True,
+            "ignore_no_formats_error": True,
+            "socket_timeout": 5,
+            "extractor_args": {"youtube": {"player_skip": ["js"]}},
+        })
+        with create_youtube_dl(opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+        if not isinstance(info, dict):
+            return None
+        return bool(info.get("subtitles") or info.get("automatic_captions"))
+    except Exception:
+        return None
+
+
 @app.get("/api/check-transcript")
 async def api_check_transcript(url: str = Query(...)):
-    """Check if YouTube video has native transcript/subtitles in < 0.5s."""
+    """Check if YouTube video has native transcript/subtitles cleanly."""
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
     problem = external_url_problem(url)
@@ -1296,15 +1326,46 @@ async def api_check_transcript(url: str = Query(...)):
                 from youtube_transcript_api import YouTubeTranscriptApi
                 api = YouTubeTranscriptApi()
                 t_list = api.list(vid)
-                return len(list(t_list)) > 0
-            except Exception:
-                return False
+                has_any = len(list(t_list)) > 0
+                return (
+                    has_any,
+                    has_any,
+                    "Official YouTube transcript is available"
+                    if has_any
+                    else "No official transcript is available; using AI speech-to-text",
+                )
+            except Exception as exc:
+                if _is_definitive_no_transcript_error(exc):
+                    return (
+                        False,
+                        False,
+                        "No official transcript is available; using AI speech-to-text",
+                    )
+                # Rate-limits / IP blocks / transient errors must not pretend subtitles
+                # don't exist; fall back to yt-dlp metadata (with cookies.txt) first.
+                yt_has = _ytdlp_has_subtitles(url)
+                if yt_has is False:
+                    return (
+                        False,
+                        False,
+                        "No official transcript is available; using AI speech-to-text",
+                    )
+                if yt_has is True:
+                    return True, True, "Official YouTube transcript is available"
+                return (
+                    True,
+                    False,
+                    "Could not verify subtitles in advance; checking during job",
+                )
 
-        has_t = await asyncio.to_thread(_check_api)
+        has_t, confirmed, note = await asyncio.wait_for(
+            asyncio.to_thread(_check_api),
+            timeout=6.0,
+        )
         return {
             "has_transcript": has_t,
-            "provider": "YouTube Subtitle Scraper" if has_t else transcribe_provider_label(),
-            "note": "Official YouTube transcript is available" if has_t else "No official transcript is available; using AI speech-to-text"
+            "provider": "YouTube Subtitle Scraper" if confirmed else transcribe_provider_label(),
+            "note": note,
         }
     except Exception:
         return {"has_transcript": True, "provider": transcribe_provider_label()}

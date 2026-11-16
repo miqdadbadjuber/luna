@@ -73,11 +73,39 @@ class TestTranscriptAndFactualPipeline(unittest.TestCase):
         self.assertTrue(data["note"].startswith("No official transcript"))
 
     def test_api_check_transcript_stays_200_when_the_check_raises(self):
-        # Failure inside the subtitle lookup must not surface as a 5xx.
-        with patch.dict(sys.modules, {"youtube_transcript_api": _failing_transcript_module()}):
+        # Failure inside the subtitle lookup must not surface as a 5xx or a bogus
+        # "no official transcript" warning when both lookups are inconclusive.
+        with patch.dict(sys.modules, {"youtube_transcript_api": _failing_transcript_module()}), \
+                patch("luna.app._ytdlp_has_subtitles", return_value=None):
             res = self.client.get("/api/check-transcript", params={"url": TRANSCRIPT_URL})
         self.assertEqual(res.status_code, 200)
-        self.assertIsInstance(res.json().get("has_transcript"), bool)
+        self.assertIs(res.json().get("has_transcript"), True)
+
+        # Transient block in youtube_transcript_api recovers via yt-dlp metadata fallback.
+        with patch.dict(sys.modules, {"youtube_transcript_api": _failing_transcript_module()}), \
+                patch("luna.app._ytdlp_has_subtitles", return_value=True):
+            res = self.client.get("/api/check-transcript", params={"url": TRANSCRIPT_URL})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["has_transcript"], True)
+        self.assertEqual(res.json()["provider"], "YouTube Subtitle Scraper")
+
+        # Definitive TranscriptsDisabled / NoTranscriptFound reports False immediately.
+        disabled_mod = types.ModuleType("youtube_transcript_api")
+
+        class TranscriptsDisabled(Exception):
+            pass
+
+        class _DisabledApi:
+            def list(self, _vid):
+                raise TranscriptsDisabled("disabled")
+
+        disabled_mod.YouTubeTranscriptApi = _DisabledApi
+        with patch.dict(sys.modules, {"youtube_transcript_api": disabled_mod}), \
+                patch("luna.app._ytdlp_has_subtitles") as mock_ytdlp:
+            res = self.client.get("/api/check-transcript", params={"url": TRANSCRIPT_URL})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["has_transcript"], False)
+        mock_ytdlp.assert_not_called()
 
         # Failure of the lookup as a whole (bad extraction, network, unexpected error).
         with patch("luna.clipper.downloader._extract_youtube_video_id", side_effect=RuntimeError("boom")):
@@ -86,6 +114,33 @@ class TestTranscriptAndFactualPipeline(unittest.TestCase):
         data = res.json()
         self.assertIsInstance(data.get("has_transcript"), bool)
         self.assertIn("provider", data)
+
+    def test_ytdlp_has_subtitles_checks_metadata_and_handles_errors(self):
+        import luna.app as luna_app
+
+        class _FakeYdl:
+            def __init__(self, payload):
+                self._payload = payload
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def extract_info(self, url, download=False):
+                if isinstance(self._payload, Exception):
+                    raise self._payload
+                return self._payload
+
+        with patch("luna.app.create_youtube_dl", return_value=_FakeYdl({"subtitles": {"id": [{}]}})):
+            self.assertIs(luna_app._ytdlp_has_subtitles(TRANSCRIPT_URL), True)
+
+        with patch("luna.app.create_youtube_dl", return_value=_FakeYdl({"subtitles": {}, "automatic_captions": {}})):
+            self.assertIs(luna_app._ytdlp_has_subtitles(TRANSCRIPT_URL), False)
+
+        with patch("luna.app.create_youtube_dl", return_value=_FakeYdl(RuntimeError("yt-dlp boom"))):
+            self.assertIsNone(luna_app._ytdlp_has_subtitles(TRANSCRIPT_URL))
 
     def test_progress_hook_clears_eta_and_sets_ai_clip_progress(self):
         job_id = "test_job_factual"
