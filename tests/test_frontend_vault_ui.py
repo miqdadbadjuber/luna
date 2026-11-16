@@ -348,23 +348,25 @@ class TestFrontendVaultUI(unittest.TestCase):
         self.assertIn("drawerQualityPill.classList.remove('hidden')", ai_branch)
 
     def test_settings_and_empty_vault_use_coss_button_variants(self):
-        """Settings actions and Empty Vault CTA must use semantic coss.com/ui button variants."""
+        """Empty Vault CTA uses coss default button; Settings header uses slim dirty-state save and Check/Change match Test Connection."""
         html = self.source
         self.assertNotIn("button-wrapper", html)
 
         for expected in (
             'id="btnOpenStudioEmpty"',
+            "coss-btn coss-btn-default",
             'id="btnSaveHeader"',
+            "settings-save-btn",
             'id="btnCheckSystem"',
             'id="btnChangeCookies"',
-            "coss-btn coss-btn-default",
-            "coss-btn coss-btn-outline coss-btn-sm",
+            'id="checkSystemIcon"',
         ):
             self.assertIn(expected, html)
 
-        css = (self.client.get("/assets/ui/luna.css").text)
+        css = self.client.get("/assets/ui/luna.css").text
         self.assertIn(".coss-btn-default", css)
-        self.assertIn(".coss-btn-outline", css)
+        self.assertIn(".settings-save-btn.is-dirty", css)
+        self.assertNotIn(".coss-btn-outline", css)
         self.assertNotIn(".button-wrapper", css)
 
 

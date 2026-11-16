@@ -3816,6 +3816,7 @@ function setLlmProvider(value) {
   syncLlmProviderUI();
   closeMenu('llmProviderMenu');
   if ((value || '') === 'openai' && typeof loadOpenaiModels === 'function') loadOpenaiModels();
+  syncSettingsDirtyState();
 }
 
 function selectTranscribe(value) {
@@ -3823,6 +3824,7 @@ function selectTranscribe(value) {
   if (input) input.value = value || '';
   syncTranscribeUI();
   closeMenu('transcribeMenu');
+  syncSettingsDirtyState();
 }
 
 function toggleLlmProviderMenu(force) { toggleMenu('llmProviderTrigger', 'llmProviderMenu', force); }
@@ -3875,6 +3877,7 @@ function selectOpenaiModel(value) {
   }
   syncModelMenu();
   closeMenu('openaiModelMenu');
+  syncSettingsDirtyState();
 }
 
 document.addEventListener('click', (event) => {
@@ -3908,8 +3911,57 @@ if (customModelInput) {
       const label = document.getElementById('openaiModelTriggerLabel');
       if (label) label.textContent = customModelInput.value.trim() || 'Custom...';
     }
+    syncSettingsDirtyState();
   });
 }
+
+let savedSettingsSnapshot = null;
+let settingsSavedTimer = null;
+
+function getSettingsSnapshot() {
+  return {
+    storage_dir: (document.getElementById('inputStorage')?.value || '').trim(),
+    llm_provider: document.getElementById('selectLlmProvider')?.value || '',
+    transcribe_provider: document.getElementById('selectTranscribeProvider')?.value || '',
+    openai_base_url: (document.getElementById('inputOpenaiBase')?.value || '').trim(),
+    openai_model: (document.getElementById('inputOpenaiModel')?.value || '').trim(),
+  };
+}
+
+function syncSettingsDirtyState() {
+  const btn = document.getElementById('btnSaveHeader');
+  const label = document.getElementById('saveLabel');
+  if (!btn) return;
+  if (settingsSavedTimer) {
+    clearTimeout(settingsSavedTimer);
+    settingsSavedTimer = null;
+  }
+  if (!savedSettingsSnapshot) {
+    btn.classList.remove('is-dirty', 'is-saved');
+    btn.disabled = true;
+    return;
+  }
+  const cur = getSettingsSnapshot();
+  const isDirty = Object.keys(savedSettingsSnapshot).some(
+    (key) => cur[key] !== savedSettingsSnapshot[key]
+  );
+  btn.classList.remove('is-saved');
+  btn.classList.toggle('is-dirty', isDirty);
+  btn.disabled = !isDirty;
+  if (label) label.textContent = 'Save Changes';
+}
+
+function captureSettingsSnapshot() {
+  savedSettingsSnapshot = getSettingsSnapshot();
+  syncSettingsDirtyState();
+}
+
+['inputOpenaiBase', 'inputStorage'].forEach((id) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('input', syncSettingsDirtyState);
+  el.addEventListener('change', syncSettingsDirtyState);
+});
 
 async function loadSettingsData() {
   try {
@@ -3964,6 +4016,7 @@ async function loadSettingsData() {
       inputStorage.value = data.storage_dir;
       currentStorageDir = data.storage_dir;
     }
+    captureSettingsSnapshot();
     if (typeof updateVaultStatsUI === 'function') updateVaultStatsUI();
 
     // System status
@@ -4061,12 +4114,21 @@ async function saveSettings() {
     }
 
     currentStorageDir = storageInput.value.trim();
+    savedSettingsSnapshot = getSettingsSnapshot();
 
     const saveBtn = document.getElementById('btnSaveHeader');
     const label = document.getElementById('saveLabel');
 
-    if (label) label.innerText = 'Saved';
-    if (saveBtn) saveBtn.disabled = true;
+    if (settingsSavedTimer) {
+      clearTimeout(settingsSavedTimer);
+      settingsSavedTimer = null;
+    }
+    if (saveBtn) {
+      saveBtn.classList.remove('is-dirty');
+      saveBtn.classList.add('is-saved');
+      saveBtn.disabled = true;
+    }
+    if (label) label.textContent = 'Saved';
 
     if (data.migrated && data.migrated.migrated_files > 0) {
       showToast(`Settings saved. ${data.migrated.migrated_files} files moved to the new folder.`);
@@ -4081,9 +4143,10 @@ async function saveSettings() {
       if (sizeEl) sizeEl.innerText = `${data.stats.total_size_mb || 0} MB`;
     }
 
-    setTimeout(() => {
-      if (label) label.innerText = 'Save';
-      if (saveBtn) saveBtn.disabled = false;
+    settingsSavedTimer = setTimeout(() => {
+      settingsSavedTimer = null;
+      if (saveBtn) saveBtn.classList.remove('is-saved');
+      syncSettingsDirtyState();
     }, 2500);
 
     // Update local vaultStats storage root if changed
@@ -4205,8 +4268,10 @@ async function testApiKey(provider, wrapId, inputId, statusElId, btn) {
 
 async function runSystemCheck(btn) {
   const label = document.getElementById('checkSystemLabel');
+  const icon = document.getElementById('checkSystemIcon');
   if (btn) btn.disabled = true;
   if (label) label.innerText = 'Checking...';
+  if (icon) icon.classList.add('animate-spin', 'text-amber-400');
 
   const chkFfmpeg = document.getElementById('chkFfmpeg');
   const statusFfmpeg = document.getElementById('statusFfmpeg');
@@ -4271,6 +4336,7 @@ async function runSystemCheck(btn) {
   } finally {
     if (btn) btn.disabled = false;
     if (label) label.innerText = 'Check';
+    if (icon) icon.classList.remove('animate-spin', 'text-amber-400');
   }
 }
 
@@ -4315,6 +4381,7 @@ async function browseStorageFolder() {
         }
 
         currentStorageDir = newPath;
+        captureSettingsSnapshot();
         if (saveResult.stats) {
           const filesEl = document.getElementById('settingsTotalFiles');
           const sizeEl = document.getElementById('settingsTotalSize');
