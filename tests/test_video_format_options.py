@@ -1,6 +1,14 @@
 import unittest
 from unittest.mock import patch, MagicMock
-from luna.app import ProcessRequest, format_video_target, extract_clip_segment, parse_timestamp
+from fastapi import HTTPException
+from luna.app import (
+    ProcessRequest,
+    _enforce_youtube_short_policy,
+    extract_clip_segment,
+    format_video_target,
+    is_youtube_short_url,
+    parse_timestamp,
+)
 
 
 class TestVideoFormatOptions(unittest.TestCase):
@@ -107,6 +115,28 @@ class TestVideoFormatOptions(unittest.TestCase):
         self.assertIn("h264_amf", cmd)
         self.assertIn("-quality", cmd)
         self.assertNotIn("libx264", cmd)
+
+    def test_youtube_short_detection_and_policy_enforcement(self):
+        self.assertTrue(is_youtube_short_url("https://www.youtube.com/shorts/dQw4w9WgXcQ"))
+        self.assertTrue(is_youtube_short_url("https://youtube.com/shorts/abc_123-xyz?feature=share"))
+        self.assertFalse(is_youtube_short_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ"))
+        self.assertFalse(is_youtube_short_url("https://evil.example/shorts/dQw4w9WgXcQ"))
+
+        video_req = ProcessRequest(
+            url="https://www.youtube.com/shorts/dQw4w9WgXcQ",
+            action="type_yt_video",
+            aspect_ratio="9:16",
+        )
+        normalized = _enforce_youtube_short_policy(video_req)
+        self.assertEqual(normalized.aspect_ratio, "original")
+
+        ai_req = ProcessRequest(
+            url="https://www.youtube.com/shorts/dQw4w9WgXcQ",
+            action="type_yt_ai_clip",
+        )
+        with self.assertRaises(HTTPException) as ctx:
+            _enforce_youtube_short_policy(ai_req)
+        self.assertEqual(ctx.exception.status_code, 400)
 
 
 if __name__ == "__main__":

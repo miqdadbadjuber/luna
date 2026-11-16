@@ -26,6 +26,7 @@ var selectedQuality = '1080';
 var selectedVideoRatio = 'original';
 var selectedVideoFps = 'auto';
 var selectedTrimRatio = 'original';
+var isYoutubeShortLocked = false;
 
 // Multi-Segment Trimmer State (Max 24h, 6 digits: HH:MM:SS or MM:SS)
 var trimSegments = [
@@ -450,6 +451,7 @@ function getAllTrimSegments() {
 // Trim Ratio Selector Handlers
 function toggleTrimRatioDropdown(e) {
   if (e) e.stopPropagation();
+  if (isYoutubeShortLocked) return;
   const menu = document.getElementById('trimRatioMenu');
   const chev = document.getElementById('trimRatioChevron');
   const btn = document.getElementById('trimRatioDropdownBtn');
@@ -468,12 +470,14 @@ function toggleTrimRatioDropdown(e) {
 }
 
 function selectTrimRatioFromMenu(r, label) {
-  selectedTrimRatio = r;
+  const nextRatio = isYoutubeShortLocked ? 'original' : r;
+  const nextLabel = isYoutubeShortLocked ? 'Original' : label;
+  selectedTrimRatio = nextRatio;
   const labelEl = document.getElementById('currentTrimRatioLabel');
-  if (labelEl) labelEl.innerText = label;
+  if (labelEl) labelEl.innerText = nextLabel;
 
   document.querySelectorAll('#trimRatioMenu .quality-menu-item[data-tratio]').forEach(item => {
-    const isAct = item.getAttribute('data-tratio') === r;
+    const isAct = item.getAttribute('data-tratio') === nextRatio;
     item.classList.toggle('active', isAct);
   });
 
@@ -556,12 +560,24 @@ function formatPlatformName(platform) {
   return platform.charAt(0).toUpperCase() + platform.slice(1);
 }
 
+function isYoutubeShortUrl(url) {
+  if (!url) return false;
+  try {
+    const parsed = new URL(String(url).trim());
+    const host = parsed.hostname.toLowerCase();
+    return (host === 'youtube.com' || host.endsWith('.youtube.com'))
+      && /^\/shorts\/[A-Za-z0-9_-]+/i.test(parsed.pathname);
+  } catch {
+    return /(?:^|https?:\/\/)(?:[\w-]+\.)?youtube\.com\/shorts\/[A-Za-z0-9_-]+/i.test(String(url).trim());
+  }
+}
+
 function extractVideoInfoInstant(url) {
   if (!url) return null;
   const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:shorts\/|watch\?v=|embed\/|v\/|live\/))([a-zA-Z0-9_-]{11})/);
   if (ytMatch) {
     return {
-      platform: 'YouTube',
+      platform: isYoutubeShortUrl(url) ? 'YouTube Shorts' : 'YouTube',
       thumbnail: `https://img.youtube.com/vi/${ytMatch[1]}/hqdefault.jpg`,
       title: 'Loading video title...'
     };
@@ -625,7 +641,7 @@ function fastPreview(url) {
       .then(data => {
         if (data && data.title && mainUrlInput.value.includes(vidId)) {
           previewTitle.innerText = data.title;
-          previewPlatformTag.innerText = 'YouTube';
+          previewPlatformTag.innerText = isYoutubeShortUrl(url) ? 'YouTube Shorts' : 'YouTube';
           if (data.thumbnail_url) {
             previewThumb.src = data.thumbnail_url;
             previewThumb.classList.remove('hidden');
@@ -673,14 +689,93 @@ mainUrlInput.addEventListener('keydown', (e) => {
   }
 });
 
+function syncRatioControlLock(btnId, chevId, locked) {
+  const btn = document.getElementById(btnId);
+  const chev = document.getElementById(chevId);
+  if (btn) {
+    btn.disabled = locked;
+    btn.setAttribute('aria-disabled', locked ? 'true' : 'false');
+    btn.classList.toggle('is-locked', locked);
+    if (locked) {
+      btn.setAttribute('title', 'YouTube Shorts always use Original ratio');
+    } else {
+      btn.removeAttribute('title');
+    }
+  }
+  if (chev) chev.classList.toggle('hidden', locked);
+}
+
+function syncSubFeatureShortLockUI() {
+  const aiItem = document.querySelector('#subFeatureMenu .sub-menu-item[data-sub="type_yt_ai_clip"]');
+  if (!aiItem) return;
+  const locked = Boolean(isYoutubeShortLocked && currentPlatform === 'youtube');
+  aiItem.classList.toggle('is-disabled', locked);
+  aiItem.setAttribute('aria-disabled', locked ? 'true' : 'false');
+  if (locked) {
+    aiItem.setAttribute('title', 'AI Short Clips is unavailable for YouTube Shorts');
+  } else {
+    aiItem.removeAttribute('title');
+  }
+  const existingTag = aiItem.querySelector('.short-lock-tag');
+  if (locked && !existingTag) {
+    const tag = document.createElement('span');
+    tag.className = 'short-lock-tag ml-auto text-[10px] text-zinc-500 font-mono pl-2';
+    tag.textContent = 'Shorts N/A';
+    aiItem.appendChild(tag);
+  } else if (!locked && existingTag) {
+    existingTag.remove();
+  }
+}
+
+function syncYoutubeShortLockUI() {
+  const locked = Boolean(isYoutubeShortLocked && currentPlatform === 'youtube');
+  syncRatioControlLock('videoRatioDropdownBtn', 'videoRatioChevron', locked);
+  syncRatioControlLock('trimRatioDropdownBtn', 'trimRatioChevron', locked);
+  syncSubFeatureShortLockUI();
+
+  if (locked) {
+    if (selectedVideoRatio !== 'original') selectVideoRatioFromMenu('original', 'Original');
+    if (selectedTrimRatio !== 'original') selectTrimRatioFromMenu('original', 'Original');
+    const vMenu = document.getElementById('videoRatioMenu');
+    const tMenu = document.getElementById('trimRatioMenu');
+    if (vMenu) { vMenu.setAttribute('data-open', 'false'); vMenu.classList.remove('open'); }
+    if (tMenu) { tMenu.setAttribute('data-open', 'false'); tMenu.classList.remove('open'); }
+  }
+}
+
+function syncYoutubeShortState(url) {
+  const nextShort = isYoutubeShortUrl(url);
+  const becameShort = !isYoutubeShortLocked && nextShort;
+  isYoutubeShortLocked = nextShort;
+
+  if (nextShort && currentPlatform === 'youtube' && (becameShort || currentYtSub === 'type_yt_ai_clip')) {
+    selectSubFeature('type_yt_video', false);
+  }
+  syncYoutubeShortLockUI();
+}
+
 function detectUrlPlatform(url) {
-  const lower = url.toLowerCase();
+  const lower = String(url || '').toLowerCase();
   if (lower.includes('tiktok.com')) {
+    isYoutubeShortLocked = false;
     switchPlatform('tiktok', false);
-  } else if (lower.includes('instagram.com') || lower.includes('instagr.am')) {
+    return;
+  }
+  if (lower.includes('instagram.com') || lower.includes('instagr.am')) {
+    isYoutubeShortLocked = false;
     switchPlatform('instagram', false);
-  } else if (lower.includes('youtube.com') || lower.includes('youtu.be')) {
-    switchPlatform('youtube', false);
+    return;
+  }
+  if (lower.includes('youtube.com') || lower.includes('youtu.be')) {
+    if (currentPlatform !== 'youtube') {
+      switchPlatform('youtube', false);
+    }
+    syncYoutubeShortState(url);
+    return;
+  }
+  if (isYoutubeShortLocked) {
+    isYoutubeShortLocked = false;
+    syncYoutubeShortLockUI();
   }
 }
 
@@ -867,6 +962,7 @@ function switchPlatform(plat, manualSwitch = false) {
   if (manualSwitch) {
     mainUrlInput.value = '';
     videoInfoCard.classList.add('hidden');
+    isYoutubeShortLocked = false;
   }
 
   // Highlight active platform badge
@@ -902,6 +998,7 @@ function switchPlatform(plat, manualSwitch = false) {
   // Select default sub-feature
   const defaultSub = plat === 'youtube' ? currentYtSub : (plat === 'instagram' ? currentIgSub : currentTtSub);
   selectSubFeature(defaultSub, false);
+  syncYoutubeShortLockUI();
 
   // Handle sub-feature chevron and interactivity for single-option platforms (Reels)
   const subChev = document.getElementById('subChevron');
@@ -939,10 +1036,14 @@ function populateSubFeatureMenu(plat) {
   });
 
   attachGlidingListener(menu);
+  syncSubFeatureShortLockUI();
   lucide.createIcons();
 }
 
 function selectSubFeature(subId, closeMenu = true) {
+  if (isYoutubeShortLocked && currentPlatform === 'youtube' && subId === 'type_yt_ai_clip') {
+    return;
+  }
   if (currentPlatform === 'youtube') currentYtSub = subId;
   else if (currentPlatform === 'instagram') currentIgSub = subId;
   else if (currentPlatform === 'tiktok') currentTtSub = subId;
@@ -1247,6 +1348,7 @@ function selectQualityFromMenu(q, label) {
     // Video Ratio Dropdown Handlers
 function toggleVideoRatioDropdown(e) {
   if (e) e.stopPropagation();
+  if (isYoutubeShortLocked) return;
   const menu = document.getElementById('videoRatioMenu');
   const chev = document.getElementById('videoRatioChevron');
   const btn = document.getElementById('videoRatioDropdownBtn');
@@ -1265,12 +1367,14 @@ function toggleVideoRatioDropdown(e) {
 }
 
 function selectVideoRatioFromMenu(r, label) {
-  selectedVideoRatio = r;
+  const nextRatio = isYoutubeShortLocked ? 'original' : r;
+  const nextLabel = isYoutubeShortLocked ? 'Original' : label;
+  selectedVideoRatio = nextRatio;
   const labelEl = document.getElementById('currentVideoRatioLabel');
-  if (labelEl) labelEl.innerText = label;
+  if (labelEl) labelEl.innerText = nextLabel;
 
   document.querySelectorAll('#videoRatioMenu .quality-menu-item[data-vratio]').forEach(item => {
-    const isAct = item.getAttribute('data-vratio') === r;
+    const isAct = item.getAttribute('data-vratio') === nextRatio;
     item.classList.toggle('active', isAct);
   });
 

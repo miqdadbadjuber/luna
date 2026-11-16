@@ -359,6 +359,15 @@ body {
   font-weight: 500 !important;
 }
 
+.sub-menu-item.is-disabled {
+  opacity: 0.42;
+  cursor: not-allowed !important;
+}
+
+.sub-menu-item.is-disabled:hover .sub-item-title {
+  color: #71717a !important;
+}
+
 /* Hide redundant checkmarks in dropdown options. */
 .check-icon,
 .aspect-check,
@@ -477,6 +486,21 @@ body {
   border-color: rgba(255, 255, 255, 0.09) !important;
   color: #ffffff !important;
   outline: none !important;
+}
+
+.pill-control.is-locked,
+.pill-control:disabled {
+  opacity: 0.58;
+  cursor: not-allowed !important;
+  color: #a1a1aa;
+  background: rgba(255, 255, 255, 0.025);
+  transform: none !important;
+}
+
+.pill-control.is-locked:hover,
+.pill-control:disabled:hover {
+  background: rgba(255, 255, 255, 0.025);
+  color: #a1a1aa;
 }
 
 /* Segmented Pill Group (Frameless) */

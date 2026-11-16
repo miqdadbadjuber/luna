@@ -368,9 +368,23 @@ class TestFrontendVaultUI(unittest.TestCase):
         css = self.client.get("/assets/ui/luna.css").text
         self.assertIn(".coss-btn-default", css)
         self.assertIn(".luna-toast-action-btn.is-primary", css)
+        self.assertIn(".pill-control.is-locked", css)
+        self.assertIn(".sub-menu-item.is-disabled", css)
         self.assertNotIn(".settings-save-btn", css)
         self.assertNotIn(".coss-btn-outline", css)
         self.assertNotIn(".button-wrapper", css)
+
+    def test_youtube_shorts_autodetect_locks_ratio_and_ai_clip(self):
+        """YouTube Shorts links auto-select Full HD Video and lock ratio + AI Short Clips."""
+        html = self.source
+        for expected in (
+            "function isYoutubeShortUrl",
+            "function syncYoutubeShortState",
+            "function syncYoutubeShortLockUI",
+            "isYoutubeShortLocked",
+            "type_yt_video",
+        ):
+            self.assertIn(expected, html)
 
 
 if __name__ == "__main__":

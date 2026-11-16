@@ -532,6 +532,34 @@ def detect_platform(url: str) -> str:
     return "unknown"
 
 
+_YOUTUBE_SHORT_PATH_RE = re.compile(r"^/shorts/[A-Za-z0-9_-]+", re.IGNORECASE)
+
+
+def is_youtube_short_url(url: str) -> bool:
+    """Return True when url points to a youtube.com/shorts/<id> URL."""
+    if detect_platform(url) != "youtube":
+        return False
+    try:
+        path = urllib.parse.urlparse(url.strip()).path or ""
+    except ValueError:
+        return False
+    return bool(_YOUTUBE_SHORT_PATH_RE.match(path))
+
+
+def _enforce_youtube_short_policy(req: "ProcessRequest") -> "ProcessRequest":
+    """Reject AI clipping on YouTube Shorts and lock output aspect ratio to original."""
+    if not is_youtube_short_url(req.url):
+        return req
+    if req.action in ("type_yt_ai_clip", "type_ig_ai_clip", "ai_clip"):
+        raise HTTPException(
+            status_code=400,
+            detail="AI Short Clips is unavailable for YouTube Shorts. Use Full HD Video instead.",
+        )
+    if req.aspect_ratio != "original":
+        return req.model_copy(update={"aspect_ratio": "original"})
+    return req
+
+
 def _safe_join(base_dir: str, *parts: str) -> str:
     base_abs = os.path.abspath(base_dir)
     candidate = os.path.abspath(os.path.join(base_abs, *parts))
@@ -1583,6 +1611,8 @@ def _save_project_to_vault(
 
 
 def _worker_process(job_id: str, req: ProcessRequest):
+    if is_youtube_short_url(req.url) and req.aspect_ratio != "original":
+        req = req.model_copy(update={"aspect_ratio": "original"})
     cancel_event = job_cancel_events.get(job_id)
 
     def _cancelled() -> bool:
@@ -2188,6 +2218,7 @@ async def api_process(req: ProcessRequest, background_tasks: BackgroundTasks):
     problem = external_url_problem(req.url)
     if problem:
         raise HTTPException(status_code=400, detail=problem)
+    req = _enforce_youtube_short_policy(req)
 
     # Validate trim input before accepting the job: a bad timestamp used to become
     # a clip rendered at the wrong offset instead of a 400.
@@ -2249,6 +2280,7 @@ async def api_retry(job_id: str, background_tasks: BackgroundTasks):
     problem = external_url_problem(req.url)
     if problem:
         raise HTTPException(status_code=400, detail=problem)
+    req = _enforce_youtube_short_policy(req)
 
     jobs[job_id].update(
         status="queued", stage="queued", stage_detail="", progress=0.0,
