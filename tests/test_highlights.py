@@ -93,6 +93,56 @@ class TestHighlights(unittest.TestCase):
             raise AssertionError("should not be called")
         self.assertEqual(get_highlights({"segments": [{"start": 0, "end": 1, "text": " "}]}, llm_fn=llm), {"highlights": []})
 
+    def test_tops_up_when_first_pass_returns_fewer_clips_than_requested(self):
+        t = transcript(120)  # 600s -> easily holds 5+ non-overlapping clips
+        calls = []
+
+        def llm(prompt):
+            calls.append(prompt)
+            if len(calls) == 1:
+                return json.dumps({"clips": [
+                    {"first": 10, "last": 15, "score": 90, "title": "First"},
+                    {"first": 30, "last": 35, "score": 88, "title": "Second"},
+                    {"first": 50, "last": 55, "score": 86, "title": "Third"},
+                ]})
+            self.assertIn("Already selected time ranges", prompt)
+            return json.dumps({"clips": [
+                {"first": 70, "last": 75, "score": 84, "title": "Fourth"},
+                {"first": 90, "last": 95, "score": 82, "title": "Fifth"},
+            ]})
+
+        out = get_highlights(t, num_clips=5, llm_fn=llm)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(out["highlights"]), 5)
+
+    def test_short_video_skips_top_up_beyond_physical_capacity(self):
+        t = transcript(6, seconds=5.5)  # 33s -> fits at most 2x 16s clips
+        calls = []
+
+        def llm(prompt):
+            calls.append(prompt)
+            return json.dumps({"clips": [
+                {"first": 0, "last": 2, "score": 90},
+                {"first": 3, "last": 5, "score": 85},
+            ]})
+
+        out = get_highlights(t, num_clips=5, llm_fn=llm)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(len(out["highlights"]), 2)
+
+    def test_overlapping_autocaptions_do_not_truncate_or_invert_bounds(self):
+        segs = [
+            {"start": 0.4, "end": 6.0, "text": "line 0"},
+            {"start": 2.6, "end": 7.3, "text": "line 1"},
+            {"start": 6.0, "end": 18.0, "text": "line 2"},
+            {"start": 16.0, "end": 22.0, "text": "line 3"},
+        ]
+        out = get_highlights({"duration": 25.0, "segments": segs}, num_clips=1, llm_fn=reply({"first": 1, "last": 2, "score": 80}))
+        h = out["highlights"][0]
+        self.assertLess(h["start_time"], h["end_time"])
+        self.assertLessEqual(h["start_time"], 2.6)
+        self.assertGreaterEqual(h["end_time"], 18.0)
+
 
 if __name__ == "__main__":
     unittest.main()

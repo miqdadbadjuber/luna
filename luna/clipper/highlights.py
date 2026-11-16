@@ -32,8 +32,8 @@ PROMPT = """You choose moments from a video transcript to publish as standalone 
 
 Each transcript line is a segment: its number, its start time, then what was said.
 
-Pick up to {count} clips. A good clip:
-- opens on a line that makes sense to someone who never saw the video, with no "so", "and" or reference to something said earlier
+Pick {count} distinct clips spread across the transcript (return at least {target} non-overlapping clips whenever the transcript is long enough). A good clip:
+- opens cleanly on a strong hook, question, story beat, or self-contained statement (conversational starters are fine as long as the point makes sense to a new viewer)
 - holds one complete idea, story, answer or punchline, and ends after it lands, not mid-thought
 - runs {low:.0f} to {high:.0f} seconds, counted from the first line's time to the next line after the last one
 - does not overlap another clip you pick
@@ -42,6 +42,21 @@ Score each clip from 0 to 100 for how likely a stranger is to watch it to the en
 Write the title and caption in the language the speaker uses. The title is at most
 8 words. The caption is one or two plain sentences for the post, with no hashtags
 and no emoji.
+
+Answer with JSON only, in this shape:
+{{"clips": [{{"first": <segment number>, "last": <segment number>, "score": <0-100>, "title": "...", "caption": "..."}}]}}
+
+Transcript:
+{lines}
+"""
+
+TOPUP_PROMPT = """You previously selected {have} valid clip(s) from this transcript, so we still need {need} more non-overlapping clip(s).
+
+Already selected time ranges (DO NOT repeat or overlap these):
+{picked}
+
+Pick {ask} NEW distinct clips from the unused parts of the transcript (each {low:.0f} to {high:.0f} seconds, complete thoughts, non-overlapping, scored 0-100).
+Write titles (at most 8 words) and captions (1-2 plain sentences, no hashtags, no emoji) in the speaker's language.
 
 Answer with JSON only, in this shape:
 {{"clips": [{{"first": <segment number>, "last": <segment number>, "score": <0-100>, "title": "...", "caption": "..."}}]}}
@@ -132,12 +147,13 @@ def _to_highlight(clip: Dict, segments: List[Dict], window: range, duration: flo
             first -= 1
         else:
             break
-    # A little air around the words so the first and last syllables are not clipped.
+    # A little air around the words so the first and last syllables are not clipped,
+    # while skipping clamp if neighbouring auto-captions intentionally overlap.
     start = max(0.0, segments[first]["start"] - LEAD_IN)
-    if first > 0:
+    if first > 0 and segments[first - 1]["end"] <= segments[first]["start"]:
         start = max(start, segments[first - 1]["end"])
     end = segments[last]["end"] + TAIL_OUT
-    if last + 1 < len(segments):
+    if last + 1 < len(segments) and segments[last + 1]["start"] >= segments[last]["end"]:
         end = min(end, segments[last + 1]["start"])
     if duration:
         end = min(end, duration)
@@ -169,8 +185,32 @@ def _drop_overlaps(highlights: List[Dict]) -> List[Dict]:
     return kept
 
 
+def _has_unused_span(highlights: List[Dict], duration: float) -> bool:
+    """True when there is at least one uncovered stretch long enough for a new clip."""
+    if not highlights:
+        return duration >= MIN_CLIP_SECONDS
+    cursor = 0.0
+    for h in sorted(highlights, key=lambda item: item["start_time"]):
+        if h["start_time"] - cursor >= MIN_CLIP_SECONDS:
+            return True
+        cursor = max(cursor, h["end_time"])
+    return (duration - cursor) >= MIN_CLIP_SECONDS
+
+
+def _format_ts(seconds: float) -> str:
+    mins, secs = divmod(max(0.0, seconds), 60)
+    return f"{int(mins):02d}:{secs:04.1f}"
+
+
+def _format_window_lines(segments: List[Dict], window: range) -> str:
+    return "\n".join(
+        f"{i} [{_format_ts(segments[i]['start'])}] {segments[i]['text']}"
+        for i in window
+    )
+
+
 def get_highlights(transcript: Dict, num_clips: int = 3, llm_fn: Optional[LLMFn] = None) -> Dict:
-    """Return {"highlights": [...]} sorted by score, best first, a few more than num_clips."""
+    """Return {"highlights": [...]} sorted by score, best first, filling num_clips when possible."""
     llm_fn = llm_fn or call_llm
     segments = [
         {"start": float(s["start"]), "end": float(s["end"]), "text": str(s.get("text", "")).strip()}
@@ -181,27 +221,62 @@ def get_highlights(transcript: Dict, num_clips: int = 3, llm_fn: Optional[LLMFn]
         return {"highlights": []}
     duration = float(transcript.get("duration") or segments[-1]["end"])
     windows = _windows(segments)
+    target = min(num_clips, max(1, int(duration // MIN_CLIP_SECONDS)))
     wanted = num_clips + 2  # a few spares, since some candidates overlap or come out weak
 
     found: List[Dict] = []
+    succeeded_windows: List[range] = []
     error: Optional[Exception] = None
     for window in windows:
         span = segments[window.stop - 1]["end"] - segments[window.start]["start"]
         count = wanted if len(windows) == 1 else min(10, max(2, math.ceil(wanted * span / max(duration, 1))))
-        lines = "\n".join(
-            f"{i} [{int(segments[i]['start'] // 60):02d}:{segments[i]['start'] % 60:04.1f}] {segments[i]['text']}"
-            for i in window
+        win_target = target if len(windows) == 1 else min(count, max(1, math.ceil(target * span / max(duration, 1))))
+        lines = _format_window_lines(segments, window)
+        prompt = PROMPT.format(
+            count=count,
+            target=win_target,
+            low=MIN_CLIP_SECONDS,
+            high=MAX_CLIP_SECONDS,
+            lines=lines,
         )
-        prompt = PROMPT.format(count=count, low=MIN_CLIP_SECONDS, high=MAX_CLIP_SECONDS, lines=lines)
         try:
             clips = call_highlight_api(prompt, llm_fn=llm_fn)
         except RuntimeError as e:
             error = e  # one bad window should not throw away the others
             continue
+        succeeded_windows.append(window)
         found += [h for h in (_to_highlight(c, segments, window, duration) for c in clips) if h]
 
     if not found and error:
         raise error
     highlights = _drop_overlaps(found)
+
+    # Top up once if the model returned fewer non-overlapping clips than requested
+    # and the transcript still has at least one unused stretch >= MIN_CLIP_SECONDS.
+    if 0 < len(highlights) < target and succeeded_windows and _has_unused_span(highlights, duration):
+        for window in succeeded_windows:
+            missing = target - len(highlights)
+            if missing <= 0:
+                break
+            picked_lines = "\n".join(
+                f"- {_format_ts(h['start_time'])} - {_format_ts(h['end_time'])}: {h.get('title', 'Highlight')}"
+                for h in sorted(highlights, key=lambda item: item["start_time"])
+            )
+            topup_prompt = TOPUP_PROMPT.format(
+                have=len(highlights),
+                need=missing,
+                ask=min(10, missing + 1),
+                picked=picked_lines,
+                low=MIN_CLIP_SECONDS,
+                high=MAX_CLIP_SECONDS,
+                lines=_format_window_lines(segments, window),
+            )
+            try:
+                extra_clips = call_highlight_api(topup_prompt, llm_fn=llm_fn)
+            except RuntimeError:
+                continue
+            found += [h for h in (_to_highlight(c, segments, window, duration) for c in extra_clips) if h]
+            highlights = _drop_overlaps(found)
+
     print(f"[highlights] {len(highlights)} clips from {len(windows)} window(s), {duration:.0f}s", flush=True)
     return {"highlights": highlights}
