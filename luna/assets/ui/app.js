@@ -6,6 +6,8 @@ var vaultProjects = [];
 var nextWorkspaceIndex = 1;
 var vaultStats = { storage_root: 'D:\\Luna-Media', total_files: 0, total_bytes: 0, total_mb: 0, total_gb: 0 };
 var currentVaultFilter = 'all';
+var currentVaultModeFilter = 'all';
+var currentVaultSort = 'newest';
 var currentVaultSearch = '';
 var deletingItemId = null;
 var deletingProjectId = null;
@@ -806,7 +808,7 @@ function alignMenuIndicator(menuId) {
 }
 
 function initAllGlidingIndicators() {
-  ['platformMenu', 'subFeatureMenu', 'aspectRatioMenu', 'clipCountMenu', 'faceDetectMenu', 'qualityMenu', 'videoRatioMenu', 'videoFpsMenu', 'trimRatioMenu'].forEach(id => {
+  ['platformMenu', 'subFeatureMenu', 'aspectRatioMenu', 'clipCountMenu', 'faceDetectMenu', 'qualityMenu', 'videoRatioMenu', 'videoFpsMenu', 'trimRatioMenu', 'vaultModeMenu', 'vaultSortMenu'].forEach(id => {
     const m = document.getElementById(id);
     if (m) attachGlidingListener(m);
   });
@@ -1010,7 +1012,7 @@ function updateDrawer(feat) {
 
 // Central Dropdown Manager (Prevents overlapping/collision)
 function closeAllDropdowns(exceptId = null) {
-  const menus = ['subFeatureMenu', 'aspectRatioMenu', 'clipCountMenu', 'faceDetectMenu', 'qualityMenu', 'videoRatioMenu', 'videoFpsMenu', 'trimRatioMenu', 'platformMenu'];
+  const menus = ['subFeatureMenu', 'aspectRatioMenu', 'clipCountMenu', 'faceDetectMenu', 'qualityMenu', 'videoRatioMenu', 'videoFpsMenu', 'trimRatioMenu', 'platformMenu', 'vaultModeMenu', 'vaultSortMenu'];
   const chevrons = {
     subFeatureMenu: 'subChevron',
     aspectRatioMenu: 'aspectChevron',
@@ -1020,7 +1022,9 @@ function closeAllDropdowns(exceptId = null) {
     videoRatioMenu: 'videoRatioChevron',
     videoFpsMenu: 'videoFpsChevron',
     trimRatioMenu: 'trimRatioChevron',
-    platformMenu: 'platformChevron'
+    platformMenu: 'platformChevron',
+    vaultModeMenu: 'vaultModeChevron',
+    vaultSortMenu: 'vaultSortChevron'
   };
   const triggerBtns = {
     subFeatureMenu: 'subFeatureDropdownBtn',
@@ -1031,7 +1035,9 @@ function closeAllDropdowns(exceptId = null) {
     videoRatioMenu: 'videoRatioDropdownBtn',
     videoFpsMenu: 'videoFpsDropdownBtn',
     trimRatioMenu: 'trimRatioDropdownBtn',
-    platformMenu: 'platformDropdownBtn'
+    platformMenu: 'platformDropdownBtn',
+    vaultModeMenu: 'vaultModeDropdownBtn',
+    vaultSortMenu: 'vaultSortDropdownBtn'
   };
   menus.forEach(id => {
     if (id !== exceptId) {
@@ -1326,7 +1332,8 @@ document.addEventListener('click', (e) => {
   const isDropdownClick = e.target.closest(
     '#platformDropdownBtn, #platformMenu, #subFeatureDropdownBtn, #subFeatureMenu, ' +
     '#aspectRatioDropdownBtn, #aspectRatioMenu, #clipCountDropdownBtn, #clipCountMenu, ' +
-    '#faceDetectDropdownBtn, #faceDetectMenu, #qualityDropdownBtn, #qualityMenu, #videoRatioDropdownBtn, #videoRatioMenu, #videoFpsDropdownBtn, #videoFpsMenu, #trimRatioDropdownBtn, #trimRatioMenu'
+    '#faceDetectDropdownBtn, #faceDetectMenu, #qualityDropdownBtn, #qualityMenu, #videoRatioDropdownBtn, #videoRatioMenu, #videoFpsDropdownBtn, #videoFpsMenu, #trimRatioDropdownBtn, #trimRatioMenu, ' +
+    '#vaultModeDropdownBtn, #vaultModeMenu, #vaultSortDropdownBtn, #vaultSortMenu'
   );
   if (!isDropdownClick) {
     closeAllDropdowns(null);
@@ -3245,6 +3252,11 @@ function switchMainTab(tab) {
           if (detailView) detailView.classList.add('hidden');
         }
 
+        if (typeof syncVaultModeDropdownOptions === 'function') syncVaultModeDropdownOptions();
+        if (typeof updateVaultPlatformUnderline === 'function') {
+          requestAnimationFrame(() => updateVaultPlatformUnderline(true));
+        }
+
         try {
           if (typeof loadVaultItems === 'function') loadVaultItems();
         } catch (e) {
@@ -4253,19 +4265,227 @@ function updateVaultStatsUI() {
   }
 
   if (currentMainTab === 'vault') {
-    requestAnimationFrame(() => updateTabsPill(false));
+    requestAnimationFrame(() => {
+      updateTabsPill(false);
+      updateVaultPlatformUnderline(true);
+    });
   }
 }
 
-function setVaultFilter(filter, btn) {
-  currentVaultFilter = filter;
-  const chips = document.querySelectorAll('.vault-chip-btn');
-  chips.forEach(c => {
-    c.className = 'vault-chip-btn px-3.5 py-1.5 rounded-xl font-sans text-xs font-medium transition cursor-pointer bg-white/[0.04] border border-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.08]';
-  });
-  if (btn) {
-    btn.className = 'vault-chip-btn px-3.5 py-1.5 rounded-xl font-sans text-xs font-semibold transition cursor-pointer active bg-white text-black shadow-[0_2px_12px_rgba(255,255,255,0.2)]';
+const VAULT_MODE_OPTIONS_BY_PLATFORM = {
+  all: [
+    { id: 'all', label: 'All Types' },
+    { id: 'clips', label: 'AI Clips' },
+    { id: 'trim', label: 'Video Trimmer' },
+    { id: 'video', label: 'Full Video' },
+    { id: 'audio', label: 'Audio MP3' },
+  ],
+  youtube: [
+    { id: 'all', label: 'All Types' },
+    { id: 'clips', label: 'AI Clips' },
+    { id: 'trim', label: 'Video Trimmer' },
+    { id: 'video', label: 'Full Video' },
+    { id: 'audio', label: 'Audio MP3' },
+  ],
+  tiktok: [
+    { id: 'all', label: 'All Types' },
+    { id: 'video', label: 'Video MP4' },
+    { id: 'audio', label: 'Audio MP3' },
+  ],
+  instagram: null,
+};
+
+const VAULT_SORT_LABELS = {
+  newest: 'Newest',
+  oldest: 'Oldest',
+  files: 'Most Files',
+  alpha: 'Name A-Z',
+};
+
+const VAULT_DROPDOWN_META = {
+  vaultModeMenu: { chev: 'vaultModeChevron', btn: 'vaultModeDropdownBtn' },
+  vaultSortMenu: { chev: 'vaultSortChevron', btn: 'vaultSortDropdownBtn' },
+};
+
+function getProjectOutputMode(record) {
+  const cat = (record.category || '').toLowerCase();
+  const act = (record.action || '').toLowerCase();
+  const plat = (record.platform || '').toLowerCase();
+  const fname = (record.filename || '').toLowerCase();
+
+  if (
+    cat.includes('audio') ||
+    act.includes('mp3') ||
+    record.type === 'audio' ||
+    plat.includes('audio') ||
+    fname.endsWith('.mp3')
+  ) {
+    return 'audio';
   }
+  if (act.includes('ai_clip') || cat.includes('01-ai-clips')) {
+    return 'clips';
+  }
+  if (
+    act === 'type_yt_clip' ||
+    act === 'manual_clip' ||
+    act === 'clip' ||
+    act.includes('trim')
+  ) {
+    return 'trim';
+  }
+  return 'video';
+}
+
+function getProjectPlatformKey(record) {
+  const cat = (record.category || '').toLowerCase();
+  const act = (record.action || '').toLowerCase();
+  const plat = (record.platform || '').toLowerCase();
+
+  if (plat.includes('instagram') || act.includes('ig_reels') || act.includes('ig_ai_clip') || cat.includes('instagram') || cat.includes('reels')) {
+    return 'instagram';
+  }
+  if (plat.includes('tiktok') || act.includes('tt_video') || act.includes('tt_mp3') || cat.includes('tiktok')) {
+    return 'tiktok';
+  }
+  if (plat.includes('youtube') || act.startsWith('type_yt_') || cat.includes('youtube') || cat.includes('01-ai-clips')) {
+    return 'youtube';
+  }
+  return plat;
+}
+
+function updateVaultPlatformUnderline(immediate = false) {
+  const tabsBar = document.getElementById('vaultPlatformTabs');
+  const indicator = document.getElementById('vaultPlatformUnderline');
+  if (!tabsBar || !indicator) return;
+
+  const activeBtn = tabsBar.querySelector('.vault-u-tab.active') ||
+    tabsBar.querySelector(`.vault-u-tab[data-filter="${currentVaultFilter}"]`) ||
+    tabsBar.querySelector('.vault-u-tab');
+  if (!activeBtn) {
+    indicator.style.opacity = '0';
+    return;
+  }
+
+  indicator.style.opacity = '1';
+  if (immediate) {
+    indicator.style.transition = 'none';
+    indicator.style.transform = `translateX(${activeBtn.offsetLeft}px)`;
+    indicator.style.width = `${activeBtn.offsetWidth}px`;
+    void indicator.offsetHeight;
+    indicator.style.transition = '';
+  } else {
+    indicator.style.transform = `translateX(${activeBtn.offsetLeft}px)`;
+    indicator.style.width = `${activeBtn.offsetWidth}px`;
+  }
+}
+
+function toggleVaultDropdown(menuId, e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById(menuId);
+  const meta = VAULT_DROPDOWN_META[menuId] || {};
+  const chev = meta.chev ? document.getElementById(meta.chev) : null;
+  const btn = meta.btn ? document.getElementById(meta.btn) : null;
+  const isClosed = menu?.getAttribute('data-open') !== 'true' && !menu?.classList.contains('open');
+  closeAllDropdowns(isClosed ? menuId : null);
+  if (menu) {
+    menu.setAttribute('data-open', isClosed ? 'true' : 'false');
+    menu.classList.toggle('open', isClosed);
+    if (chev) chev.classList.toggle('rotate-180', isClosed);
+    if (btn) {
+      btn.setAttribute('aria-expanded', isClosed ? 'true' : 'false');
+      btn.classList.toggle('active', isClosed);
+    }
+    if (isClosed) alignMenuIndicator(menuId);
+  }
+}
+
+function syncVaultModeDropdownOptions() {
+  const wrap = document.getElementById('vaultModeDropdownWrap');
+  const menu = document.getElementById('vaultModeMenu');
+  const labelEl = document.getElementById('vaultModeLabel');
+  const options = VAULT_MODE_OPTIONS_BY_PLATFORM[currentVaultFilter];
+
+  if (!options) {
+    currentVaultModeFilter = 'all';
+    if (wrap) wrap.classList.add('hidden');
+    closeAllDropdowns(null);
+    return;
+  }
+
+  if (wrap) wrap.classList.remove('hidden');
+  if (!options.some(o => o.id === currentVaultModeFilter)) {
+    currentVaultModeFilter = 'all';
+  }
+
+  if (menu) {
+    const itemsHtml = options.map(opt => {
+      const isAct = opt.id === currentVaultModeFilter;
+      return `<div onclick="setVaultModeFilter('${opt.id}')" class="quality-menu-item${isAct ? ' active' : ''}" data-vmode="${opt.id}"><span class="quality-item-title truncate">${escapeHtml(opt.label)}</span></div>`;
+    }).join('');
+    menu.innerHTML = `<span class="gliding-menu-indicator pointer-events-none absolute left-[3px] right-[3px] rounded-[6px] bg-white/[0.08] z-[1]" style="opacity: 0; transition: top 220ms cubic-bezier(0.23,1,0.32,1), height 220ms cubic-bezier(0.23,1,0.32,1), opacity 150ms ease;"></span>${itemsHtml}`;
+    attachGlidingListener(menu);
+  }
+
+  const activeOpt = options.find(o => o.id === currentVaultModeFilter) || options[0];
+  if (labelEl && activeOpt) labelEl.innerText = activeOpt.label;
+}
+
+function setVaultModeFilter(mode) {
+  currentVaultModeFilter = mode || 'all';
+  const options = VAULT_MODE_OPTIONS_BY_PLATFORM[currentVaultFilter] || VAULT_MODE_OPTIONS_BY_PLATFORM.all;
+  const activeOpt = options.find(o => o.id === currentVaultModeFilter) || options[0];
+  const labelEl = document.getElementById('vaultModeLabel');
+  if (labelEl && activeOpt) labelEl.innerText = activeOpt.label;
+
+  document.querySelectorAll('#vaultModeMenu .quality-menu-item[data-vmode]').forEach(item => {
+    item.classList.toggle('active', item.getAttribute('data-vmode') === currentVaultModeFilter);
+  });
+
+  closeDropdownSmoothly('vaultModeMenu', 'vaultModeChevron', 'vaultModeDropdownBtn', 80);
+  renderVaultGallery();
+}
+
+function setVaultSort(sortKey) {
+  currentVaultSort = VAULT_SORT_LABELS[sortKey] ? sortKey : 'newest';
+  const labelEl = document.getElementById('vaultSortLabel');
+  if (labelEl) labelEl.innerText = VAULT_SORT_LABELS[currentVaultSort];
+
+  document.querySelectorAll('#vaultSortMenu .quality-menu-item[data-vsort]').forEach(item => {
+    item.classList.toggle('active', item.getAttribute('data-vsort') === currentVaultSort);
+  });
+
+  closeDropdownSmoothly('vaultSortMenu', 'vaultSortChevron', 'vaultSortDropdownBtn', 80);
+  renderVaultGallery();
+}
+
+function setVaultFilter(filter, btn) {
+  if (['clips', 'trim', 'video', 'audio'].includes(filter)) {
+    currentVaultFilter = 'all';
+    document.querySelectorAll('#vaultPlatformTabs .vault-u-tab').forEach(t => {
+      const isAll = t.dataset.filter === 'all';
+      t.classList.toggle('active', isAll);
+      t.setAttribute('aria-selected', isAll ? 'true' : 'false');
+    });
+    updateVaultPlatformUnderline(false);
+    syncVaultModeDropdownOptions();
+    setVaultModeFilter(filter);
+    return;
+  }
+
+  currentVaultFilter = filter || 'all';
+  const tabs = document.querySelectorAll('#vaultPlatformTabs .vault-u-tab');
+  let activeTab = btn || null;
+  tabs.forEach(t => {
+    const isMatch = t === btn || (!btn && t.dataset.filter === currentVaultFilter);
+    if (isMatch) activeTab = t;
+    t.classList.toggle('active', isMatch);
+    t.setAttribute('aria-selected', isMatch ? 'true' : 'false');
+  });
+  if (activeTab && typeof activeTab.scrollIntoView === 'function') {
+    activeTab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+  }
+  updateVaultPlatformUnderline(false);
+  syncVaultModeDropdownOptions();
   renderVaultGallery();
 }
 
@@ -4288,34 +4508,79 @@ function clearVaultSearch() {
   renderVaultGallery();
 }
 
-function matchesFilter(item) {
-  const cat = (item.category || '').toLowerCase();
-  const act = (item.action || '').toLowerCase();
-  const plat = (item.platform || '').toLowerCase();
-  const fname = (item.filename || '').toLowerCase();
-  const isAudio = cat.includes('audio') || act.includes('mp3') || item.type === 'audio' || fname.endsWith('.mp3');
-  const isClip = cat.includes('clip') || act.includes('ai_clip') || (item.id && item.id.startsWith('clip_'));
+function matchesPlatformFilter(record) {
+  if (!currentVaultFilter || currentVaultFilter === 'all') return true;
+  return getProjectPlatformKey(record) === currentVaultFilter;
+}
 
-  if (currentVaultFilter === 'youtube') return plat === 'youtube' && !isClip && !isAudio;
-  if (currentVaultFilter === 'instagram') return plat === 'instagram' || cat.includes('instagram') || cat.includes('reels');
-  if (currentVaultFilter === 'tiktok') return plat === 'tiktok' || cat.includes('tiktok');
-  if (currentVaultFilter === 'clips') return isClip;
-  if (currentVaultFilter === 'audio') return isAudio;
+function matchesVaultScope(record) {
+  if (!matchesPlatformFilter(record)) return false;
+  if (currentVaultModeFilter && currentVaultModeFilter !== 'all') {
+    return getProjectOutputMode(record) === currentVaultModeFilter;
+  }
   return true;
 }
 
-function matchesProjectFilter(proj) {
-  const plat = (proj.platform || '').toLowerCase();
-  const act = (proj.action || '').toLowerCase();
-  const isClip = act.includes('ai_clip') || act.includes('clip') || plat.includes('clip');
-  const isAudio = act.includes('mp3') || plat.includes('audio');
+function matchesFilter(item) {
+  return matchesVaultScope(item);
+}
 
-  if (currentVaultFilter === 'youtube') return plat.includes('youtube') && !isClip && !isAudio;
-  if (currentVaultFilter === 'instagram') return plat.includes('instagram') || act.includes('reels');
-  if (currentVaultFilter === 'tiktok') return plat.includes('tiktok');
-  if (currentVaultFilter === 'clips') return isClip;
-  if (currentVaultFilter === 'audio') return isAudio;
-  return true;
+function matchesProjectFilter(proj) {
+  return matchesVaultScope(proj);
+}
+
+function getProjectTimestamp(proj) {
+  const raw = proj.created_at ?? proj.saved_at ?? proj.files?.[0]?.saved_at;
+  if (typeof raw === 'number' && !Number.isNaN(raw)) return raw;
+  if (typeof raw === 'string' && raw.trim()) {
+    const num = Number(raw);
+    if (!Number.isNaN(num)) return num;
+    const parsed = Date.parse(raw);
+    if (!Number.isNaN(parsed)) return parsed / 1000;
+  }
+  return 0;
+}
+
+function sortVaultProjects(list) {
+  const indexed = list.map((proj, idx) => ({ proj, idx, ts: getProjectTimestamp(proj) }));
+  indexed.sort((a, b) => {
+    if (currentVaultSort === 'oldest') {
+      if (a.ts !== b.ts) return a.ts - b.ts;
+      return b.idx - a.idx;
+    }
+    if (currentVaultSort === 'files') {
+      const fa = Array.isArray(a.proj.files) ? a.proj.files.length : 0;
+      const fb = Array.isArray(b.proj.files) ? b.proj.files.length : 0;
+      if (fb !== fa) return fb - fa;
+    }
+    if (currentVaultSort === 'alpha') {
+      const cmp = (a.proj.workspace_name || '').localeCompare(b.proj.workspace_name || '');
+      if (cmp !== 0) return cmp;
+    }
+    if (b.ts !== a.ts) return b.ts - a.ts;
+    return a.idx - b.idx;
+  });
+  return indexed.map(entry => entry.proj);
+}
+
+function updateVaultTabCounts() {
+  const searched = vaultProjects.filter(p => matchesProjectSearch(p));
+  const counts = { all: searched.length, youtube: 0, instagram: 0, tiktok: 0 };
+  searched.forEach(proj => {
+    const plat = getProjectPlatformKey(proj);
+    if (plat in counts) counts[plat] += 1;
+  });
+
+  const elMap = {
+    all: 'vaultCountAll',
+    youtube: 'vaultCountYoutube',
+    instagram: 'vaultCountInstagram',
+    tiktok: 'vaultCountTiktok',
+  };
+  Object.keys(elMap).forEach(key => {
+    const el = document.getElementById(elMap[key]);
+    if (el) el.textContent = String(counts[key] || 0);
+  });
 }
 
 function matchesSearch(item) {
@@ -4381,9 +4646,13 @@ function renderVaultGallery() {
   if (!grid) return;
 
   closeVaultCardMenu();
+  updateVaultTabCounts();
+  requestAnimationFrame(() => updateVaultPlatformUnderline(true));
   grid.innerHTML = '';
 
-  const filtered = vaultProjects.filter(p => matchesProjectFilter(p) && matchesProjectSearch(p));
+  const filtered = sortVaultProjects(
+    vaultProjects.filter(p => matchesProjectFilter(p) && matchesProjectSearch(p))
+  );
 
   // Selection only covers cards the user can currently see, so a bulk delete never hits hidden workspaces.
   const visibleSelectable = new Set(filtered.filter(p => !p.virtual).map(p => p.project_id));
@@ -4398,7 +4667,7 @@ function renderVaultGallery() {
       if (currentVaultSearch) {
         if (emptyTitle) emptyTitle.innerText = 'Not found';
         if (emptyDesc) emptyDesc.innerText = `No projects match the search "${currentVaultSearch}".`;
-      } else if (currentVaultFilter !== 'all') {
+      } else if (currentVaultFilter !== 'all' || currentVaultModeFilter !== 'all') {
         if (emptyTitle) emptyTitle.innerText = 'Empty Category';
         if (emptyDesc) emptyDesc.innerText = 'No projects match this filter yet.';
       } else {
@@ -7534,6 +7803,9 @@ document.addEventListener('input', (e) => {
 // Wire up Transitions.dev sliding tabs pill & redraw flowchart on resize
 window.addEventListener('resize', () => {
   updateTabsPill(true);
+  if (currentMainTab === 'vault' && typeof updateVaultPlatformUnderline === 'function') {
+    updateVaultPlatformUnderline(true);
+  }
   if (currentActiveProjectId) {
     const proj = vaultProjects.find(p => p.project_id === currentActiveProjectId);
     if (proj && typeof isAiClipperProject === 'function' && isAiClipperProject(proj)) {
@@ -7622,10 +7894,36 @@ renderTrimSegments();
   }
 });
 if (document.fonts && document.fonts.ready) {
-  document.fonts.ready.then(() => updateTabsPill(true));
+  document.fonts.ready.then(() => {
+    updateTabsPill(true);
+    if (typeof updateVaultPlatformUnderline === 'function') updateVaultPlatformUnderline(true);
+  });
 }
 setTimeout(() => {
   updateTabsPill(true);
+  if (typeof syncVaultModeDropdownOptions === 'function') syncVaultModeDropdownOptions();
+  if (typeof updateVaultPlatformUnderline === 'function') updateVaultPlatformUnderline(true);
+  const platTabs = document.getElementById('vaultPlatformTabs');
+  if (platTabs) {
+    platTabs.addEventListener('keydown', e => {
+      const tabs = Array.from(platTabs.querySelectorAll('[role="tab"]'));
+      const idx = tabs.indexOf(document.activeElement);
+      if (idx === -1) return;
+      let nextIdx = null;
+      if (e.key === 'ArrowRight') nextIdx = (idx + 1) % tabs.length;
+      else if (e.key === 'ArrowLeft') nextIdx = (idx - 1 + tabs.length) % tabs.length;
+      else if (e.key === 'Home') nextIdx = 0;
+      else if (e.key === 'End') nextIdx = tabs.length - 1;
+      if (nextIdx !== null) {
+        e.preventDefault();
+        tabs[nextIdx].focus();
+        tabs[nextIdx].click();
+      }
+    });
+  }
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeAllDropdowns(null);
+  });
   if (typeof initAllGlidingIndicators === 'function') {
     initAllGlidingIndicators();
   }

@@ -521,9 +521,9 @@
     <section id="section-vault" class="hidden animate-fadeIn mb-16">
 
       <!-- 1. MAIN PROJECTS LIST VIEW -->
-      <div id="vaultProjectsListView" class="space-y-8">
+      <div id="vaultProjectsListView" class="space-y-6">
         <!-- Vault Header -->
-        <div class="flex items-center justify-between pb-4 border-b border-white/[0.08]">
+        <div class="flex items-center justify-between pb-1">
           <h2 class="font-sans text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
             Media Vault
           </h2>
@@ -534,53 +534,104 @@
           </div>
         </div>
 
-        <!-- Filter Chips & Instant Live Search Strip -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-          <!-- Filter Chips -->
-          <div class="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none" id="vaultFilterChips">
-            <button type="button" onclick="setVaultFilter('all', this)"
-              class="vault-chip-btn px-3.5 py-1.5 rounded-xl font-sans text-xs font-semibold transition cursor-pointer active bg-white text-black shadow-[0_2px_12px_rgba(255,255,255,0.2)]"
-              data-filter="all">
-              All
+        <!-- Platform Underline Tabs + Contextual Mode/Sort Dropdowns & Live Search -->
+        <div class="space-y-3.5">
+          <!-- Primary Underline Tabs (Platform) -->
+          <div class="vault-underline-tabs" role="tablist" aria-label="Filter projects by platform" id="vaultPlatformTabs">
+            <span class="vault-underline-indicator" id="vaultPlatformUnderline" aria-hidden="true"></span>
+            <button type="button" role="tab" aria-selected="true" onclick="setVaultFilter('all', this)"
+              class="vault-u-tab active" data-filter="all" id="btn-vault-plat-all">
+              <span>All</span>
+              <span class="vault-u-count" id="vaultCountAll">0</span>
             </button>
-            <button type="button" onclick="setVaultFilter('youtube', this)"
-              class="vault-chip-btn px-3.5 py-1.5 rounded-xl font-sans text-xs font-medium transition cursor-pointer bg-white/[0.04] border border-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.08]"
-              data-filter="youtube">
-              YouTube
+            <button type="button" role="tab" aria-selected="false" onclick="setVaultFilter('youtube', this)"
+              class="vault-u-tab" data-filter="youtube" id="btn-vault-plat-youtube">
+              <span>YouTube</span>
+              <span class="vault-u-count" id="vaultCountYoutube">0</span>
             </button>
-            <button type="button" onclick="setVaultFilter('instagram', this)"
-              class="vault-chip-btn px-3.5 py-1.5 rounded-xl font-sans text-xs font-medium transition cursor-pointer bg-white/[0.04] border border-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.08]"
-              data-filter="instagram">
-              Instagram
+            <button type="button" role="tab" aria-selected="false" onclick="setVaultFilter('instagram', this)"
+              class="vault-u-tab" data-filter="instagram" id="btn-vault-plat-instagram">
+              <span>Instagram</span>
+              <span class="vault-u-count" id="vaultCountInstagram">0</span>
             </button>
-            <button type="button" onclick="setVaultFilter('tiktok', this)"
-              class="vault-chip-btn px-3.5 py-1.5 rounded-xl font-sans text-xs font-medium transition cursor-pointer bg-white/[0.04] border border-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.08]"
-              data-filter="tiktok">
-              TikTok
-            </button>
-            <button type="button" onclick="setVaultFilter('clips', this)"
-              class="vault-chip-btn px-3.5 py-1.5 rounded-xl font-sans text-xs font-medium transition cursor-pointer bg-white/[0.04] border border-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.08]"
-              data-filter="clips">
-              AI Clips
-            </button>
-            <button type="button" onclick="setVaultFilter('audio', this)"
-              class="vault-chip-btn px-3.5 py-1.5 rounded-xl font-sans text-xs font-medium transition cursor-pointer bg-white/[0.04] border border-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.08]"
-              data-filter="audio">
-              Audio MP3
+            <button type="button" role="tab" aria-selected="false" onclick="setVaultFilter('tiktok', this)"
+              class="vault-u-tab" data-filter="tiktok" id="btn-vault-plat-tiktok">
+              <span>TikTok</span>
+              <span class="vault-u-count" id="vaultCountTiktok">0</span>
             </button>
           </div>
 
-          <!-- Instant Live Search Input -->
-          <div class="relative w-full sm:w-64 flex-shrink-0">
-            <i data-lucide="search"
-              class="w-3.5 h-3.5 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
-            <input type="text" id="vaultSearchInput" placeholder="Search videos, titles, captions..."
-              oninput="onVaultSearchInput(this.value)"
-              class="w-full h-9 pl-9 pr-8 rounded-xl bg-white/[0.04] hover:bg-white/[0.06] focus:bg-white/[0.08] border border-white/[0.09] focus:border-white/[0.09] text-white placeholder-zinc-500 text-xs font-sans focus:outline-none transition" />
-            <button type="button" id="vaultSearchClearBtn" onclick="clearVaultSearch()"
-              class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 p-0.5">
-              <i data-lucide="x" class="w-3 h-3"></i>
-            </button>
+          <!-- Secondary Strip: Mode & Sort Dropdown Pills + Instant Live Search -->
+          <div id="vaultFilterToolbar" class="relative z-20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-1.5 flex-wrap" id="vaultFilterChips">
+              <!-- Contextual Output Mode Dropdown Pill -->
+              <div id="vaultModeDropdownWrap" class="relative flex-shrink-0">
+                <button type="button" id="vaultModeDropdownBtn" aria-expanded="false"
+                  onclick="toggleVaultDropdown('vaultModeMenu', event)" class="pill-control">
+                  <span id="vaultModeLabel">All Types</span>
+                  <i data-lucide="chevron-down" class="w-2.5 h-2.5 text-zinc-400 transition-transform duration-200"
+                    id="vaultModeChevron"></i>
+                </button>
+                <div id="vaultModeMenu" data-open="false"
+                  class="popover-menu absolute left-0 top-full mt-1.5 w-[132px] z-50">
+                  <span class="gliding-menu-indicator pointer-events-none absolute left-[3px] right-[3px] rounded-[6px] bg-white/[0.08] z-[1]" style="opacity: 0; transition: top 220ms cubic-bezier(0.23,1,0.32,1), height 220ms cubic-bezier(0.23,1,0.32,1), opacity 150ms ease;"></span>
+                  <div onclick="setVaultModeFilter('all')" class="quality-menu-item active" data-vmode="all">
+                    <span class="quality-item-title truncate">All Types</span>
+                  </div>
+                  <div onclick="setVaultModeFilter('clips')" class="quality-menu-item" data-vmode="clips">
+                    <span class="quality-item-title truncate">AI Clips</span>
+                  </div>
+                  <div onclick="setVaultModeFilter('trim')" class="quality-menu-item" data-vmode="trim">
+                    <span class="quality-item-title truncate">Video Trimmer</span>
+                  </div>
+                  <div onclick="setVaultModeFilter('video')" class="quality-menu-item" data-vmode="video">
+                    <span class="quality-item-title truncate">Full Video</span>
+                  </div>
+                  <div onclick="setVaultModeFilter('audio')" class="quality-menu-item" data-vmode="audio">
+                    <span class="quality-item-title truncate">Audio MP3</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Sort Order Dropdown Pill -->
+              <div id="vaultSortDropdownWrap" class="relative flex-shrink-0">
+                <button type="button" id="vaultSortDropdownBtn" aria-expanded="false"
+                  onclick="toggleVaultDropdown('vaultSortMenu', event)" class="pill-control">
+                  <span id="vaultSortLabel">Newest</span>
+                  <i data-lucide="chevron-down" class="w-2.5 h-2.5 text-zinc-400 transition-transform duration-200"
+                    id="vaultSortChevron"></i>
+                </button>
+                <div id="vaultSortMenu" data-open="false"
+                  class="popover-menu absolute left-0 top-full mt-1.5 w-[124px] z-50">
+                  <span class="gliding-menu-indicator pointer-events-none absolute left-[3px] right-[3px] rounded-[6px] bg-white/[0.08] z-[1]" style="opacity: 0; transition: top 220ms cubic-bezier(0.23,1,0.32,1), height 220ms cubic-bezier(0.23,1,0.32,1), opacity 150ms ease;"></span>
+                  <div onclick="setVaultSort('newest')" class="quality-menu-item active" data-vsort="newest">
+                    <span class="quality-item-title truncate">Newest</span>
+                  </div>
+                  <div onclick="setVaultSort('oldest')" class="quality-menu-item" data-vsort="oldest">
+                    <span class="quality-item-title truncate">Oldest</span>
+                  </div>
+                  <div onclick="setVaultSort('files')" class="quality-menu-item" data-vsort="files">
+                    <span class="quality-item-title truncate">Most Files</span>
+                  </div>
+                  <div onclick="setVaultSort('alpha')" class="quality-menu-item" data-vsort="alpha">
+                    <span class="quality-item-title truncate">Name A-Z</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Instant Live Search Input -->
+            <div class="relative w-full sm:w-64 flex-shrink-0">
+              <i data-lucide="search"
+                class="w-3.5 h-3.5 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+              <input type="text" id="vaultSearchInput" placeholder="Search videos, titles, captions..."
+                oninput="onVaultSearchInput(this.value)"
+                class="w-full h-9 pl-9 pr-8 rounded-xl bg-white/[0.04] hover:bg-white/[0.06] focus:bg-white/[0.08] border border-white/[0.09] focus:border-white/[0.09] text-white placeholder-zinc-500 text-xs font-sans focus:outline-none transition" />
+              <button type="button" id="vaultSearchClearBtn" onclick="clearVaultSearch()"
+                class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 p-0.5">
+                <i data-lucide="x" class="w-3 h-3"></i>
+              </button>
+            </div>
           </div>
         </div>
 

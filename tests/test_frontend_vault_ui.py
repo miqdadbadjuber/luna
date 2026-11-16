@@ -161,13 +161,29 @@ class TestFrontendVaultUI(unittest.TestCase):
         self.assertIn('id="vaultSearchInput"', html)
         self.assertIn('id="vaultEmptyState"', html)
 
-        # Filter chips
+        # Platform underline tabs + contextual mode & sort dropdown pills
+        self.assertIn('id="vaultPlatformTabs"', html)
+        self.assertIn('id="vaultPlatformUnderline"', html)
+        self.assertIn('id="vaultModeDropdownBtn"', html)
+        self.assertIn('id="vaultSortDropdownBtn"', html)
         self.assertIn("All", html)
+        self.assertIn("All Types", html)
         self.assertIn("YouTube", html)
         self.assertIn("Instagram", html)
         self.assertIn("TikTok", html)
         self.assertIn("AI Clips", html)
+        self.assertIn("Video Trimmer", html)
+        self.assertIn("Full Video", html)
         self.assertIn("Audio MP3", html)
+        self.assertIn("Newest", html)
+        self.assertIn("Oldest", html)
+        for count_id in (
+            "vaultCountAll",
+            "vaultCountYoutube",
+            "vaultCountInstagram",
+            "vaultCountTiktok",
+        ):
+            self.assertIn(f'id="{count_id}"', html)
 
     def test_delete_modal_exists(self):
         """Check for delete confirmation modal and its key elements."""
@@ -270,6 +286,13 @@ class TestFrontendVaultUI(unittest.TestCase):
             "function updateVaultBadge",
             "function updateVaultStatsUI",
             "function setVaultFilter",
+            "function setVaultModeFilter",
+            "function setVaultSort",
+            "function toggleVaultDropdown",
+            "function updateVaultPlatformUnderline",
+            "function updateVaultTabCounts",
+            "function getProjectOutputMode",
+            "function sortVaultProjects",
             "function onVaultSearchInput",
             "function clearVaultSearch",
             "function renderVaultGallery",

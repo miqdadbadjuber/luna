@@ -3258,6 +3258,118 @@ body.tab-settings [data-us-project] canvas {
   font-weight: 500;
 }
 
+/* Media Vault Concept C: Output Mode Underline Tabs (matches Transitions.dev motion & theme tokens) */
+.vault-underline-tabs {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.vault-underline-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.vault-underline-indicator {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 0;
+  background: #ffffff;
+  border-radius: 9999px;
+  transform: translateX(0);
+  transition:
+    transform var(--tabs-dur) var(--tabs-ease),
+    width var(--tabs-dur) var(--tabs-ease),
+    opacity var(--tabs-dur) ease;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.vault-u-tab {
+  position: relative;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0 2px 11px;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: #a1a1aa;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: color 180ms ease;
+}
+
+.vault-u-tab:hover {
+  color: #e4e4e7;
+}
+
+.vault-u-tab.active,
+.vault-u-tab[aria-selected="true"] {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.vault-u-tab:focus-visible,
+#vaultFilterToolbar .pill-control:focus-visible {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.45);
+  border-radius: 8px;
+}
+
+.vault-u-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #a1a1aa;
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+.vault-u-tab.active .vault-u-count,
+.vault-u-tab[aria-selected="true"] .vault-u-count {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+@media (max-width: 639px) {
+  .vault-underline-tabs {
+    gap: 16px;
+  }
+
+  .vault-u-tab {
+    min-height: 44px;
+    padding-bottom: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vault-underline-indicator,
+  .vault-u-tab,
+  .vault-u-count {
+    transition: none !important;
+  }
+}
+
 /* Kill bright border glow and outline on click / focus */
 button:focus,
 button:focus-visible,
