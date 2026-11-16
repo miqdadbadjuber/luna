@@ -4213,59 +4213,17 @@ async function loadSettingsData() {
     // System status
     if (data.status) {
       const s = data.status;
-
-      // FFmpeg
-      const chkFfmpeg = document.getElementById('chkFfmpeg');
-      const statusFfmpeg = document.getElementById('statusFfmpeg');
-      if (chkFfmpeg) {
-        chkFfmpeg.setAttribute('data-lucide', s.ffmpeg ? 'check' : 'x');
-        chkFfmpeg.className = s.ffmpeg ? 'w-4 h-4 text-emerald-400' : 'w-4 h-4 text-red-400';
-      }
-      if (statusFfmpeg) statusFfmpeg.innerText = s.ffmpeg ? 'Available' : 'Not found';
-
-      // yt-dlp
-      const chkYtdlp = document.getElementById('chkYtdlp');
-      const statusYtdlp = document.getElementById('statusYtdlp');
-      if (chkYtdlp) {
-        chkYtdlp.setAttribute('data-lucide', 'check');
-        chkYtdlp.className = 'w-4 h-4 text-emerald-400';
-      }
-      if (statusYtdlp) statusYtdlp.innerText = s.ytdlp || 'Available';
-
-      // OpenCV
-      const chkOpencv = document.getElementById('chkOpencv');
-      const statusOpencv = document.getElementById('statusOpencv');
-      if (chkOpencv) {
-        chkOpencv.setAttribute('data-lucide', s.opencv ? 'check' : 'alert-circle');
-        chkOpencv.className = s.opencv ? 'w-4 h-4 text-emerald-400' : 'w-4 h-4 text-amber-400';
-      }
-      if (statusOpencv) statusOpencv.innerText = s.opencv ? 'Active' : 'Inactive';
-
-      // Storage
-      const chkStorage = document.getElementById('chkStorage');
-      const statusStorageAccess = document.getElementById('statusStorageAccess');
-      if (chkStorage) {
-        chkStorage.setAttribute('data-lucide', s.storage ? 'check' : 'x');
-        chkStorage.className = s.storage ? 'w-4 h-4 text-emerald-400' : 'w-4 h-4 text-red-400';
-      }
-      if (statusStorageAccess) statusStorageAccess.innerText = s.storage ? 'Writable' : 'Access denied';
+      renderSystemDependencyStatuses(s, { detailed: false });
 
       // Cookies
-      const chkCookies = document.getElementById('chkCookies');
       const cookieFileDetail = document.getElementById('cookieFileDetail');
       const cookieStatusBadge = document.getElementById('cookieStatusBadge');
       if (s.cookies && s.cookies.exists) {
-        if (chkCookies) {
-          chkCookies.setAttribute('data-lucide', 'check');
-          chkCookies.className = 'w-4 h-4 text-emerald-400';
-        }
+        setDependencyIcon('chkCookies', 'check', 'w-4 h-4 text-emerald-400');
         if (cookieFileDetail) cookieFileDetail.innerText = `(${s.cookies.name || 'cookies.txt'} • ${s.cookies.size || ''})`;
         if (cookieStatusBadge) cookieStatusBadge.innerText = 'Installed';
       } else {
-        if (chkCookies) {
-          chkCookies.setAttribute('data-lucide', 'alert-circle');
-          chkCookies.className = 'w-4 h-4 text-zinc-500';
-        }
+        setDependencyIcon('chkCookies', 'alert-circle', 'w-4 h-4 text-zinc-500');
         if (cookieFileDetail) cookieFileDetail.innerText = '(cookies.txt not found)';
         if (cookieStatusBadge) cookieStatusBadge.innerText = 'Empty';
       }
@@ -4451,77 +4409,109 @@ async function testApiKey(provider, wrapId, inputId, statusElId, btn) {
   }
 }
 
+/**
+ * Swap a dependency status icon in place without re-running global lucide.createIcons().
+ * Using setAttribute('class', ...) is required because SVGElement.className is SVGAnimatedString.
+ */
+function setDependencyIcon(id, iconName, className) {
+  const el = document.getElementById(id);
+  if (!el || !el.parentNode) return;
+  const pascalName = iconName.replace(/(^|[-_\s]+)(\w)/g, (_, __, ch) => ch.toUpperCase());
+  const iconDef = window.lucide && window.lucide.icons && window.lucide.icons[pascalName];
+  if (iconDef && typeof window.lucide.createElement === 'function') {
+    const svg = window.lucide.createElement(iconDef);
+    svg.id = id;
+    svg.setAttribute('data-lucide', iconName);
+    svg.setAttribute('class', `lucide lucide-${iconName} ${className}`.trim());
+    el.parentNode.replaceChild(svg, el);
+    return;
+  }
+  el.setAttribute('data-lucide', iconName);
+  el.setAttribute('class', className);
+  if (window.lucide && typeof window.lucide.createIcons === 'function') {
+    window.lucide.createIcons();
+  }
+}
+
+function renderSystemDependencyStatuses(data, { detailed = false } = {}) {
+  const rows = [
+    {
+      iconId: 'chkFfmpeg',
+      statusId: 'statusFfmpeg',
+      icon: data.ffmpeg ? 'check' : 'x',
+      cls: data.ffmpeg ? 'w-4 h-4 text-emerald-400' : 'w-4 h-4 text-red-400',
+      text: detailed ? (data.ffmpeg_version || (data.ffmpeg ? 'Available' : 'Not found')) : (data.ffmpeg ? 'Available' : 'Not found')
+    },
+    {
+      iconId: 'chkYtdlp',
+      statusId: 'statusYtdlp',
+      icon: 'check',
+      cls: 'w-4 h-4 text-emerald-400',
+      text: data.ytdlp || 'Available'
+    },
+    {
+      iconId: 'chkOpencv',
+      statusId: 'statusOpencv',
+      icon: data.opencv ? 'check' : 'alert-circle',
+      cls: data.opencv ? 'w-4 h-4 text-emerald-400' : 'w-4 h-4 text-amber-400',
+      text: detailed ? (data.opencv_version || (data.opencv ? 'Active' : 'Inactive')) : (data.opencv ? 'Active' : 'Inactive')
+    },
+    {
+      iconId: 'chkStorage',
+      statusId: 'statusStorageAccess',
+      icon: data.storage ? 'check' : 'x',
+      cls: data.storage ? 'w-4 h-4 text-emerald-400' : 'w-4 h-4 text-red-400',
+      text: data.storage ? (detailed ? 'Read/write ready' : 'Writable') : 'Access denied'
+    }
+  ];
+
+  rows.forEach(({ iconId, statusId, icon, cls, text }) => {
+    setDependencyIcon(iconId, icon, cls);
+    const statusEl = document.getElementById(statusId);
+    if (statusEl) statusEl.innerText = text;
+  });
+}
+
 async function runSystemCheck(btn) {
   const label = document.getElementById('checkSystemLabel');
-  const icon = document.getElementById('checkSystemIcon');
+  const startIcon = document.getElementById('checkSystemIcon');
   if (btn) btn.disabled = true;
   if (label) label.innerText = 'Checking...';
-  if (icon) icon.classList.add('animate-spin', 'text-amber-400');
+  if (startIcon) startIcon.classList.add('animate-spin', 'text-amber-400');
 
-  const chkFfmpeg = document.getElementById('chkFfmpeg');
-  const statusFfmpeg = document.getElementById('statusFfmpeg');
-  const chkYtdlp = document.getElementById('chkYtdlp');
-  const statusYtdlp = document.getElementById('statusYtdlp');
-  const chkOpencv = document.getElementById('chkOpencv');
-  const statusOpencv = document.getElementById('statusOpencv');
-  const chkStorage = document.getElementById('chkStorage');
-  const statusStorageAccess = document.getElementById('statusStorageAccess');
-
-  // Show a live validation indicator on each item row
-  if (statusFfmpeg) statusFfmpeg.innerHTML = '<span class="text-amber-400 animate-pulse font-mono text-[11px]">Checking...</span>';
-  if (statusYtdlp) statusYtdlp.innerHTML = '<span class="text-amber-400 animate-pulse font-mono text-[11px]">Checking...</span>';
-  if (statusOpencv) statusOpencv.innerHTML = '<span class="text-amber-400 animate-pulse font-mono text-[11px]">Checking...</span>';
-  if (statusStorageAccess) statusStorageAccess.innerHTML = '<span class="text-amber-400 animate-pulse font-mono text-[11px]">Checking...</span>';
-
-  [chkFfmpeg, chkYtdlp, chkOpencv, chkStorage].forEach(el => {
-    if (el) {
-      el.setAttribute('data-lucide', 'loader-2');
-      el.className = 'w-4 h-4 text-amber-400 animate-spin';
-    }
+  const depIconIds = ['chkFfmpeg', 'chkYtdlp', 'chkOpencv', 'chkStorage'];
+  const previousIcons = depIconIds.map((id) => {
+    const el = document.getElementById(id);
+    return {
+      id,
+      icon: el?.getAttribute('data-lucide') || 'check',
+      cls: el?.getAttribute('class') || 'w-4 h-4 text-emerald-400'
+    };
   });
-  lucide.createIcons();
+
+  const checkingBadges = document.querySelectorAll('[data-sys-checking]');
+  checkingBadges.forEach((el) => el.classList.remove('hidden'));
+
+  depIconIds.forEach((id) => {
+    setDependencyIcon(id, 'loader-2', 'w-4 h-4 text-amber-400 animate-spin');
+  });
 
   try {
     const res = await fetch('/api/settings/check-system', { method: 'POST' });
     if (!res.ok) throw new Error('Could not check the system');
     const data = await res.json();
 
-    // FFmpeg
-    if (chkFfmpeg) {
-      chkFfmpeg.setAttribute('data-lucide', data.ffmpeg ? 'check' : 'x');
-      chkFfmpeg.className = data.ffmpeg ? 'w-4 h-4 text-emerald-400' : 'w-4 h-4 text-red-400';
-    }
-    if (statusFfmpeg) statusFfmpeg.innerText = data.ffmpeg_version || (data.ffmpeg ? 'Available' : 'Not found');
-
-    // yt-dlp
-    if (chkYtdlp) {
-      chkYtdlp.setAttribute('data-lucide', 'check');
-      chkYtdlp.className = 'w-4 h-4 text-emerald-400';
-    }
-    if (statusYtdlp) statusYtdlp.innerText = data.ytdlp || 'Available';
-
-    // OpenCV
-    if (chkOpencv) {
-      chkOpencv.setAttribute('data-lucide', data.opencv ? 'check' : 'alert-circle');
-      chkOpencv.className = data.opencv ? 'w-4 h-4 text-emerald-400' : 'w-4 h-4 text-amber-400';
-    }
-    if (statusOpencv) statusOpencv.innerText = data.opencv_version || (data.opencv ? 'Active' : 'Inactive');
-
-    // Storage
-    if (chkStorage) {
-      chkStorage.setAttribute('data-lucide', data.storage ? 'check' : 'x');
-      chkStorage.className = data.storage ? 'w-4 h-4 text-emerald-400' : 'w-4 h-4 text-red-400';
-    }
-    if (statusStorageAccess) statusStorageAccess.innerText = data.storage ? 'Read/write ready' : 'Access denied';
-
-    lucide.createIcons();
+    renderSystemDependencyStatuses(data, { detailed: true });
     showToast('Dependency check complete: all utilities are ready');
   } catch (e) {
+    previousIcons.forEach(({ id, icon, cls }) => setDependencyIcon(id, icon, cls));
     showToast(`Dependency check failed: ${e.message}`, true);
   } finally {
+    checkingBadges.forEach((el) => el.classList.add('hidden'));
     if (btn) btn.disabled = false;
     if (label) label.innerText = 'Check';
-    if (icon) icon.classList.remove('animate-spin', 'text-amber-400');
+    const currentIcon = document.getElementById('checkSystemIcon');
+    if (currentIcon) currentIcon.classList.remove('animate-spin', 'text-amber-400');
   }
 }
 
@@ -4627,15 +4617,10 @@ async function handleCookieUpload(input) {
 
       const detailEl = document.getElementById('cookieFileDetail');
       const badgeEl = document.getElementById('cookieStatusBadge');
-      const chkCookies = document.getElementById('chkCookies');
 
       if (detailEl) detailEl.innerText = `(${data.filename || file.name} • ${data.size || ''})`;
       if (badgeEl) badgeEl.innerText = 'Installed';
-      if (chkCookies) {
-        chkCookies.setAttribute('data-lucide', 'check');
-        chkCookies.className = 'w-4 h-4 text-emerald-400';
-      }
-      lucide.createIcons();
+      setDependencyIcon('chkCookies', 'check', 'w-4 h-4 text-emerald-400');
       showToast(`File ${file.name} uploaded successfully`);
     } catch (err) {
       showToast(`Could not load cookies: ${err.message}`, true);
