@@ -3339,8 +3339,8 @@ body.tab-settings [data-us-project] canvas {
   align-items: center;
   gap: 5px;
   font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 400;
   color: #a1a1aa;
   white-space: nowrap;
   cursor: pointer;
@@ -3357,6 +3357,7 @@ body.tab-settings [data-us-project] canvas {
 .vault-inline-trigger .vault-trigger-icon {
   color: inherit;
   flex-shrink: 0;
+  stroke-width: 1.75;
 }
 
 .vault-inline-trigger .vault-trigger-chevron {
