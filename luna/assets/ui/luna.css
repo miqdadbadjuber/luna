@@ -3282,11 +3282,9 @@ body.tab-settings [data-us-project] canvas {
   width: 0;
   background: #ffffff;
   border-radius: 9999px;
-  transform: translateX(0);
-  transition:
-    transform var(--tabs-dur) var(--tabs-ease),
-    width var(--tabs-dur) var(--tabs-ease),
-    opacity var(--tabs-dur) ease;
+  transform: translate3d(0, 0, 0);
+  transition: opacity 200ms ease;
+  will-change: transform, width;
   pointer-events: none;
   z-index: 1;
 }
@@ -3300,7 +3298,6 @@ body.tab-settings [data-us-project] canvas {
   min-height: 36px;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
   font-family: inherit;
   font-size: 13px;
   font-weight: 500;
@@ -3309,7 +3306,7 @@ body.tab-settings [data-us-project] canvas {
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
-  transition: color 180ms ease;
+  transition: color 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .vault-u-tab:hover {
@@ -3399,23 +3396,36 @@ body.tab-settings [data-us-project] canvas {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 18px;
+  overflow: hidden;
+  max-width: 0;
+  min-width: 0;
   height: 18px;
-  padding: 0 5px;
+  padding: 0;
+  margin-left: 0;
+  opacity: 0;
+  transform: scale(0.75) translateX(-4px);
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #a1a1aa;
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  transition: background-color 180ms ease, color 180ms ease;
+  pointer-events: none;
+  transition:
+    max-width 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    padding 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    margin-left 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .vault-u-tab.active .vault-u-count,
 .vault-u-tab[aria-selected="true"] .vault-u-count {
-  background: rgba(255, 255, 255, 0.14);
-  color: #ffffff;
-  font-weight: 600;
+  max-width: 48px;
+  padding: 0 6px;
+  margin-left: 7px;
+  opacity: 1;
+  transform: scale(1) translateX(0);
 }
 
 @media (max-width: 639px) {

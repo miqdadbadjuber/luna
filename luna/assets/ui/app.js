@@ -4353,6 +4353,9 @@ function getProjectPlatformKey(record) {
   return plat;
 }
 
+let vaultUnderlineRaf = null;
+let vaultUnderlineState = { x: 0, w: 0, initialized: false };
+
 function updateVaultPlatformUnderline(immediate = false) {
   const tabsBar = document.getElementById('vaultPlatformTabs');
   const indicator = document.getElementById('vaultPlatformUnderline');
@@ -4366,17 +4369,64 @@ function updateVaultPlatformUnderline(immediate = false) {
     return;
   }
 
+  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const shouldSnap = immediate || reduceMotion || !vaultUnderlineState.initialized;
+
   indicator.style.opacity = '1';
-  if (immediate) {
-    indicator.style.transition = 'none';
-    indicator.style.transform = `translateX(${activeBtn.offsetLeft}px)`;
-    indicator.style.width = `${activeBtn.offsetWidth}px`;
-    void indicator.offsetHeight;
-    indicator.style.transition = '';
-  } else {
-    indicator.style.transform = `translateX(${activeBtn.offsetLeft}px)`;
-    indicator.style.width = `${activeBtn.offsetWidth}px`;
+  if (shouldSnap) {
+    if (vaultUnderlineRaf) {
+      cancelAnimationFrame(vaultUnderlineRaf);
+      vaultUnderlineRaf = null;
+    }
+    const tx = activeBtn.offsetLeft;
+    const tw = activeBtn.offsetWidth;
+    if (tw > 0) {
+      vaultUnderlineState = { x: tx, w: tw, initialized: true };
+    }
+    indicator.style.transform = `translate3d(${tx}px, 0, 0)`;
+    indicator.style.width = `${tw}px`;
+    return;
   }
+
+  if (vaultUnderlineRaf) {
+    cancelAnimationFrame(vaultUnderlineRaf);
+    vaultUnderlineRaf = null;
+  }
+
+  const startTime = performance.now();
+  let lastTime = startTime;
+
+  const tick = (now) => {
+    const currentBtn = tabsBar.querySelector('.vault-u-tab.active') || activeBtn;
+    const targetX = currentBtn.offsetLeft;
+    const targetW = currentBtn.offsetWidth;
+    const dt = Math.min(0.05, Math.max(0.001, (now - lastTime) / 1000));
+    lastTime = now;
+
+    // Frame-rate-independent exponential ease stays locked onto activeBtn while badges animate
+    const alpha = 1 - Math.exp(-18 * dt);
+    vaultUnderlineState.x += (targetX - vaultUnderlineState.x) * alpha;
+    vaultUnderlineState.w += (targetW - vaultUnderlineState.w) * alpha;
+
+    indicator.style.transform = `translate3d(${vaultUnderlineState.x.toFixed(2)}px, 0, 0)`;
+    indicator.style.width = `${vaultUnderlineState.w.toFixed(2)}px`;
+
+    const settled = (now - startTime >= 340) &&
+      Math.abs(targetX - vaultUnderlineState.x) < 0.25 &&
+      Math.abs(targetW - vaultUnderlineState.w) < 0.25;
+
+    if (settled) {
+      vaultUnderlineState.x = targetX;
+      vaultUnderlineState.w = targetW;
+      indicator.style.transform = `translate3d(${targetX}px, 0, 0)`;
+      indicator.style.width = `${targetW}px`;
+      vaultUnderlineRaf = null;
+      return;
+    }
+    vaultUnderlineRaf = requestAnimationFrame(tick);
+  };
+
+  vaultUnderlineRaf = requestAnimationFrame(tick);
 }
 
 function toggleVaultDropdown(menuId, e) {
@@ -4647,7 +4697,9 @@ function renderVaultGallery() {
 
   closeVaultCardMenu();
   updateVaultTabCounts();
-  requestAnimationFrame(() => updateVaultPlatformUnderline(true));
+  if (!vaultUnderlineRaf) {
+    requestAnimationFrame(() => updateVaultPlatformUnderline(!vaultUnderlineState.initialized));
+  }
   grid.innerHTML = '';
 
   const filtered = sortVaultProjects(
