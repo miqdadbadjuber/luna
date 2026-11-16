@@ -690,7 +690,7 @@ mainUrlInput.addEventListener('keydown', (e) => {
   }
 });
 
-function syncRatioControlLock(btnId, chevId, locked) {
+function syncRatioControlLock(btnId, chevId, locked, lockTitle = 'YouTube Shorts always use Original ratio') {
   const btn = document.getElementById(btnId);
   const chev = document.getElementById(chevId);
   if (btn) {
@@ -698,12 +698,29 @@ function syncRatioControlLock(btnId, chevId, locked) {
     btn.setAttribute('aria-disabled', locked ? 'true' : 'false');
     btn.classList.toggle('is-locked', locked);
     if (locked) {
-      btn.setAttribute('title', 'YouTube Shorts always use Original ratio');
+      btn.setAttribute('title', lockTitle);
     } else {
       btn.removeAttribute('title');
     }
   }
   if (chev) chev.classList.toggle('hidden', locked);
+}
+
+function syncFaceDetectLockUI() {
+  const locked = selectedRatio === '16:9' || selectedRatio === 'original';
+  syncRatioControlLock(
+    'faceDetectDropdownBtn',
+    'faceChevron',
+    locked,
+    'Face Track is unavailable for 16:9 Wide ratio'
+  );
+  if (locked) {
+    if (selectedFaceDetect) selectFaceDetectFromMenu(false, 'Center Crop');
+    const menu = document.getElementById('faceDetectMenu');
+    const btn = document.getElementById('faceDetectDropdownBtn');
+    if (menu) { menu.setAttribute('data-open', 'false'); menu.classList.remove('open'); }
+    if (btn) { btn.setAttribute('aria-expanded', 'false'); btn.classList.remove('active'); }
+  }
 }
 
 function syncSubFeatureShortLockUI() {
@@ -1212,6 +1229,7 @@ function selectRatioFromMenu(r, label) {
     item.classList.toggle('active', isAct);
   });
 
+  syncFaceDetectLockUI();
   closeDropdownSmoothly('aspectRatioMenu', 'aspectChevron', 'aspectRatioDropdownBtn', 80);
 }
 
@@ -1265,6 +1283,7 @@ function setClipCount(cnt) {
 // Face Detect Dropdown Handlers
 function toggleFaceDetectDropdown(e) {
   if (e) e.stopPropagation();
+  if (selectedRatio === '16:9' || selectedRatio === 'original') return;
   const menu = document.getElementById('faceDetectMenu');
   const chev = document.getElementById('faceChevron');
   const btn = document.getElementById('faceDetectDropdownBtn');
@@ -1283,10 +1302,12 @@ function toggleFaceDetectDropdown(e) {
 }
 
 function selectFaceDetectFromMenu(val, label) {
-  selectedFaceDetect = (val === true || val === 'true');
+  const locked = selectedRatio === '16:9' || selectedRatio === 'original';
+  selectedFaceDetect = locked ? false : (val === true || val === 'true');
+  const displayLabel = selectedFaceDetect ? label : 'Center Crop';
   const labelEl = document.getElementById('currentFaceDetectLabel');
   const iconEl = document.getElementById('currentFaceDetectIcon');
-  if (labelEl) labelEl.innerText = label;
+  if (labelEl) labelEl.innerText = displayLabel;
   if (iconEl) {
     iconEl.innerHTML = selectedFaceDetect
       ? '<i data-lucide="scan-face" class="w-3.5 h-3.5"></i>'
@@ -2731,8 +2752,9 @@ function updateProgressUI(stage, data) {
       stageSubTitle.innerText = 'Finding the strongest moments';
       setTaskStatuses(['done', 'done', 'done', 'running', 'pending'], pData, 0);
     } else if (stage === 'clipping' || stage === 'rendering') {
-      stageMainTitle.innerText = 'Render Vertical Clips';
-      stageSubTitle.innerText = 'Encoding 9:16 clips';
+      const ratioText = selectedRatio === '16:9' ? '16:9 Wide' : selectedRatio;
+      stageMainTitle.innerText = selectedRatio === '16:9' ? 'Render Clips' : 'Render Vertical Clips';
+      stageSubTitle.innerText = `Encoding ${ratioText} clips`;
       setTaskStatuses(['done', 'done', 'done', 'done', 'running'], pData, 0);
     } else if (stage === 'saving') {
       stageMainTitle.innerText = 'Saving to Workspace';
@@ -8373,6 +8395,7 @@ async function checkAndResumeSavedJob(savedJobId) {
 document.addEventListener('DOMContentLoaded', () => {
   applyRouteFromHash(window.location.hash, { isInitial: true });
   updateTabsPill(true);
+  syncFaceDetectLockUI();
   if (typeof initAllGlidingIndicators === 'function') {
     initAllGlidingIndicators();
     renderTrimSegments();

@@ -138,6 +138,23 @@ class TestVideoFormatOptions(unittest.TestCase):
             _enforce_youtube_short_policy(ai_req)
         self.assertEqual(ctx.exception.status_code, 400)
 
+    def test_process_request_disables_face_detect_for_16_9_and_original(self):
+        wide_req = ProcessRequest(
+            url="https://youtube.com/watch?v=123",
+            action="type_yt_ai_clip",
+            aspect_ratio="16:9",
+            use_face_detect=True,
+        )
+        self.assertFalse(wide_req.use_face_detect)
+
+        vert_req = ProcessRequest(
+            url="https://youtube.com/watch?v=123",
+            action="type_yt_ai_clip",
+            aspect_ratio="9:16",
+            use_face_detect=True,
+        )
+        self.assertTrue(vert_req.use_face_detect)
+
 
 if __name__ == "__main__":
     unittest.main()

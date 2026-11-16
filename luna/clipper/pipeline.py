@@ -3,6 +3,7 @@
 # THIRD_PARTY_NOTICES.md for the upstream notice.
 
 """End-to-end orchestrator: yt-dlp, transcription, LLM ranking, then ffmpeg/opencv rendering."""
+import threading
 from typing import Callable, Dict, List, Optional
 
 from .clipper import crop_highlights_local
@@ -22,8 +23,11 @@ def generate_shorts(
     on_status: Optional[Callable[[str], None]] = None,
     out_dir: Optional[str] = None,
     progress_hook: Optional[Callable] = None,
+    cancel_event: Optional[threading.Event] = None,
 ) -> Dict:
     """Run the full pipeline and return a structured result."""
+    if cancel_event is not None and cancel_event.is_set():
+        raise RuntimeError("CANCELLED_BY_USER")
     # downloader keeps the metadata as a process global: clear it before the
     # download so a reused local file or cached download cannot inherit the
     # previous job's title
@@ -32,12 +36,16 @@ def generate_shorts(
         youtube_url, fmt=download_format, out_dir=out_dir, progress_hook=progress_hook
     )
 
+    if cancel_event is not None and cancel_event.is_set():
+        raise RuntimeError("CANCELLED_BY_USER")
     transcript = transcribe_local(source_path, video_url=youtube_url, language=language, on_status=on_status)
     if not transcript["segments"]:
         raise RuntimeError(
             "Whisper produced no segments. The video may have no detectable speech."
         )
 
+    if cancel_event is not None and cancel_event.is_set():
+        raise RuntimeError("CANCELLED_BY_USER")
     if on_status:
         on_status("ranking_highlights")
     highlights_result = get_highlights(transcript, num_clips=num_clips, llm_fn=call_llm)
@@ -48,6 +56,8 @@ def generate_shorts(
     top = sorted(all_highlights, key=lambda h: int(h.get("score", 0)), reverse=True)[:num_clips]
     print(f"[pipeline] cropping {len(top)} of {len(all_highlights)} candidates", flush=True)
 
+    if cancel_event is not None and cancel_event.is_set():
+        raise RuntimeError("CANCELLED_BY_USER")
     if on_status:
         on_status("rendering")
 
@@ -60,6 +70,7 @@ def generate_shorts(
         # Subtitles are burned into the clip by the renderer. They were causing good
         # videos to fail, so the pipeline does not pass cues at all for now.
         transcript_segments=[],
+        cancel_event=cancel_event,
     )
 
     # A job with no clips must fail visibly instead of reporting success with an empty result.

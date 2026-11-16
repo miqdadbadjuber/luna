@@ -405,6 +405,16 @@ class TestFrontendVaultUI(unittest.TestCase):
         self.assertIn("html[data-init-route] #mainTabsPill", css)
         self.assertIn("updateTabsPill(immediatePill)", html)
 
+    def test_16_9_ratio_locks_face_detect_ui(self):
+        """Selecting 16:9 Wide must lock Face Track back to Center Crop."""
+        html = self.source
+        for expected in (
+            "function syncFaceDetectLockUI",
+            "Face Track is unavailable for 16:9 Wide ratio",
+            "syncFaceDetectLockUI();",
+        ):
+            self.assertIn(expected, html)
+
 
 if __name__ == "__main__":
     unittest.main()

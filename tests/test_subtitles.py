@@ -3,12 +3,13 @@ import importlib
 import shutil
 import subprocess
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 
 from PIL import Image, ImageChops
 
-from luna.clipper.clipper import crop_clip_local
+from luna.clipper.clipper import crop_clip_local, crop_highlights_local, _run_ffmpeg
 from luna.clipper.subtitles import overlay_args, segments_for_clip, split_cue
 
 
@@ -96,6 +97,47 @@ class TestAllClipsFailed(unittest.TestCase):
                 patch.object(pipeline, "crop_highlights_local", return_value=[{"clip_url": None, "error": "boom"}]):
             with self.assertRaisesRegex(RuntimeError, "boom"):
                 pipeline.generate_shorts("https://example.test/v")
+
+
+class TestClipperResilience(unittest.TestCase):
+    def test_hardware_encoder_serializes_workers_and_falls_back_to_libx264(self):
+        seen_cmds = []
+
+        def fake_run(cmd, timeout=None, cancel_event=None):
+            seen_cmds.append((list(cmd), timeout))
+            out_file = cmd[-1]
+            if "h264_amf" in cmd:
+                with open(out_file, "wb") as f:
+                    f.write(b"partial")
+                raise RuntimeError("ffmpeg timed out after 180s")
+            with open(out_file, "wb") as f:
+                f.write(b"ok-mp4")
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        clipper_mod = importlib.import_module("luna.clipper.clipper")
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(clipper_mod, "_probe_dims", return_value=(1920, 1080, 60.0)), \
+                    patch.object(clipper_mod, "_get_encoder_flags", return_value=["-c:v", "h264_amf", "-quality", "speed"]), \
+                    patch.object(clipper_mod, "_run_ffmpeg", side_effect=fake_run), \
+                    patch.object(clipper_mod.concurrent.futures, "ThreadPoolExecutor", wraps=clipper_mod.concurrent.futures.ThreadPoolExecutor) as exec_spy:
+                results = crop_highlights_local(
+                    "src.mp4",
+                    [{"title": "A", "start_time": 0.0, "end_time": 10.0}],
+                    aspect_ratio="16:9",
+                    out_dir=tmp,
+                    use_face_detect=True,
+                )
+        self.assertEqual(exec_spy.call_args.kwargs.get("max_workers"), 1)
+        self.assertEqual(len(seen_cmds), 2)
+        self.assertIn("h264_amf", seen_cmds[0][0])
+        self.assertIn("libx264", seen_cmds[1][0])
+        self.assertIsNotNone(results[0].get("clip_url"))
+
+    def test_run_ffmpeg_respects_cancel_event(self):
+        cancel = threading.Event()
+        cancel.set()
+        with self.assertRaisesRegex(RuntimeError, "CANCELLED_BY_USER"):
+            _run_ffmpeg(["ffmpeg", "-version"], cancel_event=cancel)
 
 
 if __name__ == "__main__":

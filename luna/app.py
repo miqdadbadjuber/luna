@@ -37,7 +37,7 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.dirname(PACKAGE_DIR)
@@ -1071,6 +1071,12 @@ class ProcessRequest(BaseModel):
         cleaned = " ".join(str(value or "").split()).strip()
         return cleaned[:80] or "Workspace 01"
 
+    @model_validator(mode="after")
+    def _normalize_face_detect(self) -> "ProcessRequest":
+        if self.aspect_ratio in ("16:9", "original"):
+            self.use_face_detect = False
+        return self
+
 
 class RenameProjectRequest(BaseModel):
     new_name: str
@@ -1719,7 +1725,12 @@ def _worker_process(job_id: str, req: ProcessRequest):
                     _set_progress(70.0)
                     jobs[job_id]["download_speed"] = ""
                     jobs[job_id]["download_eta"] = ""
-                    jobs[job_id]["stage_detail"] = "Rendering 9:16 clips (vertical crop)..."
+                    ratio_label = req.aspect_ratio or "9:16"
+                    jobs[job_id]["stage_detail"] = (
+                        "Rendering 16:9 clips..."
+                        if ratio_label in ("16:9", "original")
+                        else f"Rendering {ratio_label} clips (vertical crop)..."
+                    )
                 elif stage == "saving":
                     _set_progress(96.0)
                     jobs[job_id]["stage_detail"] = "Saving to Workspace..."
@@ -1737,6 +1748,7 @@ def _worker_process(job_id: str, req: ProcessRequest):
                 on_status=on_status,
                 out_dir=job_output_dir,
                 progress_hook=progress_hook,
+                cancel_event=cancel_event,
             )
 
             if jobs.get(job_id, {}).get("cancelled"):

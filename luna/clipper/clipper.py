@@ -17,6 +17,8 @@ import concurrent.futures
 import os
 import subprocess
 import tempfile
+import threading
+import time
 from typing import Callable, Dict, List, Optional, Tuple
 
 from .config import local_output_dir
@@ -25,23 +27,50 @@ from .subtitles import MAX_INLINE_OVERLAY_SCREENS, overlay_args, overlay_args_sc
 # Sample face position once per second (approx 30 frames) for tracking
 FACE_DETECT_SAMPLE_EVERY = 30
 
-# Ceiling for a single encode/probe. Shorts are a few minutes long, so a pass
-# that runs longer is stuck rather than slow and the job must fail visibly.
+# Ceiling for long/non-clip ffmpeg calls; individual clip encodes use a tighter duration-based budget.
 FFMPEG_TIMEOUT_SECONDS = 3600
 
+_HARDWARE_ENCODERS = ("h264_amf", "h264_mf")
+_SOFTWARE_ENCODER_FLAGS = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-threads", "0"]
 
-def _run_ffmpeg(cmd: List[str], timeout: Optional[float] = None) -> subprocess.CompletedProcess:
-    """Run ffmpeg/ffprobe with a timeout and surface stderr when it fails."""
-    try:
-        return subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout or FFMPEG_TIMEOUT_SECONDS,
-            check=True,
-        )
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"ffmpeg failed: {(e.stderr or '')[-2000:]}") from e
+
+def _is_hardware_encoder(enc_flags: List[str]) -> bool:
+    return any(codec in enc_flags for codec in _HARDWARE_ENCODERS)
+
+
+def _run_ffmpeg(
+    cmd: List[str],
+    timeout: Optional[float] = None,
+    cancel_event: Optional[threading.Event] = None,
+) -> subprocess.CompletedProcess:
+    """Run ffmpeg/ffprobe with timeout + cancel_event polling and return CompletedProcess."""
+    if cancel_event is not None and cancel_event.is_set():
+        raise RuntimeError("CANCELLED_BY_USER")
+
+    limit = max(10.0, float(timeout or FFMPEG_TIMEOUT_SECONDS))
+    deadline = time.monotonic() + limit
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    while True:
+        if cancel_event is not None and cancel_event.is_set():
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+            raise RuntimeError("CANCELLED_BY_USER")
+        try:
+            out, err = proc.communicate(timeout=1)
+            break
+        except subprocess.TimeoutExpired:
+            if time.monotonic() > deadline:
+                proc.kill()
+                proc.communicate()
+                raise RuntimeError(f"ffmpeg timed out after {int(limit)}s")
+
+    if proc.returncode != 0:
+        raise RuntimeError(f"ffmpeg failed: {(err or '')[-2000:]}")
+    return subprocess.CompletedProcess(cmd, proc.returncode, stdout=out, stderr=err)
 
 
 def _ratio(aspect_ratio: str) -> float:
@@ -259,34 +288,54 @@ def _encode(
     frame_w: int,
     frame_h: int,
     worker_threads: Optional[int] = None,
+    cancel_event: Optional[threading.Event] = None,
 ) -> None:
+    clip_dur = max(0.1, end_time - start_time)
+    clip_timeout = max(180.0, clip_dur * 5.0 + 60.0)
     cmd = [
         "ffmpeg", "-y", "-loglevel", "error",
         "-ss", f"{start_time:.3f}",
         # -t is the clip length, which is unambiguous; -to depends on whether
         # ffmpeg reads it as an input or output timestamp
-        "-t", f"{max(0.1, end_time - start_time):.3f}",
+        "-t", f"{clip_dur:.3f}",
         "-i", source_path,
     ]
-    if worker_threads:
-        enc_flags = _apply_thread_budget(enc_flags, worker_threads)
-    tail = [
-        *enc_flags, "-c:a", "aac", "-b:a", "128k",
-        "-pix_fmt", "yuv420p",  # 10-bit/HDR sources otherwise produce unplayable clips
-        "-movflags", "+faststart", out_path,
-    ]
-    if not cues:
-        _run_ffmpeg([*cmd, *(["-vf", vf] if vf else []), *tail])
-        return
-    with tempfile.TemporaryDirectory() as tmp:
-        rendered = render_cues(cues, frame_w, frame_h, tmp)
-        if len(rendered) > MAX_INLINE_OVERLAY_SCREENS:
-            # one -i per cue plus the inline graph overruns the Windows command
-            # line; the graph goes in a script file that TemporaryDirectory clears
-            script_path = os.path.join(tmp, "filtergraph.txt")
-            _run_ffmpeg([*cmd, *overlay_args_script(rendered, vf, script_path), *tail])
-        else:
-            _run_ffmpeg([*cmd, *overlay_args(rendered, vf), *tail])
+
+    def _encode_with(flags: List[str]) -> None:
+        resolved_flags = _apply_thread_budget(flags, worker_threads) if worker_threads else list(flags)
+        tail = [
+            *resolved_flags, "-c:a", "aac", "-b:a", "128k",
+            "-pix_fmt", "yuv420p",  # 10-bit/HDR sources otherwise produce unplayable clips
+            "-movflags", "+faststart", out_path,
+        ]
+        if not cues:
+            _run_ffmpeg([*cmd, *(["-vf", vf] if vf else []), *tail], timeout=clip_timeout, cancel_event=cancel_event)
+            return
+        with tempfile.TemporaryDirectory() as tmp:
+            rendered = render_cues(cues, frame_w, frame_h, tmp)
+            if len(rendered) > MAX_INLINE_OVERLAY_SCREENS:
+                # one -i per cue plus the inline graph overruns the Windows command
+                # line; the graph goes in a script file that TemporaryDirectory clears
+                script_path = os.path.join(tmp, "filtergraph.txt")
+                _run_ffmpeg([*cmd, *overlay_args_script(rendered, vf, script_path), *tail], timeout=clip_timeout, cancel_event=cancel_event)
+            else:
+                _run_ffmpeg([*cmd, *overlay_args(rendered, vf), *tail], timeout=clip_timeout, cancel_event=cancel_event)
+
+    try:
+        _encode_with(enc_flags)
+    except Exception as exc:
+        if (cancel_event is not None and cancel_event.is_set()) or str(exc) == "CANCELLED_BY_USER":
+            raise
+        if not _is_hardware_encoder(enc_flags):
+            raise
+        # Hardware drivers (e.g. h264_amf) can hang or fail mid-stream; discard partial MP4 and fall back cleanly.
+        print(f"[clip/local] hardware encode failed ({exc}), retrying with libx264", flush=True)
+        if os.path.exists(out_path):
+            try:
+                os.remove(out_path)
+            except OSError:
+                pass
+        _encode_with(_SOFTWARE_ENCODER_FLAGS)
 
 
 def crop_clip_local(
@@ -299,6 +348,7 @@ def crop_clip_local(
     src_dims: Optional[Tuple[int, int, float]] = None,
     cues: Optional[List[Dict]] = None,
     worker_threads: Optional[int] = None,
+    cancel_event: Optional[threading.Event] = None,
 ) -> str:
     """Cut + reframe one highlight in a single fast ffmpeg pass with hardware acceleration."""
     if src_dims is None:
@@ -310,9 +360,12 @@ def crop_clip_local(
     crop_w, crop_h = _crop_box(src_w, src_h, aspect_ratio)
     enc_flags = _get_encoder_flags()
 
-    if aspect_ratio == "16:9":
-        # Native aspect ratio: subclip directly
-        _encode(source_path, start_time, padded_end, "", enc_flags, out_path, cues, src_w, src_h, worker_threads=worker_threads)
+    if aspect_ratio in ("16:9", "original"):
+        # Native aspect ratio: subclip directly (face tracking has no crop slack)
+        _encode(
+            source_path, start_time, padded_end, "", enc_flags, out_path, cues,
+            src_w, src_h, worker_threads=worker_threads, cancel_event=cancel_event,
+        )
         return out_path
 
     if use_face_detect:
@@ -335,7 +388,7 @@ def crop_clip_local(
             try:
                 _encode(
                     source_path, start_time, padded_end, vf, enc_flags, out_path, cues, crop_w, crop_h,
-                    worker_threads=worker_threads,
+                    worker_threads=worker_threads, cancel_event=cancel_event,
                 )
             finally:
                 if os.path.exists(sendcmd_path):
@@ -347,7 +400,7 @@ def crop_clip_local(
     y0 = max(0, (src_h - crop_h) // 2)
     _encode(
         source_path, start_time, padded_end, f"crop={crop_w}:{crop_h}:{x0}:{y0}", enc_flags, out_path, cues,
-        crop_w, crop_h, worker_threads=worker_threads,
+        crop_w, crop_h, worker_threads=worker_threads, cancel_event=cancel_event,
     )
     return out_path
 
@@ -360,6 +413,7 @@ def crop_highlights_local(
     use_face_detect: bool = False,
     on_progress: Optional[Callable[[int, int], None]] = None,
     transcript_segments: Optional[List[Dict]] = None,
+    cancel_event: Optional[threading.Event] = None,
 ) -> List[Dict]:
     out_dir = out_dir or local_output_dir()
     if "=" in str(out_dir) or not str(out_dir).strip():
@@ -367,20 +421,29 @@ def crop_highlights_local(
     os.makedirs(out_dir, exist_ok=True)
 
     src_dims = _probe_dims(source_path)
+    enc_flags = _get_encoder_flags()
+    effective_face_detect = bool(use_face_detect and aspect_ratio not in ("16:9", "original"))
     print(
         f"[clip/local] source={src_dims[0]}x{src_dims[1]} @ {src_dims[2]:.1f}fps, "
-        f"target_ratio={aspect_ratio}, face_detect={use_face_detect}, total_clips={len(highlights)}",
+        f"target_ratio={aspect_ratio}, face_detect={effective_face_detect}, total_clips={len(highlights)}",
         flush=True,
     )
 
     results: List[Dict] = [{} for _ in highlights]
-    # Render up to 3 clips simultaneously, each with its share of the CPU budget
-    max_workers = min(3, max(1, (os.cpu_count() or 4) - 1))
-    # a single worker keeps libx264's own -threads 0 detection, otherwise it
-    # would oversubscribe the CPU across parallel ffmpeg processes
-    worker_threads = max(1, (os.cpu_count() or 4) // max_workers) if max_workers > 1 else 0
+    # GPU hardware encoders (AMD AMF / MediaFoundation) can deadlock under concurrent encodes,
+    # so serialize hardware jobs while keeping multi-worker encoding for software libx264.
+    if _is_hardware_encoder(enc_flags):
+        max_workers = 1
+        worker_threads = 0
+    else:
+        max_workers = min(3, max(1, (os.cpu_count() or 4) - 1))
+        # a single worker keeps libx264's own -threads 0 detection, otherwise it
+        # would oversubscribe the CPU across parallel ffmpeg processes
+        worker_threads = max(1, (os.cpu_count() or 4) // max_workers) if max_workers > 1 else 0
 
     def _process_one(idx: int, h: Dict) -> Dict:
+        if cancel_event is not None and cancel_event.is_set():
+            raise RuntimeError("CANCELLED_BY_USER")
         out_path = os.path.join(out_dir, f"short_{idx:02d}.mp4")
         print(
             f"[clip/local] starting clip {idx}/{len(highlights)}: {h.get('title', '(untitled)')} "
@@ -394,20 +457,22 @@ def crop_highlights_local(
                 float(h["end_time"]),
                 aspect_ratio,
                 out_path,
-                use_face_detect=use_face_detect,
+                use_face_detect=effective_face_detect,
                 src_dims=src_dims,
                 cues=segments_for_clip(
                     transcript_segments or [], float(h["start_time"]), float(h["end_time"]) + 0.25
                 ),
                 worker_threads=worker_threads,
+                cancel_event=cancel_event,
             )
             print(f"[clip/local] finished clip {idx}/{len(highlights)} -> {out_path}", flush=True)
             return {**h, "clip_url": out_path}
         except Exception as e:
+            if (cancel_event is not None and cancel_event.is_set()) or str(e) == "CANCELLED_BY_USER":
+                raise RuntimeError("CANCELLED_BY_USER") from e
             print(f"[clip/local] clip {idx} failed: {e}", flush=True)
             return {**h, "clip_url": None, "error": str(e)}
 
-    # Render up to 3 clips simultaneously in parallel
     completed_count = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(_process_one, i, h): i - 1 for i, h in enumerate(highlights, 1)}
