@@ -427,8 +427,8 @@ class TestFrontendVaultUI(unittest.TestCase):
         ):
             self.assertIn(expected, html)
 
-    def test_clip_language_controls_and_hybrid_background_fallback(self):
-        """AI clip language selector (ID/EN) and local 1:1 Studio wave fallback exist cleanly."""
+    def test_clip_language_controls_and_original_unicorn_background(self):
+        """AI clip language selector (ID/EN) and original UnicornStudio WebGL background (with software WebGL2 shim) exist cleanly."""
         html = self.source
         for expected in (
             'id="selectClipLanguage"',
@@ -438,19 +438,19 @@ class TestFrontendVaultUI(unittest.TestCase):
             'id="wsLangBtnEn"',
             "function setClipLanguage",
             "function setWorkspaceClipLanguage",
-            'id="studioFallbackCanvas"',
-            "/assets/ui/hero-waves.png",
+            'data-us-project="N9XzvQXu7fA5SY2ewADJ"',
         ):
             self.assertIn(expected, html)
 
-        bg_js = self.client.get("/assets/ui/background.js").text
-        self.assertIn("__isHealthyHardwareWebGL2", bg_js)
-        self.assertIn("__drawStudioFallbackFrame", bg_js)
-        self.assertIn("/assets/ui/hero-waves.png", bg_js)
+        self.assertNotIn("studioFallbackCanvas", html)
+        self.assertNotIn('data-bg-mode="fallback"', html)
+        self.assertNotIn("/assets/ui/hero-waves.png", html)
 
-        img_res = self.client.get("/assets/ui/hero-waves.png")
-        self.assertEqual(img_res.status_code, 200)
-        self.assertGreater(len(img_res.content), 100000)
+        bg_js = self.client.get("/assets/ui/background.js").text
+        self.assertIn("failIfMajorPerformanceCaveat: false", bg_js)
+        self.assertIn("fastly.jsdelivr.net", bg_js)
+        self.assertNotIn("__drawStudioFallbackFrame", bg_js)
+        self.assertNotIn("/assets/ui/hero-waves.png", bg_js)
 
     def test_settings_dependency_toast_key_hints_and_storage_copy(self):
         """Settings dependency check reports cookies truthfully, warns on unsaved keys, and clarifies Move Folder."""
