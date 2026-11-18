@@ -1,6 +1,11 @@
 // Global WebGL Lifecycle Controllers for UnicornStudio (original animated shader + software WebGL2 shim)
-let __unicornLastViewport = { w: window.innerWidth, h: window.innerHeight };
+let __unicornLastViewport = {
+  w: window.innerWidth,
+  h: window.innerHeight,
+  dpr: window.devicePixelRatio || 1,
+};
 let __unicornNeedsResize = false;
+let __unicornNeedsRefresh = false;
 let __unicornResizeTimer = null;
 let __unicornBootPending = false;
 
@@ -46,6 +51,49 @@ function __isStudioTabActive() {
   return true;
 }
 
+function __keepUnicornPlanesDrawable(scene, refreshTextures) {
+  if (!scene) return;
+  if (scene.curtain && Array.isArray(scene.curtain.planes)) {
+    scene.curtain.planes.forEach(function (plane) {
+      if (plane) {
+        plane._canDraw = true;
+      }
+    });
+  }
+  if (refreshTextures && Array.isArray(scene.layers)) {
+    scene.layers.forEach(function (layer) {
+      const tex = layer && layer.preloadedCanvasTexture;
+      if (tex && typeof tex.needUpdate === 'function') {
+        tex.needUpdate();
+      }
+    });
+  }
+  if (scene.curtain && typeof scene.curtain.needRender === 'function') {
+    scene.curtain.needRender();
+  }
+}
+
+function __bindSceneContextHandlers(scene) {
+  const canvas = scene && scene.curtain ? scene.curtain.canvas : null;
+  if (!canvas || (canvas.dataset && canvas.dataset.lunaContextBound === '1')) {
+    return;
+  }
+  if (canvas.dataset) {
+    canvas.dataset.lunaContextBound = '1';
+  }
+  canvas.addEventListener('webglcontextlost', function () {
+    __unicornNeedsRefresh = true;
+  });
+  canvas.addEventListener('webglcontextrestored', function () {
+    __unicornNeedsRefresh = true;
+    if (__isStudioTabActive() && !document.hidden) {
+      requestAnimationFrame(function () {
+        window.resumeUnicornStudio();
+      });
+    }
+  });
+}
+
 function __initUnicornStudioNow() {
   if (!window.UnicornStudio || window.UnicornStudio.isInitialized || typeof window.UnicornStudio.init !== 'function') {
     return;
@@ -63,13 +111,18 @@ function __initUnicornStudioNow() {
     }
     if (scenes && Array.isArray(scenes)) {
       scenes.forEach(function (scene) {
-        if (scene && scene.interactivity && scene.interactivity.mouse) {
+        if (!scene) return;
+        if (scene.interactivity && scene.interactivity.mouse) {
           scene.interactivity.mouse.disabled = true;
         }
+        // Keep static wave/gradient planes drawable so background FBO evictions cannot wipe the wave black.
+        scene.disablePlanes = function () {};
+        __keepUnicornPlanesDrawable(scene, false);
+        __bindSceneContextHandlers(scene);
       });
     }
-    // If loaded while on non-studio tab, pause WebGL drawing immediately
-    if (!__isStudioTabActive()) {
+    // If loaded while on non-studio tab or hidden browser tab, pause WebGL cleanly until visible
+    if (!__isStudioTabActive() || document.hidden) {
       window.pauseUnicornStudio();
     }
   }).catch(function (e) {
@@ -82,9 +135,11 @@ window.pauseUnicornStudio = function () {
   try {
     if (window.__unicornScenes && Array.isArray(window.__unicornScenes)) {
       window.__unicornScenes.forEach(function (scene) {
-        if (scene && scene.curtain && typeof scene.curtain.disableDrawing === 'function') {
+        if (!scene) return;
+        scene.paused = true;
+        if (scene.curtain && typeof scene.curtain.disableDrawing === 'function') {
           scene.curtain.disableDrawing();
-        } else if (scene && typeof scene.disable === 'function') {
+        } else if (typeof scene.disable === 'function') {
           scene.disable();
         }
       });
@@ -103,25 +158,38 @@ window.resumeUnicornStudio = function () {
       if (window.__unicornScenes && Array.isArray(window.__unicornScenes)) {
         const vw = window.innerWidth;
         const vh = window.innerHeight;
-        const viewportChanged = __unicornNeedsResize || vw !== __unicornLastViewport.w || vh !== __unicornLastViewport.h;
+        const dpr = window.devicePixelRatio || 1;
+        const viewportChanged = (
+          __unicornNeedsResize ||
+          vw !== __unicornLastViewport.w ||
+          vh !== __unicornLastViewport.h ||
+          dpr !== __unicornLastViewport.dpr
+        );
         window.__unicornScenes.forEach(function (scene) {
-          if (scene && scene.curtain && typeof scene.curtain.enableDrawing === 'function') {
+          if (!scene) return;
+          scene.paused = false;
+          scene.disablePlanes = function () {};
+          if (scene.curtain && typeof scene.curtain.enableDrawing === 'function') {
             scene.curtain.enableDrawing();
-          } else if (scene && typeof scene.enable === 'function') {
+          } else if (typeof scene.enable === 'function') {
             scene.enable();
           }
-          const canvas = scene && scene.curtain ? scene.curtain.canvas : null;
+          const canvas = scene.curtain ? scene.curtain.canvas : null;
           const needsZeroFix = Boolean(canvas && (canvas.width === 0 || canvas.height === 0));
-          if (viewportChanged || needsZeroFix) {
-            if (scene && typeof scene.resize === 'function') {
+          __keepUnicornPlanesDrawable(scene, true);
+          if (__unicornNeedsRefresh || viewportChanged || needsZeroFix) {
+            if (typeof scene.refresh === 'function') {
+              scene.refresh();
+            } else if (typeof scene.resize === 'function') {
               scene.resize();
-            } else if (scene && scene.curtain && typeof scene.curtain.resize === 'function') {
+            } else if (scene.curtain && typeof scene.curtain.resize === 'function') {
               scene.curtain.resize();
             }
           }
         });
-        __unicornLastViewport = { w: vw, h: vh };
+        __unicornLastViewport = { w: vw, h: vh, dpr: dpr };
         __unicornNeedsResize = false;
+        __unicornNeedsRefresh = false;
       }
     }
   } catch (e) {
@@ -140,13 +208,26 @@ window.addEventListener('resize', function () {
   }, 120);
 });
 
-// Automatically pause WebGL rendering when browser tab is inactive / hidden
+// Pause WebGL + shader clock while tab is hidden and restore cleanly on return or bfcache wake
 document.addEventListener('visibilitychange', function () {
   if (document.hidden) {
     window.pauseUnicornStudio();
   } else if (__isStudioTabActive()) {
     window.resumeUnicornStudio();
   }
+});
+
+window.addEventListener('pageshow', function (event) {
+  if (event && event.persisted) {
+    __unicornNeedsRefresh = true;
+  }
+  if (!document.hidden && __isStudioTabActive()) {
+    window.resumeUnicornStudio();
+  }
+});
+
+window.addEventListener('pagehide', function () {
+  window.pauseUnicornStudio();
 });
 
 !function () {

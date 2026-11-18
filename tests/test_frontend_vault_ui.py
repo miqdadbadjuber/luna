@@ -505,6 +505,24 @@ class TestFrontendVaultUI(unittest.TestCase):
         bg_js = self.client.get("/assets/ui/background.js").text
         self.assertIn("__getLunaUiScale", bg_js)
 
+    def test_unicorn_background_wave_lifecycle_guards(self):
+        """Phase 4.2: Static wave/gradient planes stay drawable across tab switches, resizes, and WebGL context restores."""
+        bg_js = self.client.get("/assets/ui/background.js").text
+        for expected in (
+            "function __keepUnicornPlanesDrawable",
+            "function __bindSceneContextHandlers",
+            "scene.disablePlanes = function () {}",
+            "scene.paused = true",
+            "scene.paused = false",
+            "webglcontextlost",
+            "webglcontextrestored",
+            "scene.refresh()",
+            "window.addEventListener('pageshow'",
+            "window.addEventListener('pagehide'",
+            "window.devicePixelRatio",
+        ):
+            self.assertIn(expected, bg_js)
+
 
 if __name__ == "__main__":
     unittest.main()
