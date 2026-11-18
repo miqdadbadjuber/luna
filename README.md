@@ -42,7 +42,7 @@ Start Luna again later with `./start.sh` on macOS and Linux. Run the same instal
 
 1. Install once with the PowerShell line above. It adds a **Luna** shortcut to the Desktop and the Start Menu.
 2. Start Luna later by double-clicking that shortcut. No terminal is needed.
-3. To update, run the install line again. Your `.env` and media are kept.
+3. To update, close any running Luna window first and run the install line again. Your `.env` and media are kept.
 
 If you cloned the repository with git, install inside the clone once. Windows PowerShell blocks `.ps1` files by default, so run it like this from the clone folder:
 

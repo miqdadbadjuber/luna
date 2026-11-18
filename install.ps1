@@ -3,13 +3,17 @@ $ErrorActionPreference = "Stop"
 
 $repoUrl = if ($env:LUNA_REPO_URL) { $env:LUNA_REPO_URL } else { "https://github.com/miqdadbadjuber/luna" }
 
+$isUpdate = $false
 if ($PSScriptRoot -and (Test-Path (Join-Path $PSScriptRoot "luna/app.py"))) {
     $lunaDir = $PSScriptRoot
+    $isUpdate = Test-Path (Join-Path $lunaDir ".venv\Scripts\python.exe")
 } else {
     # Run through `irm | iex`, so there is no checkout yet.
     $lunaDir = if ($env:LUNA_DIR) { $env:LUNA_DIR } else { Join-Path $env:USERPROFILE "Luna" }
     $ref = if ($env:LUNA_REF) { $env:LUNA_REF } else { "main" }
     if (Test-Path (Join-Path $lunaDir ".git")) {
+        $isUpdate = $true
+        Write-Host "Updating Luna in $lunaDir..."
         git -C $lunaDir pull --ff-only
         if ($LASTEXITCODE -ne 0) { throw "Could not update Luna in $lunaDir." }
     } elseif ((Get-Command git -ErrorAction SilentlyContinue) -and -not (Test-Path (Join-Path $lunaDir "luna/app.py"))) {
@@ -20,7 +24,9 @@ if ($PSScriptRoot -and (Test-Path (Join-Path $PSScriptRoot "luna/app.py"))) {
     } else {
         # No git: unpack the source archive over $lunaDir. .env, .venv and media are not in it, so they survive.
         # shortcut: files removed upstream stay behind on an update, switch to git if that ever matters.
-        Write-Host "Downloading Luna..."
+        $isUpdate = Test-Path (Join-Path $lunaDir "luna/app.py")
+        $downloadMsg = if ($isUpdate) { "Updating Luna in $lunaDir..." } else { "Downloading Luna..." }
+        Write-Host $downloadMsg
         $zip = Join-Path $env:TEMP "luna-src.zip"
         $tmp = Join-Path $env:TEMP "luna-src"
         try {
@@ -67,6 +73,7 @@ Write-Host "Checking FFmpeg..."
 if ($LASTEXITCODE -ne 0) { throw "Could not set up FFmpeg." }
 
 # A Desktop and Start Menu shortcut, so starting Luna again needs no terminal.
+$shortcutsCreated = $false
 try {
     $shell = New-Object -ComObject WScript.Shell
     foreach ($dir in @([Environment]::GetFolderPath("Desktop"), [Environment]::GetFolderPath("Programs"))) {
@@ -76,9 +83,45 @@ try {
         $lnk.WorkingDirectory = $lunaDir
         $lnk.Save()
     }
+    $shortcutsCreated = $true
 } catch {
     Write-Warning "Could not create the Luna shortcut: $($_.Exception.Message)"
 }
 
-Write-Host "Luna is installed in $lunaDir. Start it again later from the Luna shortcut on the Desktop or in the Start Menu."
-if ($env:LUNA_NO_START -ne "1") { & .\start.bat }
+$actionWord = if ($isUpdate) { "update" } else { "installation" }
+Write-Host ""
+Write-Host "============================================================" -ForegroundColor DarkGray
+Write-Host "  Luna $actionWord complete!" -ForegroundColor Green
+Write-Host "============================================================" -ForegroundColor DarkGray
+Write-Host "  Location : $lunaDir"
+if ($shortcutsCreated) {
+    Write-Host "  Launcher : 'Luna' shortcut (Desktop & Start Menu) or .\start.bat"
+} else {
+    Write-Host "  Launcher : .\start.bat"
+}
+Write-Host "  Settings : .env and saved Workspace media are kept across updates."
+Write-Host "  Update   : Close Luna first, then re-run the same PowerShell install command."
+Write-Host "============================================================" -ForegroundColor DarkGray
+Write-Host ""
+
+if ($env:LUNA_NO_START -ne "1") {
+    $shouldLaunch = $true
+    $canPrompt = $false
+    try {
+        $canPrompt = [Environment]::UserInteractive -and -not [Console]::IsInputRedirected
+    } catch {
+        $canPrompt = $false
+    }
+    if ($canPrompt -and $env:LUNA_AUTO_START -ne "1") {
+        $reply = Read-Host "Press Enter to launch Luna now (or type N to exit)"
+        if ($reply -and $reply.Trim().ToLowerInvariant() -in @("n", "no")) {
+            $shouldLaunch = $false
+        }
+    }
+    if ($shouldLaunch) {
+        Write-Host "Starting Luna..." -ForegroundColor Cyan
+        & .\start.bat
+    } else {
+        Write-Host "Launch skipped. Open Luna anytime from the Desktop/Start Menu shortcut or .\start.bat."
+    }
+}
