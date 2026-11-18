@@ -24,12 +24,12 @@ GRADE_COLUMNS = ("video", "clip", "start", "end", "score", "title", "caption", *
 
 
 def _config() -> Dict:
-    from .clipper.config import llm_provider, openai_model, transcribe_provider
+    from .clipper.config import gemini_model, llm_provider, openai_model, transcribe_provider
 
     provider = llm_provider()
     return {
         "llm_provider": provider,
-        "model": openai_model() if provider == "openai" else os.getenv("GEMINI_MODEL", "gemini-3.5-flash"),
+        "model": openai_model() if provider == "openai" else gemini_model(),
         "transcribe_provider": transcribe_provider(),
     }
 

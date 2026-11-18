@@ -47,6 +47,73 @@ def call_openai_llm(prompt: str) -> str:
     return response.choices[0].message.content or ""
 
 
+GEMINI_FALLBACK_MODELS = ("gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite")
+_GEMINI_UNSUPPORTED_MODEL_TOKENS = ("tts", "image", "embedding", "live", "native-audio", "veo", "imagen")
+
+
+def _discover_gemini_flash_models(client, excluded: set) -> list[str]:
+    """Query active generateContent Flash models as a last-resort fallback on 404/503."""
+    found = []
+    try:
+        for m in client.models.list():
+            name = (getattr(m, "name", None) or "").removeprefix("models/")
+            if not name or name in excluded or "flash" not in name.lower():
+                continue
+            if any(tok in name.lower() for tok in _GEMINI_UNSUPPORTED_MODEL_TOKENS):
+                continue
+            actions = getattr(m, "supported_actions", None) or []
+            if actions and "generateContent" not in actions:
+                continue
+            found.append(name)
+    except Exception:
+        return []
+    found.sort(reverse=True)
+    return found[:3]
+
+
+def gemini_generate_with_fallback(client, *, contents, config, log_prefix: str = "[llm/gemini]"):
+    """Call Gemini generate_content with model cascade, 503/429 retries, and dynamic 404 recovery."""
+    models_to_try = []
+    for m in (gemini_model(), *GEMINI_FALLBACK_MODELS):
+        if m and m not in models_to_try:
+            models_to_try.append(m)
+
+    transient_err = None
+    last_err = None
+    discovered_added = False
+    idx = 0
+    while idx < len(models_to_try):
+        model_name = models_to_try[idx]
+        idx += 1
+        for attempt in range(1, 4):
+            try:
+                print(f"{log_prefix} requesting model={model_name} (attempt {attempt})...", flush=True)
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=contents,
+                    config=config,
+                )
+                if response.text:
+                    return response
+            except Exception as e:
+                err_str = str(e)
+                last_err = e
+                print(f"{log_prefix} model={model_name} attempt {attempt} failed: {err_str}", flush=True)
+                if "400" in err_str or "401" in err_str or "403" in err_str:
+                    raise e
+                if "503" in err_str or "UNAVAILABLE" in err_str or "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                    transient_err = e
+                    time.sleep(2 * attempt)
+                    continue
+                break
+        if idx == len(models_to_try) and not discovered_added:
+            discovered_added = True
+            for extra in _discover_gemini_flash_models(client, set(models_to_try)):
+                models_to_try.append(extra)
+
+    raise transient_err or last_err or RuntimeError("Failed to generate content from Gemini API.")
+
+
 def call_gemini_llm(prompt: str) -> str:
     """Gemini backend with automatic model fallback & retry for 503/429 spikes."""
     try:
@@ -57,45 +124,18 @@ def call_gemini_llm(prompt: str) -> str:
             "    pip install -r requirements.txt"
         ) from e
 
-    api_key = require_gemini_key()
-    client = genai.Client(api_key=api_key)
-
-    # Priority cascade: user's configured model first, followed by reliable fallbacks
-    models_to_try = []
-    for m in [gemini_model(), "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
-        if m and m not in models_to_try:
-            models_to_try.append(m)
-
-    last_err = None
-    for model_name in models_to_try:
-        for attempt in range(1, 3):
-            try:
-                print(f"[llm/gemini] requesting model={model_name} (attempt {attempt})...", flush=True)
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=prompt,
-                    config={
-                        "temperature": 0.2,
-                        "response_mime_type": "application/json",
-                        "max_output_tokens": 8192,
-                    },
-                )
-                if response.text:
-                    return response.text
-            except Exception as e:
-                err_str = str(e)
-                last_err = e
-                print(f"[llm/gemini] model={model_name} attempt {attempt} failed: {err_str}", flush=True)
-                if "400" in err_str or "401" in err_str or "403" in err_str:
-                    # bad key or bad request: retrying and switching models cannot fix it
-                    raise e
-                if "503" in err_str or "UNAVAILABLE" in err_str or "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                    time.sleep(2 * attempt)
-                    continue
-                else:
-                    break
-
-    raise last_err or RuntimeError("Failed to generate content from Gemini API.")
+    client = genai.Client(api_key=require_gemini_key())
+    response = gemini_generate_with_fallback(
+        client,
+        contents=prompt,
+        config={
+            "temperature": 0.2,
+            "response_mime_type": "application/json",
+            "max_output_tokens": 8192,
+        },
+        log_prefix="[llm/gemini]",
+    )
+    return response.text or ""
 
 
 def call_llm(prompt: str) -> str:

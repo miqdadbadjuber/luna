@@ -11,12 +11,13 @@ load_dotenv(os.path.join(ROOT_DIR, ".env"))
 
 DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
+DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
 
 
 # Settings rewrites .env while the app is running, so these read os.getenv on
 # every call instead of freezing the values at import time.
 def gemini_model() -> str:
-    return os.getenv("GEMINI_MODEL", "").strip() or "gemini-3.5-flash"
+    return os.getenv("GEMINI_MODEL", "").strip() or DEFAULT_GEMINI_MODEL
 
 
 # Kept as groq_base_url()'s fallback: existing callers and tests still patch

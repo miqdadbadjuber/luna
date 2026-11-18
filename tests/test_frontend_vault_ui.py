@@ -415,6 +415,18 @@ class TestFrontendVaultUI(unittest.TestCase):
         ):
             self.assertIn(expected, html)
 
+    def test_strict_url_validation_and_dynamic_quality_status(self):
+        """Frontend URL validation restricts supported domains and task labels reflect selected quality."""
+        html = self.source
+        for expected in (
+            "SUPPORTED_MEDIA_DOMAINS",
+            "function isSupportedMediaHost",
+            "QUALITY_LABELS",
+            "Downloading Video ${activeTaskQuality}p",
+            "data.quality || localStorage.getItem('luna_active_quality')",
+        ):
+            self.assertIn(expected, html)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -221,6 +221,43 @@ class TestOpenAICompatible(unittest.TestCase):
             res = TestClient(app).post("/api/settings/openai-models", json={"base_url": self.base_url + "/"})
         self.assertEqual(res.json(), {"models": ["a-chat", "z-chat"]})
 
+    def test_gemini_fallback_on_503_and_404_with_model_discovery(self):
+        from types import SimpleNamespace
+        from luna.clipper import llm
+
+        seen_models = []
+
+        class _FakeModels:
+            def generate_content(self, *, model, contents, config):
+                seen_models.append(model)
+                if model == "gemini-3.8-flash":
+                    raise RuntimeError("503 UNAVAILABLE")
+                if model in ("gemini-3.5-flash", "gemini-3.5-flash-lite"):
+                    raise RuntimeError("404 NOT_FOUND")
+                if model == "gemini-3.9-flash":
+                    return SimpleNamespace(text="ok from discovered")
+                raise RuntimeError(f"unexpected model {model}")
+
+            def list(self):
+                return [
+                    SimpleNamespace(name="models/gemini-3.9-flash-tts", supported_actions=["generateContent"]),
+                    SimpleNamespace(name="models/gemini-3.9-flash", supported_actions=["generateContent"]),
+                ]
+
+        fake_client = SimpleNamespace(models=_FakeModels())
+        with patch.dict(os.environ, {"GEMINI_MODEL": ""}), patch("luna.clipper.llm.time.sleep"):
+            resp = llm.gemini_generate_with_fallback(fake_client, contents="hi", config={})
+        self.assertEqual(resp.text, "ok from discovered")
+        self.assertEqual(
+            seen_models,
+            [
+                "gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.8-flash",
+                "gemini-3.5-flash",
+                "gemini-3.5-flash-lite",
+                "gemini-3.9-flash",
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

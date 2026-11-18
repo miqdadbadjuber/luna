@@ -704,14 +704,16 @@ Rules:
                     flush=True,
                 )
                 try:
-                    response = client.models.generate_content(
-                        model=model_name,
+                    from .llm import gemini_generate_with_fallback
+                    response = gemini_generate_with_fallback(
+                        client,
                         contents=[uploaded_file, prompt],
                         config=types.GenerateContentConfig(
                             response_mime_type="application/json",
                             temperature=0.1,
                             max_output_tokens=8192,
                         ),
+                        log_prefix="[transcribe/gemini]",
                     )
                     raw_text = response.text or "{}"
                     clean_json = re.sub(r"^```(?:json)?\s*", "", raw_text.strip(), flags=re.MULTILINE)

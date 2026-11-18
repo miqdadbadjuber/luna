@@ -6,6 +6,7 @@
 import asyncio
 import copy
 from contextlib import asynccontextmanager
+import html
 import json
 import logging
 import os
@@ -60,6 +61,7 @@ ensure_ffmpeg()
 from .clipper import generate_shorts
 from .clipper.clipper import _get_encoder_flags
 from .clipper.config import (
+    DEFAULT_GEMINI_MODEL,
     DEFAULT_OPENAI_BASE_URL,
     openai_base_url,
     openai_model,
@@ -978,9 +980,39 @@ def extract_clip_segment(
     return out_clip
 
 
+def _probe_source_height(input_path: str) -> Optional[int]:
+    """Return video height in pixels via ffprobe, or None when unavailable."""
+    if not input_path or not os.path.exists(input_path):
+        return None
+    try:
+        proc = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-select_streams", "v:0",
+                "-show_entries", "stream=height",
+                "-of", "csv=p=0",
+                input_path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if proc.returncode == 0:
+            for line in (proc.stdout or "").splitlines():
+                line = line.strip()
+                if line.isdigit():
+                    val = int(line)
+                    if val > 0:
+                        return val
+    except Exception:
+        pass
+    return None
+
+
 def format_video_target(input_path: str, ratio: str = "original", fps: str = "auto", cancel_event: Optional[threading.Event] = None) -> str:
     """
     Format full video to target aspect ratio (original, 9:16, 3:4, 1:1) and FPS (auto, 60, 30).
+    Avoids upscaling sub-1080p sources when cropping to another aspect ratio.
     Returns path to the formatted video file (or original if unchanged).
     """
     if ratio == "original" and (not fps or fps == "auto"):
@@ -998,12 +1030,23 @@ def format_video_target(input_path: str, ratio: str = "original", fps: str = "au
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", input_path]
 
     vf_filters = []
-    if ratio in ("9:16", "916"):
-        vf_filters.append("crop=ih*9/16:ih,scale=1080:1920")
-    elif ratio in ("3:4", "34"):
-        vf_filters.append("crop=ih*3/4:ih,scale=810:1080")
-    elif ratio in ("1:1", "11"):
-        vf_filters.append("crop=min(iw\\,ih):min(iw\\,ih),scale=1080:1080")
+    if ratio in ("9:16", "916", "3:4", "34", "1:1", "11"):
+        src_h = _probe_source_height(input_path)
+        upscale_ok = src_h is None or src_h >= 1080
+        if ratio in ("9:16", "916"):
+            vf_filters.append(
+                "crop=ih*9/16:ih,scale=1080:1920" if upscale_ok else "crop=trunc(ih*9/16/2)*2:trunc(ih/2)*2,setsar=1"
+            )
+        elif ratio in ("3:4", "34"):
+            vf_filters.append(
+                "crop=ih*3/4:ih,scale=810:1080" if upscale_ok else "crop=trunc(ih*3/4/2)*2:trunc(ih/2)*2,setsar=1"
+            )
+        elif ratio in ("1:1", "11"):
+            vf_filters.append(
+                "crop=min(iw\\,ih):min(iw\\,ih),scale=1080:1080"
+                if upscale_ok
+                else "crop=trunc(min(iw\\,ih)/2)*2:trunc(min(iw\\,ih)/2)*2,setsar=1"
+            )
 
     if vf_filters:
         cmd.extend(["-vf", ",".join(vf_filters)])
@@ -1144,6 +1187,93 @@ async def guide_page():
 
 
 
+_TIKTOK_BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "en-US,en;q=0.9",
+}
+
+
+def _extract_meta_content(page_html: str, prop: str) -> Optional[str]:
+    for pat in (
+        rf'<meta[^>]+(?:property|name)=["\']{re.escape(prop)}["\'][^>]+content=["\']([^"\']+)["\']',
+        rf'<meta[^>]+content=["\']([^"\']+)["\'][^>]+(?:property|name)=["\']{re.escape(prop)}["\']',
+    ):
+        m = re.search(pat, page_html, re.IGNORECASE)
+        if m:
+            val = html.unescape(m.group(1)).strip()
+            if val:
+                return val
+    return None
+
+
+def _fetch_tiktok_preview(url: str):
+    """Resolve TikTok shortlinks safely and gather fast metadata via oEmbed / HTML meta tags."""
+    resolved_url = url
+    t, d, th, ch = None, 0, None, None
+    parsed = urllib.parse.urlparse(url)
+    host = (parsed.hostname or "").lower()
+    is_shortlink = host in ("vt.tiktok.com", "vm.tiktok.com") or "/t/" in (parsed.path or "")
+
+    if is_shortlink:
+        try:
+            r = requests.get(
+                url,
+                headers=_TIKTOK_BROWSER_HEADERS,
+                timeout=4.0,
+                allow_redirects=True,
+                stream=True,
+            )
+            try:
+                final_url = (r.url or "").strip()
+                if final_url and external_url_problem(final_url) is None:
+                    resolved_url = final_url
+            finally:
+                r.close()
+        except Exception:
+            pass
+
+    clean_url = resolved_url.split("?", 1)[0] if ("/video/" in resolved_url or "/photo/" in resolved_url) else resolved_url
+    for candidate in dict.fromkeys((clean_url, resolved_url)):
+        try:
+            r = requests.get(
+                f"https://www.tiktok.com/oembed?url={requests.utils.quote(candidate, safe='')}",
+                headers=_TIKTOK_BROWSER_HEADERS,
+                timeout=3.5,
+            )
+            if r.status_code == 200:
+                odata = r.json()
+                if isinstance(odata, dict) and odata.get("title"):
+                    t = str(odata["title"]).strip()
+                    ch = str(odata.get("author_name") or "TikTok").strip()
+                    th = odata.get("thumbnail_url") or th
+                    break
+        except Exception:
+            pass
+
+    if not t and external_url_problem(clean_url) is None:
+        try:
+            r = requests.get(clean_url, headers=_TIKTOK_BROWSER_HEADERS, timeout=4.0)
+            if r.status_code == 200:
+                page_html = r.text[:250_000]
+                t = _extract_meta_content(page_html, "og:title") or _extract_meta_content(page_html, "twitter:title")
+                if t and t.lower() in ("tiktok", "tiktok - make your day"):
+                    t = _extract_meta_content(page_html, "description") or _extract_meta_content(page_html, "og:description")
+                th = th or _extract_meta_content(page_html, "og:image") or _extract_meta_content(page_html, "twitter:image")
+                m_dur = re.search(r'"duration"\s*:\s*(\d{1,5})', page_html)
+                if m_dur:
+                    d = int(m_dur.group(1))
+                m_author = re.search(r'"nickname"\s*:\s*"([^"]+)"', page_html)
+                if m_author:
+                    ch = ch or m_author.group(1)
+        except Exception:
+            pass
+
+    return resolved_url, t, d, th, ch
+
+
 @app.post("/api/info")
 async def api_info(req: InfoRequest):
     url = req.url.strip()
@@ -1154,9 +1284,11 @@ async def api_info(req: InfoRequest):
         raise HTTPException(status_code=400, detail=problem)
 
     platform = detect_platform(url)
+    resolved_url = url
     fast_title = None
     fast_thumb = None
     fast_duration = 0
+    fast_channel = None
 
     # 1. Fast path: YouTube Innertube + oEmbed (sub-second to ~1.3s)
     if platform == "youtube":
@@ -1252,44 +1384,45 @@ async def api_info(req: InfoRequest):
 
     elif platform == "tiktok":
         try:
-            def _fetch_tt():
-                r = requests.get(f"https://www.tiktok.com/oembed?url={requests.utils.quote(url)}", timeout=2.5)
-                return r.json() if r.status_code == 200 else None
-            odata = await asyncio.to_thread(_fetch_tt)
-            if odata and "title" in odata:
-                fast_title = odata["title"]
-                fast_channel = odata.get("author_name") or "TikTok"
-                if odata.get("thumbnail_url"):
-                    fast_thumb = odata["thumbnail_url"]
+            resolved_url, fast_title, tt_dur, tt_thumb, fast_channel = await asyncio.to_thread(_fetch_tiktok_preview, url)
+            if tt_dur > 0:
+                fast_duration = tt_dur
+            if tt_thumb:
+                fast_thumb = tt_thumb
         except Exception:
             pass
 
     # 2. Extract full info with yt-dlp asynchronously if duration is still missing
     def _extract_ydl():
         opts = get_ytdl_base_opts({"skip_download": True, "noplaylist": True})
-        opts["socket_timeout"] = 6
+        opts["socket_timeout"] = 10 if platform in ("tiktok", "instagram") else 6
+        if platform == "tiktok":
+            opts["http_headers"] = _TIKTOK_BROWSER_HEADERS
         with create_youtube_dl(opts) as ydl:
-            return ydl.extract_info(url, download=False)
+            return ydl.extract_info(resolved_url, download=False)
 
     try:
         ydl_task = asyncio.to_thread(_extract_ydl)
-        timeout_sec = 8.0
+        timeout_sec = 12.0 if platform in ("tiktok", "instagram") else 8.0
         info = await asyncio.wait_for(ydl_task, timeout=timeout_sec)
         dur = info.get("duration") or fast_duration or 0
+        default_channel = "TikTok" if platform == "tiktok" else ("Instagram" if platform == "instagram" else "YouTube")
         return {
             "title": info.get("title") or fast_title or "Video",
             "duration": dur,
             "thumbnail": info.get("thumbnail") or fast_thumb,
             "platform": platform,
-            "channel": info.get("channel") or info.get("uploader") or fast_channel or "YouTube",
+            "channel": info.get("channel") or info.get("uploader") or fast_channel or default_channel,
         }
     except Exception as e:
         if fast_title:
+            default_channel = "TikTok" if platform == "tiktok" else ("Instagram" if platform == "instagram" else "YouTube")
             return {
                 "title": fast_title,
                 "duration": fast_duration,
                 "thumbnail": fast_thumb,
                 "platform": platform,
+                "channel": fast_channel or default_channel,
             }
         detail = str(e)
         lowered = detail.lower()
@@ -2251,6 +2384,7 @@ async def api_process(req: ProcessRequest, background_tasks: BackgroundTasks):
         "id": job_id,
         "url": req.url.strip(),
         "action": req.action,
+        "quality": req.quality,
         "workspace_name": req.workspace_name or "Workspace 01",
         "status": "queued",
         "stage": "queued",
@@ -2295,6 +2429,7 @@ async def api_retry(job_id: str, background_tasks: BackgroundTasks):
     req = _enforce_youtube_short_policy(req)
 
     jobs[job_id].update(
+        quality=req.quality,
         status="queued", stage="queued", stage_detail="", progress=0.0,
         cancelled=False, results=[], error=None, error_detail=None,
     )
@@ -2663,7 +2798,7 @@ async def api_get_settings():
         "openai_model": openai_model(),
         "gemini_api_key": _mask_key(gemini_key),
         "has_gemini_api_key": bool(gemini_key.strip()),
-        "gemini_model": os.getenv("GEMINI_MODEL", "gemini-3.5-flash"),
+        "gemini_model": os.getenv("GEMINI_MODEL", "").strip() or DEFAULT_GEMINI_MODEL,
         "groq_api_key": _mask_key(groq_key),
         "has_groq_api_key": bool(groq_key.strip()),
         "groq_model": os.getenv("GROQ_WHISPER_MODEL", "whisper-large-v3-turbo"),

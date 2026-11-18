@@ -83,6 +83,70 @@ class TestApiInfo(unittest.TestCase):
         self.assertIn("not a supported", friendly_error_message(RuntimeError("Unsupported URL")))
         self.assertEqual(friendly_error_message(RuntimeError("boom")), "boom")
 
+    def test_api_info_tiktok_shortlink_oembed_preview(self):
+        import luna.app as app_module
+
+        redirect_resp = MagicMock()
+        redirect_resp.url = "https://www.tiktok.com/@creator/video/7400000000000000001?is_from_webapp=1"
+
+        oembed_resp = MagicMock()
+        oembed_resp.status_code = 200
+        oembed_resp.json.return_value = {
+            "title": "Fresh TikTok Shortlink Video",
+            "author_name": "Creator One",
+            "thumbnail_url": "https://p16.tiktokcdn.com/thumb.jpg",
+        }
+
+        ydl_ctx = MagicMock()
+        ydl_ctx.__enter__.return_value.extract_info.return_value = {"duration": 27}
+
+        with patch.object(app_module, "external_url_problem", return_value=None), \
+                patch("requests.get", side_effect=[redirect_resp, oembed_resp]) as mock_get, \
+                patch.object(app_module, "create_youtube_dl", return_value=ydl_ctx):
+            res = self.client.post("/api/info", json={"url": "https://vt.tiktok.com/ZS1234567/"})
+
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["title"], "Fresh TikTok Shortlink Video")
+        self.assertEqual(data["platform"], "tiktok")
+        self.assertEqual(data["channel"], "Creator One")
+        self.assertEqual(data["duration"], 27)
+        self.assertEqual(data["thumbnail"], "https://p16.tiktokcdn.com/thumb.jpg")
+        self.assertIn("oembed", mock_get.call_args_list[1][0][0])
+        ydl_ctx.__enter__.return_value.extract_info.assert_called_once_with(redirect_resp.url, download=False)
+
+    def test_api_info_tiktok_html_fallback_when_ytdlp_fails(self):
+        import luna.app as app_module
+
+        redirect_resp = MagicMock()
+        redirect_resp.url = "https://www.tiktok.com/@creator/video/7400000000000000002"
+
+        oembed_400 = MagicMock()
+        oembed_400.status_code = 400
+
+        html_resp = MagicMock()
+        html_resp.status_code = 200
+        html_resp.text = (
+            '<meta property="og:title" content="Fallback HTML Title">'
+            '<meta property="og:image" content="https://p16.tiktokcdn.com/html.jpg">'
+            '{"duration":19,"nickname":"HtmlCreator"}'
+        )
+
+        ydl_ctx = MagicMock()
+        ydl_ctx.__enter__.return_value.extract_info.side_effect = RuntimeError("timed out")
+
+        with patch.object(app_module, "external_url_problem", return_value=None), \
+                patch("requests.get", side_effect=[redirect_resp, oembed_400, html_resp]), \
+                patch.object(app_module, "create_youtube_dl", return_value=ydl_ctx):
+            res = self.client.post("/api/info", json={"url": "https://vm.tiktok.com/ZM999/"})
+
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["title"], "Fallback HTML Title")
+        self.assertEqual(data["duration"], 19)
+        self.assertEqual(data["thumbnail"], "https://p16.tiktokcdn.com/html.jpg")
+        self.assertEqual(data["channel"], "HtmlCreator")
+
     def test_frontend_format_duration_logic(self):
         res = self.client.get("/")
         self.assertEqual(res.status_code, 200)

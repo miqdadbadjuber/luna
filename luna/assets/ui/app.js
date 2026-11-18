@@ -573,24 +573,46 @@ function isYoutubeShortUrl(url) {
   }
 }
 
-function extractVideoInfoInstant(url) {
-  if (!url) return null;
-  const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:shorts\/|watch\?v=|embed\/|v\/|live\/))([a-zA-Z0-9_-]{11})/);
-  if (ytMatch) {
-    return {
-      platform: isYoutubeShortUrl(url) ? 'YouTube Shorts' : 'YouTube',
-      thumbnail: `https://img.youtube.com/vi/${ytMatch[1]}/hqdefault.jpg`,
-      title: 'Loading video title...'
-    };
+const SUPPORTED_MEDIA_DOMAINS = ['youtube.com', 'youtu.be', 'instagram.com', 'instagr.am', 'tiktok.com'];
+const QUALITY_LABELS = { '1080': '1080p FHD', '720': '720p HD', '480': '480p SD', '360': '360p SD' };
+
+function isSupportedMediaHost(hostname) {
+  const host = String(hostname || '').toLowerCase();
+  return SUPPORTED_MEDIA_DOMAINS.some(d => host === d || host.endsWith('.' + d));
+}
+
+function getMediaHost(url) {
+  try {
+    const u = new URL(String(url || '').trim());
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+    return (u.hostname || '').toLowerCase();
+  } catch (_) {
+    return '';
   }
-  if (url.includes('tiktok.com')) {
+}
+
+function extractVideoInfoInstant(url) {
+  if (!isValidMediaUrl(url)) return null;
+  const host = getMediaHost(url);
+  if (host === 'youtube.com' || host.endsWith('.youtube.com') || host === 'youtu.be' || host.endsWith('.youtu.be')) {
+    const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:shorts\/|watch\?v=|embed\/|v\/|live\/))([a-zA-Z0-9_-]{11})/);
+    if (ytMatch) {
+      return {
+        platform: isYoutubeShortUrl(url) ? 'YouTube Shorts' : 'YouTube',
+        thumbnail: `https://img.youtube.com/vi/${ytMatch[1]}/hqdefault.jpg`,
+        title: 'Loading video title...'
+      };
+    }
+    return null;
+  }
+  if (host === 'tiktok.com' || host.endsWith('.tiktok.com')) {
     return {
       platform: 'TikTok',
       thumbnail: null,
       title: 'Loading media title...'
     };
   }
-  if (url.includes('instagram.com') || url.includes('instagr.am')) {
+  if (host === 'instagram.com' || host.endsWith('.instagram.com') || host === 'instagr.am' || host.endsWith('.instagr.am')) {
     return {
       platform: 'Instagram',
       thumbnail: null,
@@ -613,7 +635,7 @@ function formatDuration(seconds) {
 }
 
 function fastPreview(url) {
-  if (!url || !url.startsWith('http')) {
+  if (!isValidMediaUrl(url)) {
     videoInfoCard.classList.add('hidden');
     return;
   }
@@ -634,13 +656,14 @@ function fastPreview(url) {
   }
 
   // Fast instant client-side oEmbed query (sub-100ms) so real title appears immediately
+  const host = getMediaHost(url);
   const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:shorts\/|watch\?v=|embed\/|v\/|live\/))([a-zA-Z0-9_-]{11})/);
-  if (ytMatch) {
+  if ((host === 'youtube.com' || host.endsWith('.youtube.com') || host === 'youtu.be' || host.endsWith('.youtu.be')) && ytMatch) {
     const vidId = ytMatch[1];
     fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${vidId}&format=json`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (data && data.title && mainUrlInput.value.includes(vidId)) {
+        if (data && data.title && mainUrlInput.value.trim() === url) {
           previewTitle.innerText = data.title;
           previewPlatformTag.innerText = isYoutubeShortUrl(url) ? 'YouTube Shorts' : 'YouTube';
           if (data.thumbnail_url) {
@@ -650,11 +673,11 @@ function fastPreview(url) {
         }
       })
       .catch(() => {});
-  } else if (url.includes('tiktok.com')) {
+  } else if ((host === 'tiktok.com' || host.endsWith('.tiktok.com')) && host !== 'vt.tiktok.com' && host !== 'vm.tiktok.com' && !url.includes('/t/')) {
     fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (data && data.title) {
+        if (data && data.title && mainUrlInput.value.trim() === url) {
           previewTitle.innerText = data.title;
           previewPlatformTag.innerText = 'TikTok';
           if (data.thumbnail_url) {
@@ -773,18 +796,20 @@ function syncYoutubeShortState(url) {
 }
 
 function detectUrlPlatform(url) {
-  const lower = String(url || '').toLowerCase();
-  if (lower.includes('tiktok.com')) {
+  const trimmed = String(url || '').trim();
+  const host = getMediaHost(trimmed);
+  const checkHost = host || (!/^https?:\/\//i.test(trimmed) ? trimmed.toLowerCase() : '');
+  if (host === 'tiktok.com' || host.endsWith('.tiktok.com') || (!host && checkHost.includes('tiktok.com'))) {
     isYoutubeShortLocked = false;
     switchPlatform('tiktok', false);
     return;
   }
-  if (lower.includes('instagram.com') || lower.includes('instagr.am')) {
+  if (host === 'instagram.com' || host.endsWith('.instagram.com') || host === 'instagr.am' || host.endsWith('.instagr.am') || (!host && (checkHost.includes('instagram.com') || checkHost.includes('instagr.am')))) {
     isYoutubeShortLocked = false;
     switchPlatform('instagram', false);
     return;
   }
-  if (lower.includes('youtube.com') || lower.includes('youtu.be')) {
+  if (host === 'youtube.com' || host.endsWith('.youtube.com') || host === 'youtu.be' || host.endsWith('.youtu.be') || (!host && (checkHost.includes('youtube.com') || checkHost.includes('youtu.be')))) {
     if (currentPlatform !== 'youtube') {
       switchPlatform('youtube', false);
     }
@@ -799,14 +824,16 @@ function detectUrlPlatform(url) {
 
 let debounceTimer = null;
 let lastUnavailableUrl = '';
-function showUnavailablePreview(message, url) {
+function showUnavailablePreview(message, url, notify = true) {
+  latestVideoTitle = { url: '', title: '' };
+  previewPlatformTag.innerText = 'Unavailable';
   previewTitle.innerText = 'Link unavailable';
   previewDuration.innerText = '';
   previewDuration.classList.add('hidden');
   if (previewBullet) previewBullet.classList.add('hidden');
   if (previewThumb) previewThumb.classList.add('hidden');
   videoInfoCard.classList.remove('hidden');
-  if (url !== lastUnavailableUrl) {
+  if (notify && url !== lastUnavailableUrl) {
     lastUnavailableUrl = url;
     showToast(message, true);
   }
@@ -814,25 +841,61 @@ function showUnavailablePreview(message, url) {
 
 function fetchVideoInfo(url, delay = 150) {
   clearTimeout(debounceTimer);
-  if (!url || !url.startsWith('http')) {
+  const cleanUrl = String(url || '').trim();
+  if (!cleanUrl) {
+    lastUnavailableUrl = '';
     videoInfoCard.classList.add('hidden');
+    return;
+  }
+  if (!/^https?:\/\//i.test(cleanUrl)) {
+    videoInfoCard.classList.add('hidden');
+    if (!/^https?:?\/?\/?$/i.test(cleanUrl) && cleanUrl.length >= 4) {
+      debounceTimer = setTimeout(() => {
+        if (mainUrlInput.value.trim() !== cleanUrl) return;
+        showUnavailablePreview(
+          'Invalid URL. Paste a link starting with https:// from YouTube, Instagram, or TikTok.',
+          cleanUrl,
+          false
+        );
+      }, Math.max(delay, 350));
+    }
+    return;
+  }
+  if (!isValidMediaUrl(cleanUrl)) {
+    videoInfoCard.classList.add('hidden');
+    let hasHostDot = false;
+    try {
+      hasHostDot = new URL(cleanUrl).hostname.includes('.');
+    } catch (_) {}
+    if (hasHostDot) {
+      debounceTimer = setTimeout(() => {
+        if (mainUrlInput.value.trim() !== cleanUrl) return;
+        showUnavailablePreview(
+          'Unsupported URL. Only YouTube, Instagram, and TikTok links are supported.',
+          cleanUrl,
+          true
+        );
+      }, Math.max(delay, 250));
+    }
     return;
   }
   debounceTimer = setTimeout(async () => {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
+    const timeout = setTimeout(() => controller.abort(), 14000);
     try {
       const res = await fetch('/api/info', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url: cleanUrl }),
         signal: controller.signal
       });
+      if (mainUrlInput.value.trim() !== cleanUrl) return;
       if (res.ok) {
         const data = await res.json();
+        if (mainUrlInput.value.trim() !== cleanUrl) return;
         if (data.title && data.title !== 'Media Item') {
           lastUnavailableUrl = '';
-          latestVideoTitle = { url, title: data.title };
+          latestVideoTitle = { url: cleanUrl, title: data.title };
           previewTitle.innerText = data.title;
           const durText = formatDuration(data.duration);
           if (durText) {
@@ -851,14 +914,25 @@ function fetchVideoInfo(url, delay = 150) {
             previewThumb.classList.remove('hidden');
           }
           videoInfoCard.classList.remove('hidden');
-        } else if (data.warning) {
-          showUnavailablePreview(data.warning, url);
+        } else {
+          showUnavailablePreview(
+            data.warning || 'Could not read video details from this link. Check the URL and try again.',
+            cleanUrl
+          );
         }
+      } else {
+        let detailMsg = 'Could not read this link. Make sure it is a supported YouTube, Instagram, or TikTok URL.';
+        try {
+          const errData = await res.json();
+          if (errData && errData.detail) detailMsg = errData.detail;
+        } catch (_) {}
+        showUnavailablePreview(detailMsg, cleanUrl);
       }
     } catch (e) {
+      if (mainUrlInput.value.trim() !== cleanUrl) return;
       showUnavailablePreview(
         'Could not read this link. Check the URL, or copy a fresh link from the app.',
-        url
+        cleanUrl
       );
     } finally {
       clearTimeout(timeout);
@@ -1438,8 +1512,7 @@ function selectVideoFpsFromMenu(fps, label) {
 }
 
 function setQuality(q) {
-  const labels = { '1080': '1080p FHD', '720': '720p HD', '480': '480p SD' };
-  selectQualityFromMenu(q, labels[q] || `${q}p`);
+  selectQualityFromMenu(q, QUALITY_LABELS[q] || `${q}p`);
 }
 
 // Trim Ratio Selector (Chips)
@@ -1656,6 +1729,7 @@ const TASK_CONFIGS = {
 };
 
 let currentActionType = 'type_yt_video';
+let activeTaskQuality = '1080';
 let currentTaskRows = [];
 let highestJobProgress = 0;
 
@@ -1665,18 +1739,30 @@ function isDownloadProgressRow(key, stage) {
   return false;
 }
 
-function initTaskRows(action) {
+function initTaskRows(action, qualityOverride) {
   currentActionType = action || 'type_yt_video';
+  activeTaskQuality = String(qualityOverride || selectedQuality || '1080').trim() || '1080';
+  const qualityBadge = QUALITY_LABELS[activeTaskQuality] || `${activeTaskQuality}p`;
   highestJobProgress = 0;
   const template = TASK_CONFIGS[currentActionType] || TASK_CONFIGS.type_yt_video;
-  currentTaskRows = template.map((t, idx) => ({
-    key: t.key,
-    label: t.label,
-    amount: t.amount,
-    status: idx === 0 ? 'running' : 'pending',
-    step: idx + 1,
-    details: t.details || []
-  }));
+  currentTaskRows = template.map((t, idx) => {
+    let label = t.label;
+    let amount = t.amount;
+    if (currentActionType === 'type_yt_video' && t.key === 'download') {
+      label = `Downloading Video ${activeTaskQuality}p`;
+      amount = qualityBadge;
+    } else if (currentActionType === 'type_yt_ai_clip' && t.key === 'ingest') {
+      amount = qualityBadge;
+    }
+    return {
+      key: t.key,
+      label,
+      amount,
+      status: idx === 0 ? 'running' : 'pending',
+      step: idx + 1,
+      details: t.details || []
+    };
+  });
 
   const container = document.getElementById('taskRowsContainer');
   if (!container) return;
@@ -2077,13 +2163,23 @@ function showConfirmModal(heading, desc, proceedLabel) {
   });
 }
 
+function clearSavedJobStorage() {
+  try {
+    localStorage.removeItem('luna_active_job_id');
+    localStorage.removeItem('luna_active_ws');
+    localStorage.removeItem('luna_active_action');
+    localStorage.removeItem('luna_active_quality');
+  } catch (e) {}
+}
+
 function isValidMediaUrl(str) {
   if (!str) return false;
   const s = str.trim();
   if (!s.startsWith('http://') && !s.startsWith('https://')) return false;
   try {
     const u = new URL(s);
-    return Boolean(u.hostname && u.hostname.includes('.'));
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+    return isSupportedMediaHost(u.hostname);
   } catch (_) {
     return false;
   }
@@ -2450,7 +2546,7 @@ async function executeActualProcess(workspaceName) {
 
     shortsGalleryGrid.innerHTML = '';
 
-    initTaskRows(action);
+    initTaskRows(action, selectedQuality);
     updateProgressUI('queued');
 
     const payload = {
@@ -2485,16 +2581,13 @@ async function executeActualProcess(workspaceName) {
         localStorage.setItem('luna_active_job_id', activeJobId);
         if (workspaceName) localStorage.setItem('luna_active_ws', workspaceName);
         if (action) localStorage.setItem('luna_active_action', action);
+        if (selectedQuality) localStorage.setItem('luna_active_quality', selectedQuality);
       } catch (e) {}
       jobIdPill.innerText = `JOB-${activeJobId}`;
       startPolling(activeJobId);
 
     } catch (err) {
-      try {
-        localStorage.removeItem('luna_active_job_id');
-        localStorage.removeItem('luna_active_ws');
-        localStorage.removeItem('luna_active_action');
-      } catch (e) {}
+      clearSavedJobStorage();
       mainActionBtn.disabled = false;
       mainActionBtn.classList.remove('opacity-50', 'cursor-not-allowed');
       progressStateCard.classList.add('hidden');
@@ -2515,11 +2608,7 @@ function setCancelButtonVisible(visible, label) {
 }
 
 async function cancelActiveJob() {
-  try {
-    localStorage.removeItem('luna_active_job_id');
-    localStorage.removeItem('luna_active_ws');
-    localStorage.removeItem('luna_active_action');
-  } catch (e) {}
+  clearSavedJobStorage();
 
   if (!activeJobId) {
     if (pollInterval) {
@@ -2592,11 +2681,7 @@ function startPolling(jobId) {
       const res = await fetch(`/api/status/${jobId}`);
       // Jobs live in server memory, so a restart loses them and they will never report again.
       if (res.status === 404) {
-        try {
-          localStorage.removeItem('luna_active_job_id');
-          localStorage.removeItem('luna_active_ws');
-          localStorage.removeItem('luna_active_action');
-        } catch (e) {}
+        clearSavedJobStorage();
         clearInterval(pollInterval);
         pollInterval = null;
         if (taskElapsedTimer) {
@@ -2620,11 +2705,7 @@ function startPolling(jobId) {
       }
 
       if (data.status === 'cancelled') {
-        try {
-          localStorage.removeItem('luna_active_job_id');
-          localStorage.removeItem('luna_active_ws');
-          localStorage.removeItem('luna_active_action');
-        } catch (e) {}
+        clearSavedJobStorage();
         clearInterval(pollInterval);
         pollInterval = null;
         if (taskElapsedTimer) {
@@ -2641,11 +2722,7 @@ function startPolling(jobId) {
       updateProgressUI(data.stage, data);
 
       if (data.status === 'completed') {
-        try {
-          localStorage.removeItem('luna_active_job_id');
-          localStorage.removeItem('luna_active_ws');
-          localStorage.removeItem('luna_active_action');
-        } catch (e) {}
+        clearSavedJobStorage();
         clearInterval(pollInterval);
         pollInterval = null;
         if (taskElapsedTimer) {
@@ -2669,11 +2746,7 @@ function startPolling(jobId) {
         mainActionBtn.disabled = false;
         mainActionBtn.classList.remove('opacity-50', 'cursor-not-allowed');
       } else if (data.status === 'failed') {
-        try {
-          localStorage.removeItem('luna_active_job_id');
-          localStorage.removeItem('luna_active_ws');
-          localStorage.removeItem('luna_active_action');
-        } catch (e) {}
+        clearSavedJobStorage();
         clearInterval(pollInterval);
         pollInterval = null;
         if (taskElapsedTimer) {
@@ -2733,7 +2806,7 @@ function updateProgressUI(stage, data) {
   if (currentActionType === 'type_yt_ai_clip') {
     if (stage === 'queued' || stage === 'downloading') {
       stageMainTitle.innerText = 'Downloading source video';
-      stageSubTitle.innerText = 'Downloading the full-resolution video stream';
+      stageSubTitle.innerText = `Downloading the ${activeTaskQuality}p video stream`;
       setTaskStatuses(['running', 'pending', 'pending', 'pending', 'pending'], pData, progressPct);
     } else if (stage === 'checking_transcript') {
       stageMainTitle.innerText = 'Checking transcript';
@@ -2779,8 +2852,8 @@ function updateProgressUI(stage, data) {
         ? 'Downloading audio'
         : (isClip ? 'Downloading source segments' : 'Downloading video');
       stageSubTitle.innerText = isAudio
-        ? 'Downloading bitstream audio fidelitas tinggi'
-        : (isClip ? 'Downloading video segments from the source' : 'Downloading the full-resolution video');
+        ? 'Downloading bitstream audio high fidelity'
+        : (isClip ? 'Downloading video segments from the source' : `Downloading the ${activeTaskQuality}p video`);
       setTaskStatuses(['running', 'pending'], pData, progressPct);
     } else if (stage === 'clipping') {
       stageMainTitle.innerText = 'Trimming video segments';
@@ -8358,9 +8431,7 @@ async function checkAndResumeSavedJob(savedJobId) {
   try {
     const res = await fetch(`/api/status/${savedJobId}`);
     if (!res.ok) {
-      localStorage.removeItem('luna_active_job_id');
-      localStorage.removeItem('luna_active_ws');
-      localStorage.removeItem('luna_active_action');
+      clearSavedJobStorage();
       return;
     }
     const data = await res.json();
@@ -8376,14 +8447,13 @@ async function checkAndResumeSavedJob(savedJobId) {
       }
       setCancelButtonVisible(true, 'Cancel');
       const savedAction = data.action || localStorage.getItem('luna_active_action') || 'type_yt_ai_clip';
+      const savedQuality = data.quality || localStorage.getItem('luna_active_quality') || selectedQuality || '1080';
       currentJobWorkspaceName = data.workspace_name || localStorage.getItem('luna_active_ws') || null;
-      initTaskRows(savedAction);
+      initTaskRows(savedAction, savedQuality);
       updateProgressUI(data.stage || 'queued', data);
       startPolling(savedJobId);
     } else {
-      localStorage.removeItem('luna_active_job_id');
-      localStorage.removeItem('luna_active_ws');
-      localStorage.removeItem('luna_active_action');
+      clearSavedJobStorage();
       // The server restarted while this job ran; it now reports failed and can be retried.
       if (data.status === 'failed' && data.retryable) offerRetry(savedJobId, data.error);
     }

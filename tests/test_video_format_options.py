@@ -155,6 +155,38 @@ class TestVideoFormatOptions(unittest.TestCase):
         )
         self.assertTrue(vert_req.use_face_detect)
 
+    @patch("luna.app._probe_source_height", return_value=480)
+    @patch("luna.app._run_ffmpeg")
+    def test_format_video_target_skips_upscale_below_1080p(self, mock_run, _mock_probe):
+        mock_run.return_value = MagicMock(returncode=0)
+        format_video_target("/fake/path/video480.mp4", ratio="9:16", fps="auto")
+        cmd = mock_run.call_args[0][0]
+        vf_idx = cmd.index("-vf")
+        self.assertEqual(cmd[vf_idx + 1], "crop=trunc(ih*9/16/2)*2:trunc(ih/2)*2,setsar=1")
+        self.assertNotIn("scale=1080:1920", cmd[vf_idx + 1])
+
+    def test_api_process_records_selected_quality_in_job_status(self):
+        from fastapi.testclient import TestClient
+        import luna.app as app_module
+
+        client = TestClient(app_module.app)
+        with patch.object(app_module, "external_url_problem", return_value=None), \
+                patch.object(app_module, "_worker_process"):
+            res = client.post("/api/process", json={
+                "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                "action": "type_yt_video",
+                "quality": "480",
+            })
+            self.assertEqual(res.status_code, 200)
+            job_id = res.json()["job_id"]
+            try:
+                st = client.get(f"/api/status/{job_id}").json()
+                self.assertEqual(st["quality"], "480")
+            finally:
+                app_module.jobs.pop(job_id, None)
+                app_module.job_requests.pop(job_id, None)
+                app_module.job_cancel_events.pop(job_id, None)
+
 
 if __name__ == "__main__":
     unittest.main()
