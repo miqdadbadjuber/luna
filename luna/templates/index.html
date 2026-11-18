@@ -43,7 +43,8 @@
 
 <body class="min-h-screen w-full relative bg-[#0d0d0d] text-zinc-100 selection:bg-white/20 selection:text-white">
 
-  <div id="studioBackgroundContainer">
+  <div id="studioBackgroundContainer" data-bg-mode="fallback">
+    <canvas id="studioFallbackCanvas" aria-hidden="true"></canvas>
     <div data-us-project="N9XzvQXu7fA5SY2ewADJ" data-us-dpi="1" data-us-fps="35" data-us-scale="1" data-us-production="true" data-us-disablemouse="true" data-us-disablemobile="true"></div>
   </div>
 
@@ -957,6 +958,41 @@
           </div>
           <p class="text-[11px] text-zinc-500 -mt-3">Auto uses OpenAI-compatible when its key is set, otherwise Gemini. Local Whisper needs <code class="font-mono text-zinc-400">requirements-whisper.txt</code> installed.</p>
 
+          <!-- Clip Output Language Row -->
+          <div class="space-y-1">
+            <div class="flex items-center justify-between text-xs gap-2">
+              <label class="font-medium text-zinc-200" for="clipLanguageTrigger">Clip Title &amp; Caption Language</label>
+              <span class="text-[11px] text-zinc-500">AI Short Clips</span>
+            </div>
+            <div class="relative" id="clipLanguageMenuWrap">
+              <input type="hidden" id="selectClipLanguage" value="id">
+              <button type="button" id="clipLanguageTrigger" onclick="toggleMenu('clipLanguageTrigger', 'clipLanguageMenu')"
+                aria-haspopup="listbox" aria-expanded="false" aria-controls="clipLanguageMenu"
+                class="t-input w-full px-3 text-xs text-white text-left cursor-pointer">
+                <span id="clipLanguageTriggerLabel" class="font-sans flex-1 min-w-0 truncate">Indonesian</span>
+                <svg class="ml-auto w-3.5 h-3.5 text-zinc-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+
+              <div id="clipLanguageMenu" role="listbox" aria-label="Clip title and caption language"
+                class="hidden fixed z-[140] rounded-xl border border-white/[0.08] bg-[#171717] p-1 shadow-[0_16px_36px_rgba(0,0,0,0.75)] max-h-[280px] overflow-y-auto">
+                <div class="relative z-[2] px-2.5 py-1.5 text-[11px] font-sans text-zinc-500">Language</div>
+
+                <button type="button" role="option" data-value="id" data-label="Indonesian" onclick="setClipLanguage('id')"
+                  class="settings-menu-item relative z-[2] w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs text-zinc-200 transition cursor-pointer">
+                  <span>Indonesian</span>
+                  <svg class="select-check ml-auto w-3.5 h-3.5 text-emerald-400 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                </button>
+
+                <button type="button" role="option" data-value="en" data-label="English" onclick="setClipLanguage('en')"
+                  class="settings-menu-item relative z-[2] w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs text-zinc-200 transition cursor-pointer">
+                  <span>English</span>
+                  <svg class="select-check ml-auto w-3.5 h-3.5 text-emerald-400 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                </button>
+              </div>
+            </div>
+            <p class="text-[11px] text-zinc-500">Default language for generated clip titles and captions. Source video and Workspace titles keep their original language.</p>
+          </div>
+
           <!-- Google Gemini Row -->
           <div class="space-y-1">
             <div class="flex items-center justify-between text-xs">
@@ -1773,6 +1809,25 @@
           </div>
           <p class="font-sans text-[11px] text-zinc-500">New files will be added to the selected workspace folder
             without creating a new folder.</p>
+        </div>
+
+        <!-- AI Clip Language Toggle (AI Short Clips only) -->
+        <div id="wsClipLanguageRow"
+          class="hidden p-3 rounded-xl bg-[#202020]/60 border border-white/[0.06] flex items-center justify-between gap-3 text-xs font-sans">
+          <div class="min-w-0">
+            <div class="text-zinc-300 font-medium">Clip Title &amp; Caption</div>
+            <div class="text-[11px] text-zinc-500">Language for generated AI clips</div>
+          </div>
+          <div class="flex items-center p-0.5 rounded-lg bg-[#171717] border border-white/[0.08] shrink-0" role="group" aria-label="Clip title and caption language">
+            <button type="button" id="wsLangBtnId" onclick="setWorkspaceClipLanguage('id')"
+              class="px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer bg-white/[0.1] text-white shadow-sm">
+              ID
+            </button>
+            <button type="button" id="wsLangBtnEn" onclick="setWorkspaceClipLanguage('en')"
+              class="px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer text-zinc-400 hover:text-white">
+              EN
+            </button>
+          </div>
         </div>
 
         <!-- Target Action Info Summary -->

@@ -143,6 +143,23 @@ class TestHighlights(unittest.TestCase):
         self.assertLessEqual(h["start_time"], 2.6)
         self.assertGreaterEqual(h["end_time"], 18.0)
 
+    def test_clip_language_controls_prompt_instruction(self):
+        seen_id = []
+        seen_en = []
+
+        def cap(bucket):
+            def _fn(prompt):
+                bucket.append(prompt)
+                return json.dumps({"clips": [{"first": 0, "last": 5, "score": 88, "title": "Ok", "caption": "Cap"}]})
+            return _fn
+
+        t = transcript(40)
+        get_highlights(t, num_clips=1, llm_fn=cap(seen_id), clip_language="id")
+        get_highlights(t, num_clips=1, llm_fn=cap(seen_en), clip_language="en")
+        self.assertIn("Indonesian", seen_id[0])
+        self.assertNotIn("strictly in natural English", seen_id[0])
+        self.assertIn("strictly in natural English", seen_en[0])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -134,5 +134,25 @@ class TestApiSettings(unittest.TestCase):
             shutil.rmtree(old_dir, ignore_errors=True)
             shutil.rmtree(new_dir, ignore_errors=True)
 
+    def test_clip_language_setting_roundtrip_and_validation(self):
+        from luna.app import ProcessRequest
+
+        os.environ.pop("CLIP_OUTPUT_LANGUAGE", None)
+        self.assertEqual(self.client.get("/api/settings").json().get("clip_language"), "id")
+
+        res = self.client.post("/api/settings", json={"clip_language": "en"})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(self.client.get("/api/settings").json().get("clip_language"), "en")
+        with open(self.env_path, "r", encoding="utf-8") as f:
+            self.assertIn("CLIP_OUTPUT_LANGUAGE=en", f.read())
+
+        bad = self.client.post("/api/settings", json={"clip_language": "th"})
+        self.assertEqual(bad.status_code, 400)
+
+        req = ProcessRequest(url="https://www.youtube.com/watch?v=dQw4w9WgXcQ", action="type_yt_ai_clip", clip_language="English")
+        self.assertEqual(req.clip_language, "en")
+        with self.assertRaises(ValueError):
+            ProcessRequest(url="https://www.youtube.com/watch?v=dQw4w9WgXcQ", action="type_yt_ai_clip", clip_language="ml")
+
 if __name__ == "__main__":
     unittest.main()

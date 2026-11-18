@@ -19,6 +19,7 @@ def generate_shorts(
     aspect_ratio: str = "9:16",
     download_format: str = "1080",
     language: Optional[str] = None,
+    clip_language: Optional[str] = None,
     use_face_detect: bool = True,
     on_status: Optional[Callable[[str], None]] = None,
     out_dir: Optional[str] = None,
@@ -48,7 +49,9 @@ def generate_shorts(
         raise RuntimeError("CANCELLED_BY_USER")
     if on_status:
         on_status("ranking_highlights")
-    highlights_result = get_highlights(transcript, num_clips=num_clips, llm_fn=call_llm)
+    highlights_result = get_highlights(
+        transcript, num_clips=num_clips, llm_fn=call_llm, clip_language=clip_language
+    )
     all_highlights: List[Dict] = highlights_result.get("highlights", [])
     if not all_highlights:
         raise RuntimeError("Highlight generator returned zero clips.")

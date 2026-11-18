@@ -605,6 +605,7 @@ body.in-workspace main {
 /* Pre-paint hash route guards to eliminate initial Studio flicker before JS mounts */
 html[data-init-route] #section-studio,
 html[data-init-route] #studioBackgroundContainer,
+html[data-init-route] #studioFallbackCanvas,
 html[data-init-route] #curtains-canvas {
   display: none !important;
 }
@@ -2697,7 +2698,7 @@ media-theme-sutro ::-webkit-scrollbar {
   }
 }
 
-/* Studio animated WebGL background container */
+/* Studio animated WebGL background container + local 1:1 Gray Hero Waves fallback */
 #studioBackgroundContainer {
   position: fixed;
   inset: 0;
@@ -2705,6 +2706,9 @@ media-theme-sutro ::-webkit-scrollbar {
   pointer-events: none;
   overflow: hidden;
   background-color: #000000;
+  background-image:
+    radial-gradient(ellipse 80% 42% at 52% 0%, rgba(76, 76, 82, 0.14), transparent 72%),
+    radial-gradient(ellipse 95% 55% at 50% 82%, rgba(56, 56, 62, 0.14), transparent 76%);
   opacity: 1;
   visibility: visible;
   transition: opacity 0.35s ease, visibility 0.35s ease;
@@ -2714,6 +2718,27 @@ media-theme-sutro ::-webkit-scrollbar {
 #studioBackgroundContainer.is-hidden {
   opacity: 0 !important;
   visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+#studioFallbackCanvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.45s ease;
+}
+
+#studioBackgroundContainer[data-bg-mode="fallback"] [data-us-project] {
+  display: none !important;
+}
+
+#studioBackgroundContainer[data-bg-mode="webgl"] #studioFallbackCanvas {
+  opacity: 0 !important;
   pointer-events: none !important;
 }
 
@@ -2741,13 +2766,21 @@ media-theme-sutro ::-webkit-scrollbar {
 body.tab-vault #curtains-canvas,
 body.tab-vault #curtains-canvas canvas,
 body.tab-vault #studioBackgroundContainer,
+body.tab-vault #studioFallbackCanvas,
 body.tab-vault [data-us-project],
 body.tab-vault [data-us-project] canvas,
 body.tab-settings #curtains-canvas,
 body.tab-settings #curtains-canvas canvas,
 body.tab-settings #studioBackgroundContainer,
+body.tab-settings #studioFallbackCanvas,
 body.tab-settings [data-us-project],
-body.tab-settings [data-us-project] canvas {
+body.tab-settings [data-us-project] canvas,
+body.tab-guide #curtains-canvas,
+body.tab-guide #curtains-canvas canvas,
+body.tab-guide #studioBackgroundContainer,
+body.tab-guide #studioFallbackCanvas,
+body.tab-guide [data-us-project],
+body.tab-guide [data-us-project] canvas {
   visibility: hidden !important;
   opacity: 0 !important;
   pointer-events: none !important;

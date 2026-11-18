@@ -63,6 +63,8 @@ from .clipper.clipper import _get_encoder_flags
 from .clipper.config import (
     DEFAULT_GEMINI_MODEL,
     DEFAULT_OPENAI_BASE_URL,
+    clip_language,
+    normalize_clip_language,
     openai_base_url,
     openai_model,
     transcribe_provider,
@@ -1083,6 +1085,7 @@ class ProcessRequest(BaseModel):
     use_face_detect: bool = False
     quality: str = "1080"
     fps: Optional[str] = "auto"
+    clip_language: Optional[str] = None
     start_time: str = "00:00"
     end_time: str = "00:30"
     segments: Optional[List[Dict[str, str]]] = Field(default=None, max_length=20)
@@ -1107,6 +1110,16 @@ class ProcessRequest(BaseModel):
     def _check_fps(cls, value: Optional[str]) -> str:
         cleaned = str(value or "auto").strip()
         return cleaned if cleaned in ("auto", "30", "60") else "auto"
+
+    @field_validator("clip_language")
+    @classmethod
+    def _check_clip_language(cls, value: Optional[str]) -> Optional[str]:
+        if value is None or not str(value).strip():
+            return None
+        normalized = normalize_clip_language(value)
+        if not normalized:
+            raise ValueError("Unsupported clip language; use 'id' or 'en'")
+        return normalized
 
     @field_validator("workspace_name")
     @classmethod
@@ -1877,6 +1890,7 @@ def _worker_process(job_id: str, req: ProcessRequest):
                 aspect_ratio=req.aspect_ratio,
                 download_format=req.quality,
                 language=None,
+                clip_language=req.clip_language or clip_language(),
                 use_face_detect=req.use_face_detect,
                 on_status=on_status,
                 out_dir=job_output_dir,
@@ -2726,6 +2740,7 @@ def _mask_key(value: str) -> str:
 class SettingsUpdateRequest(BaseModel):
     llm_provider: Optional[str] = None
     transcribe_provider: Optional[str] = None
+    clip_language: Optional[str] = None
     openai_api_key: Optional[str] = None
     openai_base_url: Optional[str] = None
     openai_model: Optional[str] = None
@@ -2790,6 +2805,7 @@ async def api_get_settings():
     return {
         "llm_provider": os.getenv("LLM_PROVIDER", "").strip().lower(),
         "transcribe_provider": transcribe_provider(),
+        "clip_language": clip_language(),
         # Secrets are never echoed back; only a hint plus a configured flag.
         "openai_api_key": _mask_key(openai_key),
         "openai_api_key_set": bool(openai_key.strip()),
@@ -2832,6 +2848,11 @@ async def api_save_settings(req: SettingsUpdateRequest):
         if value not in ("groq", "gemini", "whisper"):
             raise HTTPException(status_code=400, detail="Unknown transcription provider")
         updates["LOCAL_TRANSCRIBE_PROVIDER"] = value
+    if req.clip_language is not None:
+        normalized_lang = normalize_clip_language(req.clip_language)
+        if not normalized_lang:
+            raise HTTPException(status_code=400, detail="Unsupported clip language; use 'id' or 'en'")
+        updates["CLIP_OUTPUT_LANGUAGE"] = normalized_lang
     if req.openai_base_url is not None and req.openai_base_url.strip():
         if not req.openai_base_url.strip().startswith(("http://", "https://")):
             raise HTTPException(status_code=400, detail="Base URL must start with http:// or https://")

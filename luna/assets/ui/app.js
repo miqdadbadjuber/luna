@@ -486,6 +486,18 @@ function selectTrimRatioFromMenu(r, label) {
   requestAnimationFrame(alignExtraTrimSegments);
 }
 var currentLang = 'id';
+var selectedClipLanguage = 'id';
+var defaultClipLanguage = 'id';
+
+function setWorkspaceClipLanguage(lang) {
+  selectedClipLanguage = (lang === 'en') ? 'en' : 'id';
+  const btnId = document.getElementById('wsLangBtnId');
+  const btnEn = document.getElementById('wsLangBtnEn');
+  const activeCls = 'px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer bg-white/[0.1] text-white shadow-sm';
+  const idleCls = 'px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer text-zinc-400 hover:text-white';
+  if (btnId) btnId.className = selectedClipLanguage === 'id' ? activeCls : idleCls;
+  if (btnEn) btnEn.className = selectedClipLanguage === 'en' ? activeCls : idleCls;
+}
 
 var activeJobId = null;
 var pollInterval = null;
@@ -2413,6 +2425,15 @@ async function openWorkspaceModal(action) {
     pipelineSummary.innerText = getPipelineLabel(action);
   }
 
+  const clipLangRow = document.getElementById('wsClipLanguageRow');
+  const isAiClipAction = (action === 'type_yt_ai_clip' || action === 'type_ig_ai_clip' || action === 'ai_clip');
+  if (clipLangRow) {
+    clipLangRow.classList.toggle('hidden', !isAiClipAction);
+  }
+  if (isAiClipAction) {
+    setWorkspaceClipLanguage(defaultClipLanguage || 'id');
+  }
+
   let nextNum = nextWorkspaceIndex || 1;
 
   // Refresh vault projects list to have the freshest workspaces
@@ -2558,6 +2579,7 @@ async function executeActualProcess(workspaceName) {
       fps: action === 'type_yt_video' ? selectedVideoFps : 'auto',
       use_face_detect: selectedFaceDetect,
       quality: selectedQuality,
+      clip_language: (action === 'type_yt_ai_clip' || action === 'type_ig_ai_clip' || action === 'ai_clip') ? selectedClipLanguage : undefined,
       start_time: action === 'type_yt_clip' ? (getAllTrimSegments()[0]?.start_time || '00:00') : '00:00',
       end_time: action === 'type_yt_clip' ? (getAllTrimSegments()[0]?.end_time || '00:30') : '00:30',
       segments: action === 'type_yt_clip' ? getAllTrimSegments() : undefined,
@@ -4040,6 +4062,13 @@ function syncTranscribeUI() {
   });
 }
 
+function syncClipLanguageUI() {
+  syncLogoSelect({
+    hiddenId: 'selectClipLanguage', menuId: 'clipLanguageMenu',
+    labelId: 'clipLanguageTriggerLabel',
+  });
+}
+
 function syncModelMenu() {
   syncLogoSelect({
     hiddenId: 'selectOpenaiModel', menuId: 'openaiModelMenu',
@@ -4061,6 +4090,14 @@ function selectTranscribe(value) {
   if (input) input.value = value || '';
   syncTranscribeUI();
   closeMenu('transcribeMenu');
+  syncSettingsDirtyState();
+}
+
+function setClipLanguage(value) {
+  const input = document.getElementById('selectClipLanguage');
+  if (input) input.value = value || 'id';
+  syncClipLanguageUI();
+  closeMenu('clipLanguageMenu');
   syncSettingsDirtyState();
 }
 
@@ -4138,6 +4175,7 @@ window.addEventListener('resize', () => {
 
 syncLlmProviderUI();
 syncTranscribeUI();
+syncClipLanguageUI();
 
 // While "Custom..." is active, the trigger should mirror what is typed.
 const customModelInput = document.getElementById('inputOpenaiModel');
@@ -4160,6 +4198,7 @@ function getSettingsSnapshot() {
     storage_dir: (document.getElementById('inputStorage')?.value || '').trim(),
     llm_provider: document.getElementById('selectLlmProvider')?.value || '',
     transcribe_provider: document.getElementById('selectTranscribeProvider')?.value || '',
+    clip_language: document.getElementById('selectClipLanguage')?.value || 'id',
     openai_base_url: (document.getElementById('inputOpenaiBase')?.value || '').trim(),
     openai_model: (document.getElementById('inputOpenaiModel')?.value || '').trim(),
   };
@@ -4178,6 +4217,7 @@ function revertSettingsToSnapshot() {
     inputStorage: savedSettingsSnapshot.storage_dir,
     selectLlmProvider: savedSettingsSnapshot.llm_provider,
     selectTranscribeProvider: savedSettingsSnapshot.transcribe_provider,
+    selectClipLanguage: savedSettingsSnapshot.clip_language,
     inputOpenaiBase: savedSettingsSnapshot.openai_base_url,
     inputOpenaiModel: savedSettingsSnapshot.openai_model,
   };
@@ -4187,6 +4227,7 @@ function revertSettingsToSnapshot() {
   }
   if (typeof syncLlmProviderUI === 'function') syncLlmProviderUI();
   if (typeof syncTranscribeUI === 'function') syncTranscribeUI();
+  if (typeof syncClipLanguageUI === 'function') syncClipLanguageUI();
   const hiddenModel = document.getElementById('selectOpenaiModel');
   if (hiddenModel) {
     const optionValues = Array.from(document.querySelectorAll('#openaiModelItems [data-value]'))
@@ -4258,9 +4299,12 @@ async function loadSettingsData() {
     const openaiFields = {
       selectLlmProvider: data.llm_provider,
       selectTranscribeProvider: data.transcribe_provider,
+      selectClipLanguage: data.clip_language || 'id',
       inputOpenaiBase: data.openai_base_url,
       inputOpenaiModel: data.openai_model
     };
+    defaultClipLanguage = data.clip_language || 'id';
+    selectedClipLanguage = defaultClipLanguage;
     for (const [id, value] of Object.entries(openaiFields)) {
       const el = document.getElementById(id);
       if (el && value !== undefined) el.value = value;
@@ -4268,6 +4312,7 @@ async function loadSettingsData() {
     // The dropdowns render from their hidden input values.
     if (typeof syncLlmProviderUI === 'function') syncLlmProviderUI();
     if (typeof syncTranscribeUI === 'function') syncTranscribeUI();
+    if (typeof syncClipLanguageUI === 'function') syncClipLanguageUI();
     // Secrets come back masked, never as the key itself. Show the hint as a
     // placeholder and leave the field empty, so saving cannot overwrite the key.
     const inputOpenai = document.getElementById('inputOpenai');
@@ -4337,11 +4382,13 @@ async function saveSettings() {
   }
 
   const isPathChanged = Boolean(currentStorageDir && storageInput.value.trim().toLowerCase() !== currentStorageDir.toLowerCase());
+  const nextClipLang = document.getElementById('selectClipLanguage')?.value || 'id';
   const payload = {
     storage_dir: storageInput.value.trim(),
     migrate_files: isPathChanged,
     llm_provider: document.getElementById('selectLlmProvider')?.value,
     transcribe_provider: document.getElementById('selectTranscribeProvider')?.value,
+    clip_language: nextClipLang,
     openai_base_url: document.getElementById('inputOpenaiBase')?.value.trim(),
     openai_model: document.getElementById('inputOpenaiModel')?.value.trim(),
   };
@@ -4366,6 +4413,8 @@ async function saveSettings() {
     }
 
     currentStorageDir = storageInput.value.trim();
+    defaultClipLanguage = nextClipLang;
+    selectedClipLanguage = nextClipLang;
     savedSettingsSnapshot = getSettingsSnapshot();
     dismissSettingsPromptToast();
 
@@ -8466,6 +8515,18 @@ document.addEventListener('DOMContentLoaded', () => {
   applyRouteFromHash(window.location.hash, { isInitial: true });
   updateTabsPill(true);
   syncFaceDetectLockUI();
+  fetch('/api/settings')
+    .then((res) => (res.ok ? res.json() : null))
+    .then((data) => {
+      if (data && data.clip_language) {
+        defaultClipLanguage = data.clip_language;
+        selectedClipLanguage = data.clip_language;
+        const hidden = document.getElementById('selectClipLanguage');
+        if (hidden) hidden.value = data.clip_language;
+        if (typeof syncClipLanguageUI === 'function') syncClipLanguageUI();
+      }
+    })
+    .catch(() => {});
   if (typeof initAllGlidingIndicators === 'function') {
     initAllGlidingIndicators();
     renderTrimSegments();

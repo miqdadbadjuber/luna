@@ -16,6 +16,7 @@ import re
 import time
 from typing import Callable, Dict, List, Optional
 
+from .config import clip_language as cfg_clip_language, normalize_clip_language
 from .llm import call_llm
 
 LLMFn = Callable[[str], str]
@@ -39,9 +40,7 @@ Pick {count} distinct clips spread across the transcript (return at least {targe
 - does not overlap another clip you pick
 
 Score each clip from 0 to 100 for how likely a stranger is to watch it to the end.
-Write the title and caption in the language the speaker uses. The title is at most
-8 words. The caption is one or two plain sentences for the post, with no hashtags
-and no emoji.
+{language_instruction}
 
 Answer with JSON only, in this shape:
 {{"clips": [{{"first": <segment number>, "last": <segment number>, "score": <0-100>, "title": "...", "caption": "..."}}]}}
@@ -56,7 +55,7 @@ Already selected time ranges (DO NOT repeat or overlap these):
 {picked}
 
 Pick {ask} NEW distinct clips from the unused parts of the transcript (each {low:.0f} to {high:.0f} seconds, complete thoughts, non-overlapping, scored 0-100).
-Write titles (at most 8 words) and captions (1-2 plain sentences, no hashtags, no emoji) in the speaker's language.
+{language_instruction}
 
 Answer with JSON only, in this shape:
 {{"clips": [{{"first": <segment number>, "last": <segment number>, "score": <0-100>, "title": "...", "caption": "..."}}]}}
@@ -64,6 +63,24 @@ Answer with JSON only, in this shape:
 Transcript:
 {lines}
 """
+
+
+def clip_language_instruction(lang: Optional[str] = None) -> str:
+    """Build explicit title/caption output language guidance for 'id' or 'en'."""
+    resolved = normalize_clip_language(lang) or cfg_clip_language()
+    if resolved == "en":
+        return (
+            "Write every clip title (at most 8 words) and caption (1-2 plain sentences, "
+            "no hashtags, no emoji) strictly in natural English. Even if parts of the "
+            "transcript are in another language or non-Latin script, translate and adapt "
+            "the title and caption cleanly into natural English."
+        )
+    return (
+        "Write every clip title (at most 8 words) and caption (1-2 plain sentences, "
+        "no hashtags, no emoji) strictly in natural, engaging Indonesian (Bahasa Indonesia). "
+        "Even if the transcript is in English or uses non-Latin script, translate and adapt "
+        "every clip title and caption cleanly into natural Indonesian."
+    )
 
 _EMOJI = re.compile(
     "[\U0001F000-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF‍️⭐⭕⬛⬜⤴⤵]"
@@ -209,9 +226,15 @@ def _format_window_lines(segments: List[Dict], window: range) -> str:
     )
 
 
-def get_highlights(transcript: Dict, num_clips: int = 3, llm_fn: Optional[LLMFn] = None) -> Dict:
+def get_highlights(
+    transcript: Dict,
+    num_clips: int = 3,
+    llm_fn: Optional[LLMFn] = None,
+    clip_language: Optional[str] = None,
+) -> Dict:
     """Return {"highlights": [...]} sorted by score, best first, filling num_clips when possible."""
     llm_fn = llm_fn or call_llm
+    lang_rule = clip_language_instruction(clip_language)
     segments = [
         {"start": float(s["start"]), "end": float(s["end"]), "text": str(s.get("text", "")).strip()}
         for s in transcript.get("segments", [])
@@ -237,6 +260,7 @@ def get_highlights(transcript: Dict, num_clips: int = 3, llm_fn: Optional[LLMFn]
             target=win_target,
             low=MIN_CLIP_SECONDS,
             high=MAX_CLIP_SECONDS,
+            language_instruction=lang_rule,
             lines=lines,
         )
         try:
@@ -269,6 +293,7 @@ def get_highlights(transcript: Dict, num_clips: int = 3, llm_fn: Optional[LLMFn]
                 picked=picked_lines,
                 low=MIN_CLIP_SECONDS,
                 high=MAX_CLIP_SECONDS,
+                language_instruction=lang_rule,
                 lines=_format_window_lines(segments, window),
             )
             try:

@@ -427,6 +427,31 @@ class TestFrontendVaultUI(unittest.TestCase):
         ):
             self.assertIn(expected, html)
 
+    def test_clip_language_controls_and_hybrid_background_fallback(self):
+        """AI clip language selector (ID/EN) and local 1:1 Studio wave fallback exist cleanly."""
+        html = self.source
+        for expected in (
+            'id="selectClipLanguage"',
+            'id="clipLanguageMenu"',
+            'id="wsClipLanguageRow"',
+            'id="wsLangBtnId"',
+            'id="wsLangBtnEn"',
+            "function setClipLanguage",
+            "function setWorkspaceClipLanguage",
+            'id="studioFallbackCanvas"',
+            "/assets/ui/hero-waves.png",
+        ):
+            self.assertIn(expected, html)
+
+        bg_js = self.client.get("/assets/ui/background.js").text
+        self.assertIn("__isHealthyHardwareWebGL2", bg_js)
+        self.assertIn("__drawStudioFallbackFrame", bg_js)
+        self.assertIn("/assets/ui/hero-waves.png", bg_js)
+
+        img_res = self.client.get("/assets/ui/hero-waves.png")
+        self.assertEqual(img_res.status_code, 200)
+        self.assertGreater(len(img_res.content), 100000)
+
 
 if __name__ == "__main__":
     unittest.main()

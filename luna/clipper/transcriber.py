@@ -253,7 +253,19 @@ def _try_fetch_native_youtube_subtitles(
                 except Exception:
                     pass
             if not target_t:
-                target_t = next(iter(t_list), None)
+                all_tracks = list(t_list)
+                pref_prefixes = (f"{language.lower()}",) if language else ("id", "en")
+                # Prefer ID/EN regional variants (e.g. en-US) and non-generated original tracks
+                # before falling back arbitrarily to the first alphabetical foreign language.
+                target_t = next(
+                    (
+                        tr for tr in all_tracks
+                        if any((getattr(tr, "language_code", "") or "").lower().split("-")[0] == p for p in pref_prefixes)
+                    ),
+                    None,
+                ) or next((tr for tr in all_tracks if not getattr(tr, "is_generated", True)), None) or (
+                    all_tracks[0] if all_tracks else None
+                )
             if target_t:
                 data = target_t.fetch()
                 segments = []
@@ -663,6 +675,7 @@ Return a valid JSON object matching this schema:
 
 Rules:
 - Capture every spoken sentence verbatim with natural sentence breaks.
+- Transcribe faithfully in the spoken language actually heard; never substitute or translate into an unrelated script.
 - Ensure 'start' and 'end' are numbers in seconds (e.g. 0.0, 14.5).
 - Do not skip parts of the audio or summarize.
 - Output pure JSON only.

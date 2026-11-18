@@ -1,4 +1,4 @@
-// Global WebGL Lifecycle Controllers to maximize GPU/CPU efficiency
+// Global Background Lifecycle Controllers (UnicornStudio WebGL2 + 1:1 local Canvas 2D fallback)
 let __unicornLastViewport = { w: window.innerWidth, h: window.innerHeight };
 let __unicornNeedsResize = false;
 
@@ -6,7 +6,207 @@ window.addEventListener('resize', function () {
   __unicornNeedsResize = true;
 });
 
+const __studioFallbackState = {
+  mode: 'fallback',
+  running: false,
+  rafId: null,
+  lastFrameAt: 0,
+  startAt: performance.now(),
+  imgLoaded: false,
+  img: null,
+  wisps: Array.from({ length: 18 }, function (_, idx) {
+    const seed = (idx + 1) * 1.6180339;
+    return {
+      x: 0.22 + ((seed * 37) % 56) / 100,
+      y: 0.04 + ((seed * 23) % 42) / 100,
+      r: 22 + ((idx * 13) % 44),
+      speed: 0.25 + ((idx % 5) * 0.08),
+      phase: seed * 3.14,
+      alpha: 0.02 + ((idx % 4) * 0.012),
+    };
+  }),
+};
+
+function __isStudioTabActive() {
+  if (document.documentElement.hasAttribute('data-init-route')) {
+    return false;
+  }
+  if (document.body && (
+    document.body.classList.contains('tab-vault') ||
+    document.body.classList.contains('tab-settings') ||
+    document.body.classList.contains('tab-guide')
+  )) {
+    return false;
+  }
+  if (typeof currentMainTab !== 'undefined') {
+    return currentMainTab === 'studio';
+  }
+  return true;
+}
+
+function __drawStudioFallbackFrame(nowMs, forceRedraw) {
+  const canvas = document.getElementById('studioFallbackCanvas');
+  if (!canvas) return;
+  const vw = window.innerWidth || 1280;
+  const vh = window.innerHeight || 720;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const targetW = Math.max(1, Math.round(vw * dpr));
+  const targetH = Math.max(1, Math.round(vh * dpr));
+  if (canvas.width !== targetW || canvas.height !== targetH || forceRedraw) {
+    canvas.width = targetW;
+    canvas.height = targetH;
+  }
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  // Layer 0: deep void base
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, vw, vh);
+
+  const elapsed = (nowMs - __studioFallbackState.startAt) * 0.001;
+
+  // Layer 4: soft centered top atmospheric bloom (avoids hard polygon edges)
+  const topBloom = ctx.createRadialGradient(
+    vw * 0.52,
+    vh * 0.01,
+    10,
+    vw * 0.52,
+    vh * 0.04,
+    Math.max(vw * 0.38, vh * 0.48)
+  );
+  topBloom.addColorStop(0, 'rgba(72, 72, 76, 0.30)');
+  topBloom.addColorStop(0.45, 'rgba(48, 48, 52, 0.14)');
+  topBloom.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = topBloom;
+  ctx.fillRect(0, 0, vw, vh * 0.65);
+
+  // Layer 1 + 2: full-resolution local Gray Hero Waves with smooth sinusoidal liquify drift
+  const img = __studioFallbackState.img;
+  if (__studioFallbackState.imgLoaded && img && img.naturalWidth > 0) {
+    const coverScale = Math.max(vw / img.naturalWidth, (vh * 0.72) / img.naturalHeight);
+    const drawW = img.naturalWidth * coverScale;
+    const drawH = img.naturalHeight * coverScale;
+    const baseX = (vw - drawW) * 0.5;
+    const baseY = vh - drawH * 0.94;
+    const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    if (reducedMotion) {
+      ctx.drawImage(img, baseX, baseY, drawW, drawH);
+    } else {
+      const slices = 32;
+      const srcSliceH = img.naturalHeight / slices;
+      const dstSliceH = drawH / slices;
+      for (let i = 0; i < slices; i++) {
+        const frac = i / slices;
+        const dx = Math.sin(elapsed * 0.48 + frac * 4.4) * 14 + Math.cos(elapsed * 0.27 + frac * 2.1) * 6;
+        const dy = Math.cos(elapsed * 0.36 + frac * 3.2) * 4;
+        ctx.drawImage(
+          img,
+          0,
+          i * srcSliceH,
+          img.naturalWidth,
+          Math.min(img.naturalHeight - i * srcSliceH, srcSliceH + 1.5),
+          baseX + dx,
+          baseY + i * dstSliceH + dy,
+          drawW,
+          dstSliceH + 1.5
+        );
+      }
+    }
+    ctx.restore();
+  }
+
+  // Layer 5: soft upper shimmering wisps inside gentle radial falloff
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  __studioFallbackState.wisps.forEach(function (w) {
+    const cx = vw * (w.x + Math.sin(elapsed * w.speed + w.phase) * 0.035);
+    const cy = vh * (w.y + Math.cos(elapsed * w.speed * 0.8 + w.phase) * 0.02);
+    const pulse = 0.65 + 0.35 * Math.sin(elapsed * (w.speed * 2.2) + w.phase);
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, w.r * 1.9);
+    g.addColorStop(0, 'rgba(210, 210, 218, ' + (w.alpha * pulse).toFixed(4) + ')');
+    g.addColorStop(1, 'rgba(210, 210, 218, 0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(cx, cy, w.r * 1.9, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+function __fallbackTick(nowMs) {
+  if (!__studioFallbackState.running) return;
+  __studioFallbackState.rafId = requestAnimationFrame(__fallbackTick);
+  if (nowMs - __studioFallbackState.lastFrameAt < 32) return;
+  __studioFallbackState.lastFrameAt = nowMs;
+  __drawStudioFallbackFrame(nowMs, false);
+}
+
+function __startFallbackLoop() {
+  if (__studioFallbackState.mode !== 'fallback') return;
+  if (!__isStudioTabActive() || document.hidden) return;
+  __drawStudioFallbackFrame(performance.now(), true);
+  const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reducedMotion) return;
+  if (!__studioFallbackState.running) {
+    __studioFallbackState.running = true;
+    __studioFallbackState.lastFrameAt = 0;
+    __studioFallbackState.rafId = requestAnimationFrame(__fallbackTick);
+  }
+}
+
+function __stopFallbackLoop() {
+  __studioFallbackState.running = false;
+  if (__studioFallbackState.rafId !== null) {
+    cancelAnimationFrame(__studioFallbackState.rafId);
+    __studioFallbackState.rafId = null;
+  }
+}
+
+function __setStudioBgMode(mode) {
+  __studioFallbackState.mode = mode;
+  const container = document.getElementById('studioBackgroundContainer');
+  if (container) {
+    container.setAttribute('data-bg-mode', mode);
+  }
+  if (mode === 'webgl') {
+    __stopFallbackLoop();
+  } else {
+    __startFallbackLoop();
+  }
+}
+
+function __isHealthyHardwareWebGL2() {
+  try {
+    const testCanvas = document.createElement('canvas');
+    const gl = testCanvas.getContext('webgl2', { failIfMajorPerformanceCaveat: true });
+    if (!gl) return false;
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    if (dbg) {
+      const renderer = String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '').toLowerCase();
+      if (/swiftshader|llvmpipe|softpipe|microsoft basic render|virtualbox|vbox|vmware|gdi generic/.test(renderer)) {
+        return false;
+      }
+    }
+    // UnicornStudio zoomBlur/liquify/wisps rely on float/half-float render targets
+    if (!gl.getExtension('EXT_color_buffer_float') && !gl.getExtension('EXT_color_buffer_half_float')) {
+      return false;
+    }
+    const extLose = gl.getExtension('WEBGL_lose_context');
+    if (extLose) extLose.loseContext();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 window.pauseUnicornStudio = function () {
+  __stopFallbackLoop();
   try {
     if (window.__unicornScenes && Array.isArray(window.__unicornScenes)) {
       window.__unicornScenes.forEach(function (scene) {
@@ -23,9 +223,12 @@ window.pauseUnicornStudio = function () {
 };
 
 window.resumeUnicornStudio = function () {
+  if (__studioFallbackState.mode !== 'webgl') {
+    __startFallbackLoop();
+  }
   try {
-    if (typeof currentMainTab === 'undefined' || currentMainTab === 'studio') {
-      if (!document.hidden && window.__unicornScenes && Array.isArray(window.__unicornScenes)) {
+    if (__isStudioTabActive() && !document.hidden) {
+      if (window.__unicornScenes && Array.isArray(window.__unicornScenes)) {
         const vw = window.innerWidth;
         const vh = window.innerHeight;
         const shouldResize = __unicornNeedsResize || vw !== __unicornLastViewport.w || vh !== __unicornLastViewport.h;
@@ -38,6 +241,9 @@ window.resumeUnicornStudio = function () {
           } else if (scene && typeof scene.enable === 'function') {
             scene.enable();
           }
+          if (shouldResize && scene && typeof scene.resize === 'function') {
+            scene.resize();
+          }
         });
         __unicornLastViewport = { w: vw, h: vh };
         __unicornNeedsResize = false;
@@ -48,45 +254,103 @@ window.resumeUnicornStudio = function () {
   }
 };
 
-// Automatically pause WebGL rendering when browser tab is inactive / hidden
+// Automatically pause WebGL/Canvas rendering when browser tab is inactive / hidden
 document.addEventListener('visibilitychange', function () {
   if (document.hidden) {
     window.pauseUnicornStudio();
-  } else if (typeof currentMainTab !== 'undefined' && currentMainTab === 'studio') {
+  } else if (__isStudioTabActive()) {
     window.resumeUnicornStudio();
   }
 });
 
+window.addEventListener('resize', function () {
+  if (__studioFallbackState.mode === 'fallback' && __isStudioTabActive()) {
+    __drawStudioFallbackFrame(performance.now(), true);
+  }
+});
+
 !function () {
+  // Always prepare the crisp local Gray Hero Waves renderer immediately
+  const waveImg = new Image();
+  waveImg.onload = function () {
+    __studioFallbackState.imgLoaded = true;
+    if (__studioFallbackState.mode === 'fallback' && __isStudioTabActive()) {
+      __drawStudioFallbackFrame(performance.now(), true);
+    }
+  };
+  waveImg.src = '/assets/ui/hero-waves.png';
+  __studioFallbackState.img = waveImg;
+  __setStudioBgMode('fallback');
+
+  if (!__isHealthyHardwareWebGL2()) {
+    console.info('[Background] Using local Gray Hero Waves fallback (software/non-WebGL2 environment).');
+    return;
+  }
+
   if (!window.UnicornStudio) {
-    window.UnicornStudio = { isInitialized: !1 };
-    var i = document.createElement("script");
-    i.src = "https://cdn.jsdelivr.net/gh/hiunicornstudio/unicornstudio.js@v1.4.30/dist/unicornStudio.umd.js";
-    i.onload = function () {
+    window.UnicornStudio = { isInitialized: false };
+    let settled = false;
+    const watchdog = setTimeout(function () {
+      if (!settled) {
+        settled = true;
+        __setStudioBgMode('fallback');
+      }
+    }, 4500);
+
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/gh/hiunicornstudio/unicornstudio.js@v1.4.30/dist/unicornStudio.umd.js';
+    script.onerror = function () {
+      clearTimeout(watchdog);
+      settled = true;
+      __setStudioBgMode('fallback');
+    };
+    script.onload = function () {
       if (!window.UnicornStudio.isInitialized && window.UnicornStudio.init) {
+        window.UnicornStudio.isInitialized = true;
         window.UnicornStudio.init().then(function (scenes) {
+          clearTimeout(watchdog);
           window.__unicornScenes = scenes;
-          if (window.UnicornStudio && typeof window.UnicornStudio.unbindEvents === 'function') {
-            window.UnicornStudio.unbindEvents();
+          if (!scenes || !scenes.length) {
+            settled = true;
+            __setStudioBgMode('fallback');
+            return;
           }
-          if (scenes && Array.isArray(scenes)) {
-            scenes.forEach(function (scene) {
-              if (scene && scene.interactivity && scene.interactivity.mouse) {
-                scene.interactivity.mouse.disabled = true;
-              }
+          scenes.forEach(function (scene) {
+            if (scene && scene.interactivity && scene.interactivity.mouse) {
+              scene.interactivity.mouse.disabled = true;
+            }
+          });
+          // Verify rendered WebGL canvas actually exists & attach context-loss guard
+          setTimeout(function () {
+            if (settled) return;
+            settled = true;
+            const canvas = document.querySelector('[data-us-project] canvas, #curtains-canvas canvas, #curtains-canvas');
+            if (!canvas) {
+              __setStudioBgMode('fallback');
+              return;
+            }
+            const rect = canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : { width: canvas.width || 0, height: canvas.height || 0 };
+            if (rect.width < 100 || rect.height < 100) {
+              __setStudioBgMode('fallback');
+              return;
+            }
+            canvas.addEventListener('webglcontextlost', function () {
+              __setStudioBgMode('fallback');
             });
-          }
-          // If loaded while on non-studio tab, pause WebGL drawing immediately
-          if (typeof currentMainTab !== 'undefined' && currentMainTab !== 'studio') {
-            window.pauseUnicornStudio();
-          }
+            __setStudioBgMode('webgl');
+            if (!__isStudioTabActive()) {
+              window.pauseUnicornStudio();
+            }
+          }, 150);
         }).catch(function (e) {
+          clearTimeout(watchdog);
+          settled = true;
           console.warn('[UnicornStudio]', e);
+          __setStudioBgMode('fallback');
         });
-        window.UnicornStudio.isInitialized = !0;
       }
     };
-    (document.head || document.body).appendChild(i);
+    (document.head || document.body).appendChild(script);
   }
 }();
 
