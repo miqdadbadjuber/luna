@@ -130,13 +130,14 @@ class TestVideoFormatOptions(unittest.TestCase):
         normalized = _enforce_youtube_short_policy(video_req)
         self.assertEqual(normalized.aspect_ratio, "original")
 
-        ai_req = ProcessRequest(
-            url="https://www.youtube.com/shorts/dQw4w9WgXcQ",
-            action="type_yt_ai_clip",
-        )
-        with self.assertRaises(HTTPException) as ctx:
-            _enforce_youtube_short_policy(ai_req)
-        self.assertEqual(ctx.exception.status_code, 400)
+        for blocked_action in ("type_yt_ai_clip", "type_yt_clip", "manual_clip"):
+            blocked_req = ProcessRequest(
+                url="https://www.youtube.com/shorts/dQw4w9WgXcQ",
+                action=blocked_action,
+            )
+            with self.assertRaises(HTTPException) as ctx:
+                _enforce_youtube_short_policy(blocked_req)
+            self.assertEqual(ctx.exception.status_code, 400)
 
     def test_process_request_disables_face_detect_for_16_9_and_original(self):
         wide_req = ProcessRequest(

@@ -375,16 +375,22 @@ class TestFrontendVaultUI(unittest.TestCase):
         self.assertNotIn(".button-wrapper", css)
 
     def test_youtube_shorts_autodetect_locks_ratio_and_ai_clip(self):
-        """YouTube Shorts links auto-select Full HD Video and lock ratio + AI Short Clips."""
+        """YouTube Shorts links auto-select Full HD Video and lock ratio + AI Short Clips + Video Trimmer."""
         html = self.source
         for expected in (
             "function isYoutubeShortUrl",
             "function syncYoutubeShortState",
             "function syncYoutubeShortLockUI",
+            "YOUTUBE_SHORT_LOCKED_FEATURES",
+            "Video Trimmer is unavailable for YouTube Shorts",
+            "short-lock-icon",
+            "pill-lock-icon",
             "isYoutubeShortLocked",
             "type_yt_video",
+            "type_yt_clip",
         ):
             self.assertIn(expected, html)
+        self.assertNotIn("Shorts N/A", html)
 
     def test_main_tabs_and_guide_subtabs_sync_url_hash(self):
         """Main tabs and Guide sub-tabs must sync location.hash so refreshes keep the active route."""
@@ -406,14 +412,24 @@ class TestFrontendVaultUI(unittest.TestCase):
         self.assertIn("updateTabsPill(immediatePill)", html)
 
     def test_16_9_ratio_locks_face_detect_ui(self):
-        """Selecting 16:9 Wide must lock Face Track back to Center Crop."""
+        """Selecting 16:9 Wide must lock Face Track back to Center Crop, hide chevron cleanly, and show lock icon."""
         html = self.source
         for expected in (
             "function syncFaceDetectLockUI",
             "Face Track is unavailable for 16:9 Wide ratio",
             "syncFaceDetectLockUI();",
+            "pill-lock-icon",
         ):
             self.assertIn(expected, html)
+
+        css = self.client.get("/assets/ui/luna.css").text
+        for expected_css in (
+            ".pill-control svg.hidden",
+            '.pill-control.is-locked svg[id$="Chevron"]',
+            ".pill-control.is-locked .pill-lock-icon",
+            ".sub-menu-item.is-disabled .short-lock-icon",
+        ):
+            self.assertIn(expected_css, css)
 
     def test_strict_url_validation_and_dynamic_quality_status(self):
         """Frontend URL validation restricts supported domains and task labels reflect selected quality."""

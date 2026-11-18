@@ -725,6 +725,21 @@ mainUrlInput.addEventListener('keydown', (e) => {
   }
 });
 
+const LUNA_LOCK_ICON_PATHS = '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path>';
+
+const YOUTUBE_SHORT_LOCKED_FEATURES = {
+  type_yt_ai_clip: 'AI Short Clips is unavailable for YouTube Shorts',
+  type_yt_clip: 'Video Trimmer is unavailable for YouTube Shorts',
+};
+
+function createLockBadgeElement(wrapperClass, svgClass) {
+  const badge = document.createElement('span');
+  badge.className = wrapperClass;
+  badge.setAttribute('aria-hidden', 'true');
+  badge.innerHTML = `<svg viewBox="0 0 24 24" class="${svgClass}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${LUNA_LOCK_ICON_PATHS}</svg>`;
+  return badge;
+}
+
 function syncRatioControlLock(btnId, chevId, locked, lockTitle = 'YouTube Shorts always use Original ratio') {
   const btn = document.getElementById(btnId);
   const chev = document.getElementById(chevId);
@@ -737,17 +752,26 @@ function syncRatioControlLock(btnId, chevId, locked, lockTitle = 'YouTube Shorts
     } else {
       btn.removeAttribute('title');
     }
+    const existingLock = btn.querySelector('.pill-lock-icon');
+    if (locked && !existingLock) {
+      btn.appendChild(createLockBadgeElement('pill-lock-icon', 'w-2.5 h-2.5'));
+    } else if (!locked && existingLock) {
+      existingLock.remove();
+    }
   }
   if (chev) chev.classList.toggle('hidden', locked);
 }
 
 function syncFaceDetectLockUI() {
   const locked = selectedRatio === '16:9' || selectedRatio === 'original';
+  const lockTitle = selectedRatio === 'original'
+    ? 'Face Track is unavailable for Original ratio'
+    : 'Face Track is unavailable for 16:9 Wide ratio';
   syncRatioControlLock(
     'faceDetectDropdownBtn',
     'faceChevron',
     locked,
-    'Face Track is unavailable for 16:9 Wide ratio'
+    lockTitle
   );
   if (locked) {
     if (selectedFaceDetect) selectFaceDetectFromMenu(false, 'Center Crop');
@@ -759,25 +783,25 @@ function syncFaceDetectLockUI() {
 }
 
 function syncSubFeatureShortLockUI() {
-  const aiItem = document.querySelector('#subFeatureMenu .sub-menu-item[data-sub="type_yt_ai_clip"]');
-  if (!aiItem) return;
   const locked = Boolean(isYoutubeShortLocked && currentPlatform === 'youtube');
-  aiItem.classList.toggle('is-disabled', locked);
-  aiItem.setAttribute('aria-disabled', locked ? 'true' : 'false');
-  if (locked) {
-    aiItem.setAttribute('title', 'AI Short Clips is unavailable for YouTube Shorts');
-  } else {
-    aiItem.removeAttribute('title');
-  }
-  const existingTag = aiItem.querySelector('.short-lock-tag');
-  if (locked && !existingTag) {
-    const tag = document.createElement('span');
-    tag.className = 'short-lock-tag ml-auto text-[10px] text-zinc-500 font-mono pl-2';
-    tag.textContent = 'Shorts N/A';
-    aiItem.appendChild(tag);
-  } else if (!locked && existingTag) {
-    existingTag.remove();
-  }
+  Object.entries(YOUTUBE_SHORT_LOCKED_FEATURES).forEach(([subId, lockTitle]) => {
+    const item = document.querySelector(`#subFeatureMenu .sub-menu-item[data-sub="${subId}"]`);
+    if (!item) return;
+    item.classList.toggle('is-disabled', locked);
+    item.setAttribute('aria-disabled', locked ? 'true' : 'false');
+    if (locked) {
+      item.setAttribute('title', lockTitle);
+    } else {
+      item.removeAttribute('title');
+    }
+    item.querySelector('.short-lock-tag')?.remove();
+    const existingLock = item.querySelector('.short-lock-icon');
+    if (locked && !existingLock) {
+      item.appendChild(createLockBadgeElement('short-lock-icon ml-auto flex items-center text-zinc-500 shrink-0', 'w-3 h-3'));
+    } else if (!locked && existingLock) {
+      existingLock.remove();
+    }
+  });
 }
 
 function syncYoutubeShortLockUI() {
@@ -801,7 +825,11 @@ function syncYoutubeShortState(url) {
   const becameShort = !isYoutubeShortLocked && nextShort;
   isYoutubeShortLocked = nextShort;
 
-  if (nextShort && currentPlatform === 'youtube' && (becameShort || currentYtSub === 'type_yt_ai_clip')) {
+  if (
+    nextShort &&
+    currentPlatform === 'youtube' &&
+    (becameShort || Object.prototype.hasOwnProperty.call(YOUTUBE_SHORT_LOCKED_FEATURES, currentYtSub))
+  ) {
     selectSubFeature('type_yt_video', false);
   }
   syncYoutubeShortLockUI();
@@ -1145,7 +1173,11 @@ function populateSubFeatureMenu(plat) {
 }
 
 function selectSubFeature(subId, closeMenu = true) {
-  if (isYoutubeShortLocked && currentPlatform === 'youtube' && subId === 'type_yt_ai_clip') {
+  if (
+    isYoutubeShortLocked &&
+    currentPlatform === 'youtube' &&
+    Object.prototype.hasOwnProperty.call(YOUTUBE_SHORT_LOCKED_FEATURES, subId)
+  ) {
     return;
   }
   if (currentPlatform === 'youtube') currentYtSub = subId;

@@ -175,6 +175,25 @@ body {
   transition: transform var(--morph-open-dur) var(--morph-ease) !important;
 }
 
+.pill-control .hidden,
+.pill-control svg.hidden,
+#platformDropdownBtn .hidden,
+#platformDropdownBtn svg.hidden,
+.pill-control.is-locked .pill-chevron,
+.pill-control.is-locked [data-lucide="chevron-down"],
+.pill-control.is-locked svg.lucide-chevron-down,
+.pill-control.is-locked svg[id$="Chevron"] {
+  display: none !important;
+}
+
+.pill-control.is-locked .pill-lock-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #71717a;
+  flex-shrink: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
 
   .popover-menu,
@@ -363,7 +382,10 @@ body {
   cursor: not-allowed !important;
 }
 
-.sub-menu-item.is-disabled:hover .sub-item-title {
+.sub-menu-item.is-disabled:hover .sub-item-title,
+.sub-menu-item.is-disabled .short-lock-icon,
+.sub-menu-item.is-disabled .short-lock-icon svg,
+.sub-menu-item.is-disabled:hover .short-lock-icon svg {
   color: #71717a !important;
 }
 

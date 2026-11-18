@@ -550,15 +550,22 @@ def is_youtube_short_url(url: str) -> bool:
     return bool(_YOUTUBE_SHORT_PATH_RE.match(path))
 
 
+_SHORT_BLOCKED_ACTIONS = {
+    "type_yt_ai_clip": "AI Short Clips is unavailable for YouTube Shorts. Use Full HD Video instead.",
+    "type_ig_ai_clip": "AI Short Clips is unavailable for YouTube Shorts. Use Full HD Video instead.",
+    "ai_clip": "AI Short Clips is unavailable for YouTube Shorts. Use Full HD Video instead.",
+    "type_yt_clip": "Video Trimmer is unavailable for YouTube Shorts. Use Full HD Video instead.",
+    "manual_clip": "Video Trimmer is unavailable for YouTube Shorts. Use Full HD Video instead.",
+}
+
+
 def _enforce_youtube_short_policy(req: "ProcessRequest") -> "ProcessRequest":
-    """Reject AI clipping on YouTube Shorts and lock output aspect ratio to original."""
+    """Reject AI clipping and Video Trimmer on YouTube Shorts and lock output aspect ratio to original."""
     if not is_youtube_short_url(req.url):
         return req
-    if req.action in ("type_yt_ai_clip", "type_ig_ai_clip", "ai_clip"):
-        raise HTTPException(
-            status_code=400,
-            detail="AI Short Clips is unavailable for YouTube Shorts. Use Full HD Video instead.",
-        )
+    detail = _SHORT_BLOCKED_ACTIONS.get(req.action)
+    if detail:
+        raise HTTPException(status_code=400, detail=detail)
     if req.aspect_ratio != "original":
         return req.model_copy(update={"aspect_ratio": "original"})
     return req
