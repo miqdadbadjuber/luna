@@ -38,6 +38,31 @@
       else if (h === '#guide' || h.indexOf('#guide/') === 0) r = 'guide';
       if (r) document.documentElement.setAttribute('data-init-route', r);
     })();
+    (function () {
+      var TARGET_BASE_WIDTH = 1150; // Matches 125% Chrome scale baseline (~1150px CSS viewport)
+      var TARGET_MIN_HEIGHT = 610;  // Keeps short screens from clipping vertically
+      var MAX_UI_ZOOM = 1.85;       // Covers down to ~90% zoom on 100% 1080p displays
+      function applyLunaUiScale() {
+        var vw = window.innerWidth || document.documentElement.clientWidth || TARGET_BASE_WIDTH;
+        var vh = window.innerHeight || document.documentElement.clientHeight || TARGET_MIN_HEIGHT;
+        var zoom = 1;
+        if (vw > TARGET_BASE_WIDTH) {
+          var byWidth = vw / TARGET_BASE_WIDTH;
+          var byHeight = Math.max(1, vh / TARGET_MIN_HEIGHT);
+          zoom = Math.min(MAX_UI_ZOOM, byWidth, byHeight);
+          zoom = Math.round(zoom * 1000) / 1000;
+        }
+        document.documentElement.style.setProperty('--luna-ui-zoom', String(zoom));
+        document.documentElement.style.zoom = String(zoom);
+      }
+      window.__lunaApplyUiScale = applyLunaUiScale;
+      window.__getLunaUiScale = function () {
+        var z = parseFloat(document.documentElement.style.zoom || '1');
+        return (!isNaN(z) && z > 0) ? z : 1;
+      };
+      applyLunaUiScale();
+      window.addEventListener('resize', applyLunaUiScale);
+    })();
   </script>
 </head>
 

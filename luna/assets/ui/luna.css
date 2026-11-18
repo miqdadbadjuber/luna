@@ -32,6 +32,7 @@ body {
   background-color: var(--color-void);
   color: #ffffff;
   font-family: 'Inter', sans-serif;
+  min-height: calc(100vh / var(--luna-ui-zoom, 1)) !important;
   overflow-x: hidden;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -611,7 +612,7 @@ body {
   transform: translateX(-50%);
   z-index: 50;
   width: max-content;
-  max-width: calc(100vw - 32px);
+  max-width: calc((100vw / var(--luna-ui-zoom, 1)) - 32px);
   pointer-events: auto;
 }
 
@@ -978,6 +979,7 @@ html[data-init-route="guide"] #section-guide {
   position: fixed;
   inset: 0;
   z-index: 1;
+  zoom: calc(1 / var(--luna-ui-zoom, 1));
   pointer-events: none;
   opacity: 0.025;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
@@ -2724,6 +2726,7 @@ media-theme-sutro ::-webkit-scrollbar {
   position: fixed;
   inset: 0;
   z-index: 0;
+  zoom: calc(1 / var(--luna-ui-zoom, 1));
   pointer-events: none;
   overflow: hidden;
   background-color: #000000;

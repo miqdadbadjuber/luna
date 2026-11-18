@@ -481,6 +481,30 @@ class TestFrontendVaultUI(unittest.TestCase):
         ):
             self.assertIn(expected, html)
 
+    def test_viewport_ui_scale_normalization_preserves_1536_baseline(self):
+        """Desktop UI zoom normalization locks 90%/100%/110% scale proportions to 125% (1150px) baseline without scaling WebGL bg."""
+        html = self.source
+        for expected in (
+            "var TARGET_BASE_WIDTH = 1150;",
+            "var TARGET_MIN_HEIGHT = 610;",
+            "window.__lunaApplyUiScale = applyLunaUiScale;",
+            "window.__getLunaUiScale",
+            "--luna-ui-zoom",
+            "function getLunaUiScale()",
+        ):
+            self.assertIn(expected, html)
+
+        css = self.client.get("/assets/ui/luna.css").text
+        for expected_css in (
+            "min-height: calc(100vh / var(--luna-ui-zoom, 1)) !important;",
+            "zoom: calc(1 / var(--luna-ui-zoom, 1));",
+            "max-width: calc((100vw / var(--luna-ui-zoom, 1)) - 32px);",
+        ):
+            self.assertIn(expected_css, css)
+
+        bg_js = self.client.get("/assets/ui/background.js").text
+        self.assertIn("__getLunaUiScale", bg_js)
+
 
 if __name__ == "__main__":
     unittest.main()

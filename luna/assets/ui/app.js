@@ -173,15 +173,20 @@ function renderTrimSegments() {
   }
 }
 
+function getLunaUiScale() {
+  return typeof window.__getLunaUiScale === 'function' ? window.__getLunaUiScale() : 1;
+}
+
 function alignExtraTrimSegments() {
   const startPill = document.getElementById('trimStartPill_0');
   const wrapper = document.getElementById('trimExtraSegmentsWrapper');
   const container = document.getElementById('mainInputCapsuleContainer');
   if (!startPill || !wrapper || !container) return;
 
+  const uiZoom = getLunaUiScale();
   const startRect = startPill.getBoundingClientRect();
   const containerRect = container.getBoundingClientRect();
-  const offsetLeft = Math.max(0, Math.round(startRect.left - containerRect.left));
+  const offsetLeft = Math.max(0, Math.round((startRect.left - containerRect.left) / uiZoom));
 
   wrapper.querySelectorAll('.trim-extra-row').forEach(row => {
     row.style.paddingLeft = `${offsetLeft}px`;
@@ -3990,15 +3995,22 @@ async function saveProviderKey(provider) {
 const openMenus = new Map(); // menuId -> triggerId
 
 function positionMenu(trigger, menu) {
+  const uiZoom = getLunaUiScale();
   const rect = trigger.getBoundingClientRect();
+  const vpW = window.innerWidth / uiZoom;
+  const vpH = window.innerHeight / uiZoom;
+  const rLeft = rect.left / uiZoom;
+  const rTop = rect.top / uiZoom;
+  const rBottom = rect.bottom / uiZoom;
+  const rWidth = rect.width / uiZoom;
   const menuHeight = Math.min(280, menu.scrollHeight || 180);
-  const menuWidth = Math.max(rect.width, 200);
-  const roomBelow = window.innerHeight - rect.bottom;
+  const menuWidth = Math.max(rWidth, 200);
+  const roomBelow = vpH - rBottom;
   menu.style.width = `${menuWidth}px`;
-  menu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8))}px`;
+  menu.style.left = `${Math.max(8, Math.min(rLeft, vpW - menuWidth - 8))}px`;
   menu.style.top = roomBelow < menuHeight + 16
-    ? `${Math.max(8, rect.top - menuHeight - 6)}px`
-    : `${rect.bottom + 6}px`;
+    ? `${Math.max(8, rTop - menuHeight - 6)}px`
+    : `${rBottom + 6}px`;
 }
 
 function closeMenu(menuId) {
@@ -5567,15 +5579,21 @@ function openVaultMoreMenu(context, btn, event) {
   btn.setAttribute('aria-expanded', 'true');
   attachVaultCardMenuGliding(menu);
 
+  const uiZoom = getLunaUiScale();
   const rect = btn.getBoundingClientRect();
+  const vpW = window.innerWidth / uiZoom;
+  const vpH = window.innerHeight / uiZoom;
+  const rRight = rect.right / uiZoom;
+  const rTop = rect.top / uiZoom;
+  const rBottom = rect.bottom / uiZoom;
   const menuW = menu.offsetWidth || 148;
   const menuH = menu.offsetHeight || 114;
   const gap = 6;
-  const left = Math.max(8, Math.min(rect.right - menuW, window.innerWidth - menuW - 8));
-  let top = rect.bottom + gap;
+  const left = Math.max(8, Math.min(rRight - menuW, vpW - menuW - 8));
+  let top = rBottom + gap;
   let placement = 'bottom';
-  if (top + menuH > window.innerHeight - 8 && rect.top - gap - menuH >= 8) {
-    top = rect.top - gap - menuH;
+  if (top + menuH > vpH - 8 && rTop - gap - menuH >= 8) {
+    top = rTop - gap - menuH;
     placement = 'top';
   }
   menu.style.left = `${Math.round(left)}px`;
@@ -7105,8 +7123,9 @@ function initClipperDraggable(nodeEl) {
     if (!isDragging) return;
     const dist = Math.hypot(e.clientX - startX, e.clientY - startY);
     if (dist > 3) hasMoved = true;
-    const dx = initialDx + (e.clientX - startX) / clipperZoom;
-    const dy = initialDy + (e.clientY - startY) / clipperZoom;
+    const totalZoom = clipperZoom * getLunaUiScale();
+    const dx = initialDx + (e.clientX - startX) / totalZoom;
+    const dy = initialDy + (e.clientY - startY) / totalZoom;
     clipperNodeOffsets[nodeEl.id] = { dx, dy };
     nodeEl.style.transform = `translate(${dx}px, ${dy}px)`;
     requestAnimationFrame(drawClipperConnectors);
@@ -7147,13 +7166,14 @@ function drawClipperConnectors() {
   svg.innerHTML = '';
 
   function getNodeBox(el) {
+    const totalZoom = clipperZoom * getLunaUiScale();
     const canvasRect = scrollCanvas.getBoundingClientRect();
     const r = el.getBoundingClientRect();
     return {
-      x: (r.left - canvasRect.left) / clipperZoom,
-      y: (r.top - canvasRect.top) / clipperZoom,
-      w: r.width / clipperZoom,
-      h: r.height / clipperZoom
+      x: (r.left - canvasRect.left) / totalZoom,
+      y: (r.top - canvasRect.top) / totalZoom,
+      w: r.width / totalZoom,
+      h: r.height / totalZoom
     };
   }
 
@@ -7248,7 +7268,7 @@ window.toggleClipCaption = function (idx, event) {
         const nodeRect = node.getBoundingClientRect();
         const triggerRect = trigger.getBoundingClientRect();
         const zoom = (typeof clipperZoom === 'number' && clipperZoom > 0) ? clipperZoom : 1;
-        top = (triggerRect.top - nodeRect.top) / zoom;
+        top = (triggerRect.top - nodeRect.top) / (zoom * getLunaUiScale());
       }
       const triggerCenterY = top + (trigger.offsetHeight / 2);
       popover.style.top = `${Math.round(triggerCenterY)}px`;
@@ -7663,6 +7683,7 @@ let clipperPanX = 0, clipperPanY = 0, clipperZoom = 1;
     const vp = getRefs();
 
     // Spotlight cursor position tracking
+    const uiZoom = getLunaUiScale();
     if (vp) {
       const rect = vp.getBoundingClientRect();
       if (
@@ -7671,8 +7692,8 @@ let clipperPanX = 0, clipperPanY = 0, clipperZoom = 1;
         e.clientY >= rect.top &&
         e.clientY <= rect.bottom
       ) {
-        const mx = e.clientX - rect.left;
-        const my = e.clientY - rect.top;
+        const mx = (e.clientX - rect.left) / uiZoom;
+        const my = (e.clientY - rect.top) / uiZoom;
         if (spotlightRaf) cancelAnimationFrame(spotlightRaf);
         spotlightRaf = requestAnimationFrame(function () {
           vp.style.setProperty('--mouse-x', mx + 'px');
@@ -7685,8 +7706,8 @@ let clipperPanX = 0, clipperPanY = 0, clipperZoom = 1;
     }
 
     if (!isPanning) return;
-    clipperPanX = panOriginX + (e.clientX - panStartX);
-    clipperPanY = panOriginY + (e.clientY - panStartY);
+    clipperPanX = panOriginX + (e.clientX - panStartX) / uiZoom;
+    clipperPanY = panOriginY + (e.clientY - panStartY) / uiZoom;
     applyTransform();
   });
 
@@ -7708,9 +7729,10 @@ let clipperPanX = 0, clipperPanY = 0, clipperZoom = 1;
     if (!e.ctrlKey && !e.metaKey) return;
     e.preventDefault();
 
+    const uiZoom = getLunaUiScale();
     const rect = viewport.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
+    const mx = (e.clientX - rect.left) / uiZoom;
+    const my = (e.clientY - rect.top) / uiZoom;
 
     const oldZoom = clipperZoom;
     const delta = e.deltaY > 0 ? -0.08 : 0.08;
@@ -7729,8 +7751,9 @@ let clipperPanX = 0, clipperPanY = 0, clipperZoom = 1;
   window.clipperZoomIn = function () {
     closeVaultCardMenu();
     getRefs();
+    const uiZoom = getLunaUiScale();
     const rect = viewport.getBoundingClientRect();
-    const cx = rect.width / 2, cy = rect.height / 2;
+    const cx = rect.width / (2 * uiZoom), cy = rect.height / (2 * uiZoom);
     const oldZoom = clipperZoom;
     clipperZoom = Math.min(clipperZoom + 0.15, 2.5);
     const ratio = clipperZoom / oldZoom;
@@ -7742,8 +7765,9 @@ let clipperPanX = 0, clipperPanY = 0, clipperZoom = 1;
   window.clipperZoomOut = function () {
     closeVaultCardMenu();
     getRefs();
+    const uiZoom = getLunaUiScale();
     const rect = viewport.getBoundingClientRect();
-    const cx = rect.width / 2, cy = rect.height / 2;
+    const cx = rect.width / (2 * uiZoom), cy = rect.height / (2 * uiZoom);
     const oldZoom = clipperZoom;
     clipperZoom = Math.max(clipperZoom - 0.15, 0.3);
     const ratio = clipperZoom / oldZoom;

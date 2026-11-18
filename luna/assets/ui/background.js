@@ -940,24 +940,25 @@ function drawGuideFlowConnectors(canvas) {
   mkArrow(dashedId, '#a3a3a3');
   svg.appendChild(defs);
 
+  const uiZoom = (typeof window.__getLunaUiScale === 'function') ? window.__getLunaUiScale() : 1;
   const sRect = stage.getBoundingClientRect();
   const rects = {};
   stage.querySelectorAll('[data-sl-id]').forEach(el => {
     const r = el.getBoundingClientRect();
     rects[el.dataset.slId] = {
       el,
-      left: r.left - sRect.left,
-      right: r.right - sRect.left,
-      top: r.top - sRect.top,
-      bottom: r.bottom - sRect.top,
-      cx: (r.left + r.right) / 2 - sRect.left,
-      cy: (r.top + r.bottom) / 2 - sRect.top,
+      left: (r.left - sRect.left) / uiZoom,
+      right: (r.right - sRect.left) / uiZoom,
+      top: (r.top - sRect.top) / uiZoom,
+      bottom: (r.bottom - sRect.top) / uiZoom,
+      cx: ((r.left + r.right) / 2 - sRect.left) / uiZoom,
+      cy: ((r.top + r.bottom) / 2 - sRect.top) / uiZoom,
     };
   });
 
   const gapEl = stage.querySelector('.sl-lane-gap');
   const gapMidY = gapEl
-    ? (gapEl.getBoundingClientRect().top + gapEl.getBoundingClientRect().bottom) / 2 - sRect.top
+    ? ((gapEl.getBoundingClientRect().top + gapEl.getBoundingClientRect().bottom) / 2 - sRect.top) / uiZoom
     : h / 2;
 
   mode.edges.forEach(edge => {
