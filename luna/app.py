@@ -2593,6 +2593,70 @@ async def api_delete_vault(item_id: str):
     return {"status": "deleted", "item_id": item_id}
 
 
+def _focus_windows_explorer_worker(target_hint: str = "") -> None:
+    """Bring a matching (or newest) File Explorer window to the foreground on Windows."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+        hint_lower = (target_hint or "").strip().lower()
+        sw_restore = 9
+
+        for delay in (0.25, 0.35, 0.5):
+            time.sleep(delay)
+            matches: List[int] = []
+            fallback_hwnds: List[int] = []
+
+            enum_proc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+            def _cb(hwnd, _lparam):
+                if not user32.IsWindowVisible(hwnd):
+                    return True
+                cls_buf = ctypes.create_unicode_buffer(64)
+                user32.GetClassNameW(hwnd, cls_buf, 64)
+                if cls_buf.value != "CabinetWClass":
+                    return True
+                title_len = user32.GetWindowTextLengthW(hwnd)
+                title_buf = ctypes.create_unicode_buffer(title_len + 2)
+                user32.GetWindowTextW(hwnd, title_buf, title_len + 2)
+                title = (title_buf.value or "").lower()
+                fallback_hwnds.append(hwnd)
+                if hint_lower and hint_lower in title:
+                    matches.append(hwnd)
+                return True
+
+            user32.EnumWindows(enum_proc(_cb), 0)
+            target_hwnd = matches[0] if matches else (fallback_hwnds[0] if fallback_hwnds else None)
+            if target_hwnd:
+                fg_hwnd = user32.GetForegroundWindow()
+                cur_tid = kernel32.GetCurrentThreadId()
+                fg_tid = user32.GetWindowThreadProcessId(fg_hwnd, None) if fg_hwnd else 0
+                if fg_tid and fg_tid != cur_tid:
+                    user32.AttachThreadInput(cur_tid, fg_tid, True)
+                user32.ShowWindowAsync(target_hwnd, sw_restore)
+                user32.BringWindowToTop(target_hwnd)
+                user32.SetForegroundWindow(target_hwnd)
+                if fg_tid and fg_tid != cur_tid:
+                    user32.AttachThreadInput(cur_tid, fg_tid, False)
+                return
+    except Exception:
+        pass
+
+
+def _open_windows_explorer(args: List[str], target_hint: str = "") -> None:
+    """Launch Windows Explorer once and request foreground focus safely."""
+    try:
+        import ctypes
+        ctypes.windll.user32.AllowSetForegroundWindow(-1)
+    except Exception:
+        pass
+    proc = subprocess.Popen(["explorer.exe", *args])
+    if isinstance(getattr(proc, "pid", None), int):
+        threading.Thread(target=_focus_windows_explorer_worker, args=(target_hint,), daemon=True).start()
+
+
 @app.post("/api/vault/open-file")
 async def api_vault_open_file(req: OpenFileRequest):
     norm_path = os.path.abspath(os.path.normpath(req.file_path))
@@ -2603,7 +2667,7 @@ async def api_vault_open_file(req: OpenFileRequest):
 
     if sys.platform == "win32":
         try:
-            subprocess.Popen(["explorer.exe", f"/select,{norm_path}"])
+            _open_windows_explorer([f"/select,{norm_path}"], os.path.basename(os.path.dirname(norm_path)))
         except Exception:
             pass
 
@@ -2625,7 +2689,7 @@ async def api_vault_open_folder(payload: Optional[Dict[str, Any]] = None):
 
     try:
         if sys.platform == "win32":
-            subprocess.Popen(["explorer.exe", folder_to_open])
+            _open_windows_explorer([folder_to_open], os.path.basename(folder_to_open))
         elif sys.platform == "darwin":
             subprocess.Popen(["open", folder_to_open])
         else:

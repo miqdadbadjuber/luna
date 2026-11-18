@@ -154,5 +154,12 @@ class TestApiSettings(unittest.TestCase):
         with self.assertRaises(ValueError):
             ProcessRequest(url="https://www.youtube.com/watch?v=dQw4w9WgXcQ", action="type_yt_ai_clip", clip_language="ml")
 
+    @patch("luna.app._open_windows_explorer")
+    def test_open_folder_invokes_foreground_explorer_helper_on_windows(self, mock_open):
+        with patch("luna.app.sys.platform", "win32"):
+            res = self.client.post("/api/vault/open-folder")
+        self.assertEqual(res.status_code, 200)
+        mock_open.assert_called_once()
+
 if __name__ == "__main__":
     unittest.main()

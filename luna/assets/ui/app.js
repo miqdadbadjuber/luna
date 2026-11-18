@@ -3859,8 +3859,33 @@ function updateProviderKeyUI(provider) {
     saveButton.classList.toggle('text-emerald-400', state.validated);
   }
   document.getElementById(`cancel${provider[0].toUpperCase()}${provider.slice(1)}Key`)?.classList.toggle('hidden', !state.editing || !state.configured);
+  const hasUnsavedTypedKey = Boolean(state.editing && input.value.trim());
+  const statusId = { openai: 'statusOpenai', gemini: 'statusGemini', groq: 'statusGroq' }[provider];
+  const statusEl = document.getElementById(statusId);
   const stateLabel = document.getElementById(`${provider}KeyState`);
-  if (stateLabel) stateLabel.textContent = locked ? 'API key is saved. Use Test Connection to check it, or Change Key to replace it.' : (state.configured ? 'Enter a replacement key. The current key stays active until you save.' : 'No API key saved yet. Test the key, then save it.');
+  if (stateLabel) {
+    stateLabel.className = 'text-[11px]';
+    if (locked) {
+      stateLabel.classList.add('text-zinc-500');
+      stateLabel.textContent = 'API key is saved. Use Test Connection to check it, or Change Key to replace it.';
+    } else if (state.validated) {
+      stateLabel.classList.add('text-emerald-400');
+      stateLabel.textContent = 'Key verified — click Save Key above to apply.';
+    } else if (hasUnsavedTypedKey) {
+      stateLabel.classList.add('text-amber-400');
+      stateLabel.textContent = state.configured
+        ? 'Unsaved replacement key — click Test Connection to verify before saving.'
+        : 'Unsaved key entered — click Test Connection to verify and enable Save Key.';
+      if (statusEl && !statusEl.textContent.trim()) {
+        statusEl.innerHTML = '<span class="text-amber-400">Unsaved • Test to save</span>';
+      }
+    } else {
+      stateLabel.classList.add('text-zinc-500');
+      stateLabel.textContent = state.configured
+        ? 'Enter a replacement key. The current key stays active until you save.'
+        : 'No API key saved yet. Test the key, then save it.';
+    }
+  }
 }
 
 function beginKeyChange(provider) {
@@ -4354,19 +4379,7 @@ async function loadSettingsData() {
     if (data.status) {
       const s = data.status;
       renderSystemDependencyStatuses(s, { detailed: false });
-
-      // Cookies
-      const cookieFileDetail = document.getElementById('cookieFileDetail');
-      const cookieStatusBadge = document.getElementById('cookieStatusBadge');
-      if (s.cookies && s.cookies.exists) {
-        setDependencyIcon('chkCookies', 'check', 'w-4 h-4 text-emerald-400');
-        if (cookieFileDetail) cookieFileDetail.innerText = `(${s.cookies.name || 'cookies.txt'} • ${s.cookies.size || ''})`;
-        if (cookieStatusBadge) cookieStatusBadge.innerText = 'Installed';
-      } else {
-        setDependencyIcon('chkCookies', 'alert-circle', 'w-4 h-4 text-zinc-500');
-        if (cookieFileDetail) cookieFileDetail.innerText = '(cookies.txt not found)';
-        if (cookieStatusBadge) cookieStatusBadge.innerText = 'Empty';
-      }
+      renderCookieStatus(s.cookies);
     }
     lucide.createIcons();
   } catch (err) {
@@ -4548,8 +4561,22 @@ async function testApiKey(provider, wrapId, inputId, statusElId, btn) {
     }
   } catch (err) {
     if (icon) icon.classList.remove('animate-pulse', 'text-amber-400');
-    if (statusEl) statusEl.innerHTML = `<span class="text-red-400">✗ Error jaringan</span>`;
+    if (statusEl) statusEl.innerHTML = '<span class="text-red-400">✗ Network error</span>';
     showToast(`Could not reach the server: ${err.message}`, true);
+  }
+}
+
+function renderCookieStatus(cookiesData) {
+  const cookieFileDetail = document.getElementById('cookieFileDetail');
+  const cookieStatusBadge = document.getElementById('cookieStatusBadge');
+  if (cookiesData && cookiesData.exists) {
+    setDependencyIcon('chkCookies', 'check', 'w-4 h-4 text-emerald-400');
+    if (cookieFileDetail) cookieFileDetail.innerText = `(${cookiesData.name || 'cookies.txt'} • ${cookiesData.size || ''})`;
+    if (cookieStatusBadge) cookieStatusBadge.innerText = 'Installed';
+  } else {
+    setDependencyIcon('chkCookies', 'alert-circle', 'w-4 h-4 text-zinc-500');
+    if (cookieFileDetail) cookieFileDetail.innerText = '(cookies.txt not found)';
+    if (cookieStatusBadge) cookieStatusBadge.innerText = 'Empty';
   }
 }
 
@@ -4646,7 +4673,26 @@ async function runSystemCheck(btn) {
     const data = await res.json();
 
     renderSystemDependencyStatuses(data, { detailed: true });
-    showToast('Dependency check complete: all utilities are ready');
+    if (data.cookies && typeof renderCookieStatus === 'function') {
+      renderCookieStatus(data.cookies);
+    }
+
+    const missingCritical = [];
+    if (!data.ffmpeg) missingCritical.push('FFmpeg');
+    if (!data.storage) missingCritical.push('Storage access');
+    const cookiesReady = Boolean(data.cookies && data.cookies.exists);
+
+    if (missingCritical.length) {
+      showToast(`Dependency check incomplete: missing ${missingCritical.join(' & ')}`, true);
+    } else if (!cookiesReady && !data.opencv) {
+      showToast('Core utilities ready (OpenCV inactive & YouTube cookies empty)', 'info');
+    } else if (!cookiesReady) {
+      showToast('Core utilities ready (YouTube cookies not uploaded)', 'info');
+    } else if (!data.opencv) {
+      showToast('Core utilities & cookies ready (OpenCV Face Tracker inactive)', 'info');
+    } else {
+      showToast('All utilities & YouTube cookies are ready');
+    }
   } catch (e) {
     previousIcons.forEach(({ id, icon, cls }) => setDependencyIcon(id, icon, cls));
     showToast(`Dependency check failed: ${e.message}`, true);
@@ -4683,7 +4729,7 @@ async function browseStorageFolder() {
           lucide.createIcons({ root: btn });
         }
 
-        showToast(`Moving Workspace folder to ${newPath}...`, 'info');
+        showToast(`Moving saved Workspace media to ${newPath}...`, 'info');
 
         const saveRes = await fetch('/api/settings', {
           method: 'POST',
@@ -4709,7 +4755,11 @@ async function browseStorageFolder() {
         }
 
         const migratedCount = saveResult.migrated ? (saveResult.migrated.migrated_files || 0) : 0;
-        showToast(`Storage moved to ${newPath} (${migratedCount} items moved)`);
+        showToast(
+          migratedCount > 0
+            ? `Workspace media moved to ${newPath} (${migratedCount} files)`
+            : `Workspace folder updated to ${newPath}`
+        );
 
         // Sync the Media Vault list.
         if (typeof loadVaultItems === 'function') loadVaultItems();

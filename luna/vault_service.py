@@ -338,7 +338,19 @@ def delete_vault_project(project_id: str) -> str:
                 continue
             fp = f.get("file_path")
             if not fp or not _is_inside_storage(fp, root):
-                continue
+                # Fall back to the migrated filename in current_dir if file_path still points at an old root.
+                fname = f.get("filename")
+                if (
+                    isinstance(fname, str)
+                    and fname.strip()
+                    and os.path.abspath(current_dir) not in category_roots
+                ):
+                    candidate = os.path.join(current_dir, os.path.basename(fname.strip()))
+                    fp = candidate if _is_inside_storage(candidate, root) else None
+                else:
+                    fp = None
+                if not fp:
+                    continue
             # Only ever unlink regular files; a metadata path must not rmtree a tree.
             if os.path.isfile(fp) and not _safe_remove_path(fp):
                 locked = True
@@ -347,6 +359,15 @@ def delete_vault_project(project_id: str) -> str:
             return "locked"
 
         proj_folder = target_proj.get("folder_path")
+        if (
+            isinstance(proj_folder, str)
+            and proj_folder
+            and not _is_inside_storage(proj_folder, root)
+            and os.path.basename(os.path.normpath(proj_folder)) == os.path.basename(current_dir)
+            and _is_inside_storage(current_dir, root)
+            and os.path.abspath(current_dir) not in category_roots
+        ):
+            proj_folder = current_dir
         if (
             proj_folder
             and _is_inside_storage(proj_folder, root)
@@ -368,6 +389,9 @@ def delete_vault_project(project_id: str) -> str:
             try:
                 if os.path.exists(meta_path):
                     os.remove(meta_path)
+                if _is_inside_storage(current_dir, root) and os.path.abspath(current_dir) not in category_roots:
+                    if os.path.isdir(current_dir) and not os.listdir(current_dir):
+                        os.rmdir(current_dir)
             except Exception:
                 return "locked"
         return "deleted"
@@ -744,18 +768,40 @@ def rename_vault_item(item_id: str, new_name: str, title_only: bool = False) -> 
     return {"status": "not_found"}
 
 
+def _safe_listdir(path: str) -> List[str]:
+    try:
+        return os.listdir(path)
+    except OSError:
+        return []
+
+
 def get_storage_stats() -> Dict[str, Any]:
     """
-    Scan get_storage_root() and return total storage statistics.
-    Excludes meta.json and hidden files.
+    Scan get_storage_root() and return total Workspace storage statistics.
+    Excludes meta.json, covers, temp files, and internal temp job folders.
     """
     root = storage_manager.get_storage_root()
+    abs_root = os.path.abspath(root)
+    abs_fallback = os.path.abspath(storage_manager.FALLBACK_PATH)
     total_bytes = 0
     total_files = 0
 
     if os.path.exists(root):
-        for dirpath, _, filenames in os.walk(root):
+        for dirpath, dirnames, filenames in os.walk(root, topdown=True):
             if os.path.basename(dirpath) == "covers":
+                dirnames[:] = []
+                continue
+            if storage_manager.is_temp_job_directory(root, dirpath, filenames):
+                dirnames[:] = []
+                continue
+            dirnames[:] = [
+                d for d in dirnames
+                if d != "covers"
+                and not d.startswith(".")
+                and not storage_manager.is_temp_job_directory(root, os.path.join(dirpath, d), _safe_listdir(os.path.join(dirpath, d)))
+            ]
+            if os.path.abspath(dirpath) == abs_fallback and abs_root == abs_fallback:
+                # Never count loose temporary downloads/subtitles in the root of output/.
                 continue
             for f in filenames:
                 if f == INDEX_FILE_NAME or f.startswith("."):

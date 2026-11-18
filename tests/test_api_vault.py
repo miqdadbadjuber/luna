@@ -289,6 +289,58 @@ class TestApiVault(unittest.TestCase):
         self.assertEqual(body["item"]["url"], orig_url)
         self.assertTrue(os.path.exists(clip_path))
 
+    def test_storage_stats_and_migration_exclude_temp_job_dirs(self):
+        """Temp job folders inside shared output/ are excluded from Workspace stats and migration."""
+        from luna import storage_manager
+
+        fallback_dir = os.path.join(self.test_dir, "shared_output")
+        new_dir = os.path.join(self.test_dir, "new_vault")
+        os.makedirs(os.path.join(fallback_dir, "c0514b82"), exist_ok=True)
+        with open(os.path.join(fallback_dir, "c0514b82", "job.json"), "w", encoding="utf-8") as f:
+            f.write('{"job": {"id": "c0514b82"}}')
+        with open(os.path.join(fallback_dir, "c0514b82", "source.mp4"), "wb") as f:
+            f.write(b"tempbytes")
+        with open(os.path.join(fallback_dir, "stray.srt"), "w", encoding="utf-8") as f:
+            f.write("1\n00:00:00,000 --> 00:00:01,000\nhi\n")
+
+        ws_dir = os.path.join(fallback_dir, "02-YouTube-Full", "WsOne")
+        os.makedirs(ws_dir, exist_ok=True)
+        saved_file = os.path.join(ws_dir, "saved.mp4")
+        with open(saved_file, "wb") as f:
+            f.write(b"12345")
+        vault_service.save_project_metadata(ws_dir, {
+            "project_id": "proj_ws_one",
+            "workspace_name": "WsOne",
+            "files": [{
+                "id": "v1",
+                "title": "Saved Video",
+                "filename": "saved.mp4",
+                "file_path": saved_file,
+                "url": "/media-vault/02-YouTube-Full/WsOne/saved.mp4",
+            }],
+        })
+
+        with patch.object(storage_manager, "FALLBACK_PATH", fallback_dir), \
+                patch.dict(os.environ, {"MEDIA_STORAGE_DIR": fallback_dir}):
+            storage_manager.invalidate_storage_root_cache()
+            stats = vault_service.get_storage_stats()
+            self.assertEqual(stats["total_files"], 1)
+            self.assertEqual(stats["total_bytes"], 5)
+
+            mig = storage_manager.migrate_storage(fallback_dir, new_dir)
+            self.assertEqual(mig["migrated_files"], 2)  # saved.mp4 + meta.json
+            self.assertTrue(os.path.exists(os.path.join(new_dir, "02-YouTube-Full", "WsOne", "saved.mp4")))
+            self.assertFalse(os.path.exists(os.path.join(new_dir, "c0514b82")))
+            self.assertTrue(os.path.exists(os.path.join(fallback_dir, "c0514b82", "source.mp4")))
+
+        with patch.object(storage_manager, "FALLBACK_PATH", fallback_dir), \
+                patch.dict(os.environ, {"MEDIA_STORAGE_DIR": new_dir}):
+            storage_manager.invalidate_storage_root_cache()
+            self.assertEqual(vault_service.delete_vault_project("proj_ws_one"), "deleted")
+            self.assertEqual(vault_service.get_storage_stats()["total_files"], 0)
+
+        storage_manager.invalidate_storage_root_cache()
+
 
 if __name__ == "__main__":
     unittest.main()

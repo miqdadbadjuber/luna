@@ -452,6 +452,19 @@ class TestFrontendVaultUI(unittest.TestCase):
         self.assertEqual(img_res.status_code, 200)
         self.assertGreater(len(img_res.content), 100000)
 
+    def test_settings_dependency_toast_key_hints_and_storage_copy(self):
+        """Settings dependency check reports cookies truthfully, warns on unsaved keys, and clarifies Move Folder."""
+        html = self.source
+        for expected in (
+            "function renderCookieStatus",
+            "Core utilities ready (YouTube cookies not uploaded)",
+            "All utilities & YouTube cookies are ready",
+            "Unsaved key entered — click Test Connection to verify and enable Save Key.",
+            "Unsaved • Test to save",
+            "Move Folder transfers saved media only.",
+        ):
+            self.assertIn(expected, html)
+
 
 if __name__ == "__main__":
     unittest.main()

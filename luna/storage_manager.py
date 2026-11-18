@@ -4,6 +4,7 @@
 # This file is part of Luna. See LICENSE and NOTICE at the repository root.
 
 import datetime
+import json
 import os
 import re
 import tempfile
@@ -55,6 +56,24 @@ ACTION_CATEGORY_MAP = {
     "audio_mp3": "05-Audio-MP3",
     "youtube_audio": "05-Audio-MP3",
 }
+
+WORKSPACE_SUBDIRS = frozenset({*CATEGORY_MAP.values(), "01-AI-Clipper"})
+
+
+def is_temp_job_directory(src_root: str, dirpath: str, filenames) -> bool:
+    """Return True for internal temporary job folders so Workspace stats/migrations ignore them."""
+    names = set(filenames or ())
+    if "job.json" in names or "job.json.tmp" in names:
+        return True
+    abs_root = os.path.abspath(src_root)
+    abs_fallback = os.path.abspath(FALLBACK_PATH)
+    abs_dir = os.path.abspath(dirpath)
+    if abs_root == abs_fallback and abs_dir != abs_fallback:
+        rel = os.path.relpath(abs_dir, abs_fallback)
+        top = rel.split(os.sep)[0]
+        if top not in WORKSPACE_SUBDIRS and "meta.json" not in names:
+            return True
+    return False
 
 
 def is_writable(path: str) -> bool:
@@ -203,6 +222,55 @@ def _is_within(child: str, parent: str) -> bool:
         return False
 
 
+_META_PATH_KEYS = ("file_path", "folder_path", "cover_path", "thumbnail_path")
+
+
+def _rewrite_migrated_meta(meta_path: str, src_roots: list[str], new_root: str) -> None:
+    """Rewrite stored filesystem paths inside migrated meta.json to point under new_root."""
+    try:
+        with open(meta_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return
+
+    changed = False
+
+    def _remap(path_val: str) -> str:
+        for base in src_roots:
+            if _is_within(path_val, base):
+                rel = os.path.relpath(os.path.abspath(path_val), os.path.abspath(base))
+                return new_root if rel == "." else os.path.join(new_root, rel)
+        return path_val
+
+    def _visit(node) -> None:
+        nonlocal changed
+        if isinstance(node, list):
+            for item in node:
+                _visit(item)
+            return
+        if not isinstance(node, dict):
+            return
+        for key in _META_PATH_KEYS:
+            val = node.get(key)
+            if isinstance(val, str) and val:
+                updated = _remap(val)
+                if updated != val:
+                    node[key] = updated
+                    changed = True
+        files = node.get("files")
+        if isinstance(files, list):
+            _visit(files)
+
+    _visit(data)
+    if not changed:
+        return
+
+    tmp_path = f"{meta_path}.tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp_path, meta_path)
+
+
 def migrate_storage(old_root: str, new_root: str) -> dict:
     """Migrate media directories and metadata from old_root (and fallback output/) to new_root."""
     import shutil
@@ -240,8 +308,28 @@ def migrate_storage(old_root: str, new_root: str) -> dict:
     for src_dir in sources_to_migrate:
         if not os.path.exists(src_dir) or src_dir == new_root:
             continue
-        for root_dir, _dirs, files in os.walk(src_dir):
+        is_fallback_src = os.path.abspath(src_dir) == fallback
+        for root_dir, dirs, files in os.walk(src_dir, topdown=True):
+            if is_temp_job_directory(src_dir, root_dir, files):
+                dirs[:] = []
+                continue
             rel = os.path.relpath(root_dir, src_dir)
+            if rel == "." and is_fallback_src:
+                # Only move recognized Workspace subfolders or folders with meta.json from shared output/.
+                dirs[:] = [
+                    d for d in dirs
+                    if d in WORKSPACE_SUBDIRS
+                    or (
+                        os.path.isfile(os.path.join(root_dir, d, "meta.json"))
+                        and not os.path.exists(os.path.join(root_dir, d, "job.json"))
+                    )
+                ]
+                continue
+            dirs[:] = [
+                d for d in dirs
+                if not os.path.exists(os.path.join(root_dir, d, "job.json"))
+                and not os.path.exists(os.path.join(root_dir, d, "job.json.tmp"))
+            ]
             target_dir = new_root if rel == "." else os.path.join(new_root, rel)
             os.makedirs(target_dir, exist_ok=True)
             for f in files:
@@ -255,11 +343,15 @@ def migrate_storage(old_root: str, new_root: str) -> dict:
                     if os.path.exists(d_f):
                         if os.path.getsize(d_f) == os.path.getsize(s_f):
                             os.remove(s_f)
+                            if f == "meta.json":
+                                _rewrite_migrated_meta(d_f, sources_to_migrate, new_root)
                         else:
                             # Keep the source so a name collision cannot destroy media.
                             failed.append(f"{s_f} (destination already exists)")
                         continue
                     _move_file(s_f, d_f)
+                    if f == "meta.json":
+                        _rewrite_migrated_meta(d_f, sources_to_migrate, new_root)
                     migrated_count += 1
                 except Exception as e:
                     failed.append(f"{s_f}: {e}")
