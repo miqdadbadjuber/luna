@@ -1,3 +1,11 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="luna/assets/dark-banner.png">
+    <source media="(prefers-color-scheme: light)" srcset="luna/assets/light-banner.png">
+    <img alt="Luna Media Studio" src="luna/assets/light-banner.png" width="480">
+  </picture>
+</p>
+
 # Luna Media Studio
 
 A local web app for downloading video and audio from YouTube, Instagram, and TikTok, organizing files in Media Vault, and generating AI-assisted short clips.
