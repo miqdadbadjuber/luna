@@ -3396,6 +3396,16 @@ function getMainTabHash(tab) {
 function switchMainTab(tab, options = {}) {
   try {
     const previousTab = currentMainTab;
+    if (
+      previousTab === 'settings' &&
+      tab !== 'settings' &&
+      !options.force &&
+      !options.isInitial &&
+      typeof guardUnsavedSettingsLeave === 'function' &&
+      guardUnsavedSettingsLeave()
+    ) {
+      return;
+    }
     const updateUrl = options.updateUrl !== false;
     const replaceUrl = Boolean(options.replaceUrl);
     const immediatePill = Boolean(options.immediate);
@@ -3761,6 +3771,10 @@ const lunaToast = (() => {
       ? `<div id="toastMessage" class="luna-toast-desc${title ? ' has-title' : ''}">${escapeHtml(description)}</div>`
       : `<div id="toastMessage" class="luna-toast-desc sr-only">${escapeHtml(title)}</div>`;
 
+    const progressHtml = normalized.indeterminate
+      ? '<div class="luna-toast-progress-track" aria-hidden="true"><div class="luna-toast-progress-bar"></div></div>'
+      : '';
+
     card.innerHTML = `
       ${iconHtml}
       <div class="luna-toast-body">
@@ -3768,6 +3782,7 @@ const lunaToast = (() => {
         ${descHtml}
       </div>
       <div class="luna-toast-actions"></div>
+      ${progressHtml}
     `;
 
     const actionsEl = card.querySelector('.luna-toast-actions');
@@ -3824,7 +3839,83 @@ const lunaToast = (() => {
     return id;
   }
 
-  return { add, close, has: (id) => active.has(id) };
+  function update(id, patch = {}) {
+    const entry = active.get(id);
+    if (!entry) return false;
+    const card = entry.el;
+    if (patch.type && ['success', 'info', 'warning', 'error', 'default'].includes(patch.type)) {
+      card.dataset.type = patch.type;
+      const oldIcon = card.querySelector('.luna-toast-icon');
+      const nextIconName = TOAST_ICON_BY_TYPE[patch.type];
+      if (nextIconName) {
+        const iconNode = document.createElement('i');
+        iconNode.setAttribute('data-lucide', nextIconName);
+        iconNode.className = 'luna-toast-icon';
+        iconNode.setAttribute('aria-hidden', 'true');
+        if (oldIcon) oldIcon.replaceWith(iconNode);
+        else card.insertBefore(iconNode, card.firstChild);
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+          window.lucide.createIcons({ root: card });
+        }
+      } else if (oldIcon) {
+        oldIcon.remove();
+      }
+    }
+    if (typeof patch.title === 'string') {
+      let titleEl = card.querySelector('.luna-toast-title');
+      if (!titleEl && patch.title) {
+        titleEl = document.createElement('div');
+        titleEl.className = 'luna-toast-title';
+        card.querySelector('.luna-toast-body')?.prepend(titleEl);
+      }
+      if (titleEl) titleEl.textContent = patch.title;
+    }
+    if (typeof patch.description === 'string') {
+      const descEl = card.querySelector('.luna-toast-desc');
+      if (descEl) {
+        descEl.textContent = patch.description;
+        descEl.classList.remove('sr-only');
+      }
+    }
+    if (typeof patch.indeterminate === 'boolean') {
+      const existingTrack = card.querySelector('.luna-toast-progress-track');
+      if (patch.indeterminate && !existingTrack) {
+        const track = document.createElement('div');
+        track.className = 'luna-toast-progress-track';
+        track.setAttribute('aria-hidden', 'true');
+        track.innerHTML = '<div class="luna-toast-progress-bar"></div>';
+        card.appendChild(track);
+      } else if (!patch.indeterminate && existingTrack) {
+        existingTrack.remove();
+      }
+    }
+    if (typeof patch.timeout === 'number') {
+      if (patch.timeout > 0) {
+        scheduleClose(entry, patch.timeout);
+      } else if (entry.timer) {
+        clearTimeout(entry.timer);
+        entry.timer = null;
+        entry.remaining = 0;
+      }
+    }
+    requestAnimationFrame(() => layoutStack());
+    return true;
+  }
+
+  function attention(id, hintText) {
+    const entry = active.get(id);
+    if (!entry) return;
+    if (typeof hintText === 'string' && hintText) {
+      update(id, { description: hintText });
+    }
+    const card = entry.el;
+    card.classList.remove('is-attention');
+    void card.offsetWidth;
+    card.classList.add('is-attention');
+    setTimeout(() => card.classList.remove('is-attention'), 650);
+  }
+
+  return { add, close, update, attention, has: (id) => active.has(id) };
 })();
 
 window.toast = lunaToast;
@@ -3943,6 +4034,7 @@ function cancelKeyChange(provider) {
   updateProviderKeyUI(provider);
   const status = document.getElementById(`${provider === 'openai' ? 'statusOpenai' : provider === 'gemini' ? 'statusGemini' : 'statusGroq'}`);
   if (status) status.textContent = '';
+  syncSettingsDirtyState();
 }
 
 function providerKeyInputChanged(provider) {
@@ -3953,12 +4045,13 @@ function providerKeyInputChanged(provider) {
   const status = document.getElementById(statusId);
   if (status) status.textContent = '';
   updateProviderKeyUI(provider);
+  syncSettingsDirtyState();
 }
 
-async function saveProviderKey(provider) {
+async function saveProviderKey(provider, options = {}) {
   const state = providerKeyUi[provider];
   const input = document.getElementById(providerKeyFields[provider]);
-  if (!state?.editing || !state.validated || !input?.value.trim()) return;
+  if (!state?.editing || !state.validated || !input?.value.trim()) return false;
   const field = { openai: 'openai_api_key', gemini: 'gemini_api_key', groq: 'groq_api_key' }[provider];
   const payload = { [field]: input.value.trim() };
   if (provider === 'openai') {
@@ -3973,13 +4066,26 @@ async function saveProviderKey(provider) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Could not save API key');
+    const savedValue = input.value.trim();
     state.configured = true;
+    state.hint = savedValue.slice(-4);
     state.editing = false;
     state.validated = false;
-    showToast(`${provider.toUpperCase()} API key saved`);
-    await loadSettingsData();
+    input.value = '';
+    updateProviderKeyUI(provider);
+    if (provider === 'openai' && savedSettingsSnapshot) {
+      savedSettingsSnapshot.openai_base_url = payload.openai_base_url || '';
+      savedSettingsSnapshot.openai_model = payload.openai_model || '';
+    }
+    syncSettingsDirtyState();
+    if (!options.silent) {
+      showToast(options.auto ? `${provider.toUpperCase()} API key verified & saved` : `${provider.toUpperCase()} API key saved`);
+    }
+    if (provider === 'openai') loadOpenaiModels();
+    return true;
   } catch (err) {
     showToast(err.message || 'Could not save API key', true);
+    return false;
   }
 }
 
@@ -4274,45 +4380,84 @@ function dismissSettingsPromptToast() {
   }
 }
 
+function hasUnsavedApiKeys() {
+  return Object.keys(providerKeyFields).some((provider) => {
+    const state = providerKeyUi[provider];
+    const input = document.getElementById(providerKeyFields[provider]);
+    return Boolean(state && state.editing && input && input.value.trim());
+  });
+}
+
+function hasUnsavedSettingsChanges() {
+  if (hasUnsavedApiKeys()) return true;
+  if (!savedSettingsSnapshot) return false;
+  const cur = getSettingsSnapshot();
+  return Object.keys(savedSettingsSnapshot).some(
+    (key) => cur[key] !== savedSettingsSnapshot[key]
+  );
+}
+
+function guardUnsavedSettingsLeave() {
+  if (!hasUnsavedSettingsChanges()) return false;
+  syncSettingsDirtyState();
+  if (settingsPromptToastId) {
+    lunaToast.attention(
+      settingsPromptToastId,
+      'Save or cancel your changes before leaving Settings.'
+    );
+  }
+  return true;
+}
+
 function revertSettingsToSnapshot() {
-  if (!savedSettingsSnapshot) return;
-  const fields = {
-    inputStorage: savedSettingsSnapshot.storage_dir,
-    selectLlmProvider: savedSettingsSnapshot.llm_provider,
-    selectTranscribeProvider: savedSettingsSnapshot.transcribe_provider,
-    selectClipLanguage: savedSettingsSnapshot.clip_language,
-    inputOpenaiBase: savedSettingsSnapshot.openai_base_url,
-    inputOpenaiModel: savedSettingsSnapshot.openai_model,
-  };
-  for (const [id, val] of Object.entries(fields)) {
-    const el = document.getElementById(id);
-    if (el) el.value = val ?? '';
+  if (savedSettingsSnapshot) {
+    const fields = {
+      inputStorage: savedSettingsSnapshot.storage_dir,
+      selectLlmProvider: savedSettingsSnapshot.llm_provider,
+      selectTranscribeProvider: savedSettingsSnapshot.transcribe_provider,
+      selectClipLanguage: savedSettingsSnapshot.clip_language,
+      inputOpenaiBase: savedSettingsSnapshot.openai_base_url,
+      inputOpenaiModel: savedSettingsSnapshot.openai_model,
+    };
+    for (const [id, val] of Object.entries(fields)) {
+      const el = document.getElementById(id);
+      if (el) el.value = val ?? '';
+    }
+    if (typeof syncLlmProviderUI === 'function') syncLlmProviderUI();
+    if (typeof syncTranscribeUI === 'function') syncTranscribeUI();
+    if (typeof syncClipLanguageUI === 'function') syncClipLanguageUI();
+    const hiddenModel = document.getElementById('selectOpenaiModel');
+    if (hiddenModel) {
+      const optionValues = Array.from(document.querySelectorAll('#openaiModelItems [data-value]'))
+        .map((el) => el.dataset.value);
+      const targetModel = savedSettingsSnapshot.openai_model;
+      hiddenModel.value = targetModel && optionValues.includes(targetModel) ? targetModel : CUSTOM_MODEL;
+      const wrap = document.getElementById('wrapOpenaiModelCustom');
+      if (wrap) wrap.classList.toggle('hidden', hiddenModel.value !== CUSTOM_MODEL);
+      if (typeof syncModelMenu === 'function') syncModelMenu();
+    }
   }
-  if (typeof syncLlmProviderUI === 'function') syncLlmProviderUI();
-  if (typeof syncTranscribeUI === 'function') syncTranscribeUI();
-  if (typeof syncClipLanguageUI === 'function') syncClipLanguageUI();
-  const hiddenModel = document.getElementById('selectOpenaiModel');
-  if (hiddenModel) {
-    const optionValues = Array.from(document.querySelectorAll('#openaiModelItems [data-value]'))
-      .map((el) => el.dataset.value);
-    const targetModel = savedSettingsSnapshot.openai_model;
-    hiddenModel.value = targetModel && optionValues.includes(targetModel) ? targetModel : CUSTOM_MODEL;
-    const wrap = document.getElementById('wrapOpenaiModelCustom');
-    if (wrap) wrap.classList.toggle('hidden', hiddenModel.value !== CUSTOM_MODEL);
-    if (typeof syncModelMenu === 'function') syncModelMenu();
-  }
+  const statusMap = { openai: 'statusOpenai', gemini: 'statusGemini', groq: 'statusGroq' };
+  Object.keys(providerKeyFields).forEach((provider) => {
+    const state = providerKeyUi[provider];
+    const input = document.getElementById(providerKeyFields[provider]);
+    if (!state || !input) return;
+    input.value = '';
+    state.validated = false;
+    state.editing = !state.configured;
+    updateProviderKeyUI(provider);
+    const st = document.getElementById(statusMap[provider]);
+    if (st) st.textContent = '';
+  });
   dismissSettingsPromptToast();
 }
 
 function syncSettingsDirtyState() {
-  if (!savedSettingsSnapshot) {
+  if (!savedSettingsSnapshot && !hasUnsavedApiKeys()) {
     dismissSettingsPromptToast();
     return;
   }
-  const cur = getSettingsSnapshot();
-  const isDirty = Object.keys(savedSettingsSnapshot).some(
-    (key) => cur[key] !== savedSettingsSnapshot[key]
-  );
+  const isDirty = hasUnsavedSettingsChanges();
   if (isDirty) {
     if (!settingsPromptToastId || !lunaToast.has(settingsPromptToastId)) {
       settingsPromptToastId = lunaToast.add({
@@ -4340,6 +4485,13 @@ function syncSettingsDirtyState() {
     dismissSettingsPromptToast();
   }
 }
+
+window.addEventListener('beforeunload', (event) => {
+  if (currentMainTab === 'settings' && hasUnsavedSettingsChanges()) {
+    event.preventDefault();
+    event.returnValue = '';
+  }
+});
 
 function captureSettingsSnapshot() {
   savedSettingsSnapshot = getSettingsSnapshot();
@@ -4456,6 +4608,43 @@ async function saveSettings() {
   if (toastCancelBtn) toastCancelBtn.disabled = true;
 
   try {
+    // Validate and include any unsaved API keys typed into Settings before saving.
+    const keyMeta = {
+      openai: { field: 'openai_api_key', wrapId: 'wrapOpenai', statusId: 'statusOpenai' },
+      gemini: { field: 'gemini_api_key', wrapId: 'wrapGemini', statusId: 'statusGemini' },
+      groq: { field: 'groq_api_key', wrapId: 'wrapGroq', statusId: 'statusGroq' },
+    };
+    const verifiedProviders = [];
+    for (const [provider, meta] of Object.entries(keyMeta)) {
+      const state = providerKeyUi[provider];
+      const inputEl = document.getElementById(providerKeyFields[provider]);
+      const candidateKey = inputEl?.value.trim() || '';
+      if (!state?.editing || !candidateKey) continue;
+      if (!state.validated) {
+        const testRes = await fetch('/api/settings/test-key', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            provider,
+            api_key: candidateKey,
+            base_url: provider === 'openai' ? payload.openai_base_url : undefined,
+          }),
+        });
+        const testData = await testRes.json();
+        const stEl = document.getElementById(meta.statusId);
+        if (!testRes.ok || !testData.valid) {
+          const errMsg = testData.message || 'Invalid key';
+          if (stEl) stEl.innerHTML = `<span class="text-red-400">✗ ${errMsg}</span>`;
+          triggerInputError(meta.wrapId, meta.wrapId.replace('wrap', 'err'), `Key ${provider} is invalid: ${errMsg}`);
+          throw new Error(`Key ${provider.toUpperCase()} is invalid: ${errMsg}`);
+        }
+        state.validated = true;
+        if (stEl) stEl.innerHTML = '<span class="text-emerald-400">✓ Connection valid · Saved</span>';
+      }
+      payload[meta.field] = candidateKey;
+      verifiedProviders.push({ provider, candidateKey });
+    }
+
     const res = await fetch('/api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -4465,6 +4654,19 @@ async function saveSettings() {
     if (!res.ok) {
       throw new Error(data.detail || 'Could not save settings');
     }
+
+    verifiedProviders.forEach(({ provider, candidateKey }) => {
+      const state = providerKeyUi[provider];
+      const inputEl = document.getElementById(providerKeyFields[provider]);
+      if (state) {
+        state.configured = true;
+        state.hint = candidateKey.slice(-4);
+        state.editing = false;
+        state.validated = false;
+      }
+      if (inputEl) inputEl.value = '';
+      updateProviderKeyUI(provider);
+    });
 
     currentStorageDir = storageInput.value.trim();
     defaultClipLanguage = nextClipLang;
@@ -4726,8 +4928,12 @@ async function testApiKey(provider, wrapId, inputId, statusElId, btn) {
       if (state.editing) {
         state.validated = true;
         updateProviderKeyUI(provider);
-        if (statusEl) statusEl.innerHTML = '<span class="text-emerald-400">✓ Connection valid · click Save Key to apply</span>';
-        showToast(`${provider.toUpperCase()} key verified. Save it to apply.`);
+        const savedOk = await saveProviderKey(provider, { auto: true });
+        if (savedOk) {
+          if (statusEl) statusEl.innerHTML = '<span class="text-emerald-400">✓ Connection valid · Saved</span>';
+        } else if (statusEl) {
+          statusEl.innerHTML = '<span class="text-emerald-400">✓ Connection valid · click Save Key to apply</span>';
+        }
       } else {
         if (statusEl) statusEl.innerHTML = '<span class="text-emerald-400">✓ Saved key connection is valid</span>';
         showToast(`${provider.toUpperCase()} saved key connection is valid`);
@@ -8637,9 +8843,259 @@ async function executeDeleteVaultItem() {
 // Auto-load vault badge count immediately on load
 updateVaultBadge();
 
+let __pendingUpdateInfo = null;
+let __lunaUpdateToastId = null;
+let __lunaUpdateInFlight = false;
+
+function openUpdateModal(data) {
+  const modal = document.getElementById('updateModal');
+  const box = document.getElementById('updateModalBox');
+  const heading = document.getElementById('updateModalHeading');
+  const desc = document.getElementById('updateModalDesc');
+  const meta = document.getElementById('updateModalMeta');
+  const shaEl = document.getElementById('updateModalSha');
+  const msgEl = document.getElementById('updateModalCommitMsg');
+  const laterBtn = document.getElementById('updateModalLaterBtn');
+  const actionBtn = document.getElementById('updateModalActionBtn');
+  const okBtn = document.getElementById('updateModalOkBtn');
+  if (!modal || !box) return;
+
+  __pendingUpdateInfo = data || null;
+  const available = Boolean(data && data.update_available);
+
+  if (available) {
+    if (heading) heading.textContent = 'Update Available';
+    if (desc) {
+      desc.textContent = data.reason === 'untracked_install'
+        ? 'A Luna update is available. Updating once will also sync local version tracking.'
+        : 'A newer version of Luna is ready to install. Your settings and saved media will stay untouched.';
+    }
+    if (meta) meta.classList.remove('hidden');
+    if (shaEl) shaEl.textContent = data.latest_short_sha || '-';
+    if (msgEl) msgEl.textContent = data.latest_message || 'Latest release on main';
+    if (laterBtn) laterBtn.classList.remove('hidden');
+    if (actionBtn) {
+      actionBtn.classList.remove('hidden');
+      actionBtn.disabled = Boolean(data.busy_jobs);
+      actionBtn.textContent = data.busy_jobs ? 'Job Running' : 'Update';
+    }
+    if (okBtn) okBtn.classList.add('hidden');
+  } else {
+    if (heading) heading.textContent = "You're up to date";
+    if (desc) {
+      const shaTag = data && data.current_short_sha ? ` (${data.current_short_sha})` : '';
+      desc.textContent = `Luna${shaTag} is already running the latest version.`;
+    }
+    if (meta) meta.classList.add('hidden');
+    if (laterBtn) laterBtn.classList.add('hidden');
+    if (actionBtn) actionBtn.classList.add('hidden');
+    if (okBtn) okBtn.classList.remove('hidden');
+  }
+
+  modal.classList.remove('hidden');
+  if (window.lucide && typeof window.lucide.createIcons === 'function') {
+    window.lucide.createIcons({ root: box });
+  }
+  requestAnimationFrame(() => {
+    box.classList.remove('scale-95', 'opacity-0');
+    box.classList.add('scale-100', 'opacity-100');
+  });
+}
+
+function closeUpdateModal() {
+  const modal = document.getElementById('updateModal');
+  const box = document.getElementById('updateModalBox');
+  if (box) {
+    box.classList.remove('scale-100', 'opacity-100');
+    box.classList.add('scale-95', 'opacity-0');
+  }
+  setTimeout(() => {
+    if (modal) modal.classList.add('hidden');
+  }, 150);
+}
+
+async function checkForLunaUpdates(btn) {
+  if (__lunaUpdateInFlight) return;
+  const trigger = btn || document.getElementById('btnCheckUpdates');
+  const icon = document.getElementById('checkUpdatesIcon');
+  const label = document.getElementById('checkUpdatesLabel');
+  if (trigger) trigger.disabled = true;
+  if (icon) icon.classList.add('animate-spin');
+  if (label) label.textContent = 'Checking...';
+
+  try {
+    const res = await fetch('/api/system/check-update');
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || 'Could not check for updates');
+    }
+    openUpdateModal(data);
+  } catch (err) {
+    showNoticeModal('Update check failed', err.message || 'Could not reach GitHub to check for updates.');
+  } finally {
+    if (trigger) trigger.disabled = false;
+    if (icon) icon.classList.remove('animate-spin');
+    if (label) label.textContent = 'Check for Updates';
+  }
+}
+
+async function waitForServerRestartAndReload() {
+  try {
+    sessionStorage.setItem('luna_update_just_completed', '1');
+  } catch (e) {}
+
+  await new Promise((resolve) => setTimeout(resolve, 1800));
+  for (let i = 0; i < 45; i++) {
+    try {
+      const res = await fetch('/api/settings', { cache: 'no-store' });
+      if (res.ok) {
+        if (__lunaUpdateToastId) {
+          lunaToast.update(__lunaUpdateToastId, {
+            type: 'success',
+            title: 'Update complete',
+            description: 'Reloading Luna...',
+            indeterminate: false,
+            timeout: 3000,
+          });
+        }
+        setTimeout(() => window.location.reload(), 600);
+        return;
+      }
+    } catch (e) {}
+    await new Promise((resolve) => setTimeout(resolve, 750));
+  }
+
+  __lunaUpdateInFlight = false;
+  if (__lunaUpdateToastId) {
+    lunaToast.update(__lunaUpdateToastId, {
+      type: 'warning',
+      title: 'Restart pending',
+      description: 'Update finished. Please refresh or reopen Luna.',
+      indeterminate: false,
+      timeout: 5000,
+    });
+  }
+}
+
+async function startLunaUpdate() {
+  if (__lunaUpdateInFlight) return;
+  const targetSha = __pendingUpdateInfo ? __pendingUpdateInfo.latest_sha : null;
+  closeUpdateModal();
+  __lunaUpdateInFlight = true;
+
+  __lunaUpdateToastId = lunaToast.add({
+    type: 'info',
+    title: 'Updating Luna',
+    description: 'Downloading latest update...',
+    timeout: 0,
+    closable: false,
+    indeterminate: true,
+  });
+
+  try {
+    const res = await fetch('/api/system/apply-update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target_sha: targetSha, auto_restart: true }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || 'Could not start update');
+    }
+
+    while (true) {
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      let st;
+      try {
+        const stRes = await fetch('/api/system/update-status', { cache: 'no-store' });
+        if (!stRes.ok) throw new Error('status_lost');
+        st = await stRes.json();
+      } catch (pollErr) {
+        // Connection reset during server restart — wait for the new process to come up.
+        if (__lunaUpdateToastId) {
+          lunaToast.update(__lunaUpdateToastId, {
+            title: 'Updating Luna',
+            description: 'Restarting Luna...',
+            indeterminate: true,
+          });
+        }
+        await waitForServerRestartAndReload();
+        return;
+      }
+
+      if (st.status === 'updating') {
+        if (__lunaUpdateToastId && st.message) {
+          lunaToast.update(__lunaUpdateToastId, {
+            title: 'Updating Luna',
+            description: st.message,
+            indeterminate: true,
+          });
+        }
+        continue;
+      }
+
+      if (st.status === 'restarting') {
+        if (__lunaUpdateToastId) {
+          lunaToast.update(__lunaUpdateToastId, {
+            title: 'Updating Luna',
+            description: 'Restarting Luna...',
+            indeterminate: true,
+          });
+        }
+        await waitForServerRestartAndReload();
+        return;
+      }
+
+      if (st.status === 'completed') {
+        __lunaUpdateInFlight = false;
+        if (__lunaUpdateToastId) {
+          lunaToast.update(__lunaUpdateToastId, {
+            type: 'success',
+            title: 'Update complete',
+            description: 'Luna has been updated to the latest version.',
+            indeterminate: false,
+            timeout: 3000,
+          });
+          __lunaUpdateToastId = null;
+        }
+        return;
+      }
+
+      if (st.status === 'error') {
+        throw new Error(st.error || st.message || 'Update failed');
+      }
+    }
+  } catch (err) {
+    __lunaUpdateInFlight = false;
+    if (__lunaUpdateToastId) {
+      lunaToast.update(__lunaUpdateToastId, {
+        type: 'error',
+        title: 'Update failed',
+        description: err.message || 'Could not update Luna.',
+        indeterminate: false,
+        timeout: 5500,
+      });
+      __lunaUpdateToastId = null;
+    } else {
+      showToast(err.message || 'Could not update Luna.', true);
+    }
+  }
+}
+
 function applyRouteFromHash(rawHash = window.location.hash, options = {}) {
   const hash = String(rawHash || '');
   const isInitial = Boolean(options.isInitial);
+
+  if (
+    !isInitial &&
+    currentMainTab === 'settings' &&
+    hash !== '#settings' &&
+    typeof guardUnsavedSettingsLeave === 'function' &&
+    guardUnsavedSettingsLeave()
+  ) {
+    syncLocationHash('#settings', { replace: true });
+    return;
+  }
 
   if (hash.startsWith('#vault-project/')) {
     const pId = hash.slice('#vault-project/'.length);
@@ -8779,6 +9235,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Check and resume running background job if page was refreshed
   try {
+    if (sessionStorage.getItem('luna_update_just_completed') === '1') {
+      sessionStorage.removeItem('luna_update_just_completed');
+      lunaToast.add({
+        type: 'success',
+        title: 'Update complete',
+        description: 'Luna has been updated to the latest version.',
+        timeout: 3000,
+      });
+    }
     const savedJobId = localStorage.getItem('luna_active_job_id');
     if (savedJobId) {
       checkAndResumeSavedJob(savedJobId);

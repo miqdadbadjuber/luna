@@ -568,6 +568,33 @@ class TestFrontendVaultUI(unittest.TestCase):
         self.assertIn("window.applyStudioBackground", bg_js)
         self.assertNotIn("patterncraft", bg_js.lower())
 
+    def test_in_app_updater_and_unsaved_settings_guard_markup(self):
+        """Phase 4.4: Settings header has Check for Updates + modal, indeterminate update toast, API key auto-save, and leave guard."""
+        html = self.source
+        for expected in (
+            'id="btnCheckUpdates"',
+            'id="updateModal"',
+            'id="updateModalActionBtn"',
+            'id="updateModalLaterBtn"',
+            'id="updateModalOkBtn"',
+            "async function checkForLunaUpdates",
+            "async function startLunaUpdate",
+            "function hasUnsavedApiKeys",
+            "function hasUnsavedSettingsChanges",
+            "function guardUnsavedSettingsLeave",
+            "saveProviderKey(provider, { auto: true })",
+            "luna_update_just_completed",
+        ):
+            self.assertIn(expected, html)
+
+        css = self.client.get("/assets/ui/luna.css").text
+        for expected_css in (
+            ".luna-toast-card.is-attention",
+            ".luna-toast-progress-track",
+            ".luna-toast-progress-bar",
+        ):
+            self.assertIn(expected_css, css)
+
 
 if __name__ == "__main__":
     unittest.main()

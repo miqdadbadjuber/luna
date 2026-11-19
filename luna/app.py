@@ -74,6 +74,11 @@ from .clipper.config import (
 )
 from .clipper.downloader import CLIPPER_FORMAT_SORT, YOUTUBE_FORMAT_SORT, YTDLP_DOWNLOAD_TUNING, create_youtube_dl
 from .clipper.highlights import clean_caption
+from .updater import (
+    apply_update as run_app_update,
+    check_for_updates as check_app_updates,
+    schedule_server_restart,
+)
 from .storage_manager import (
     CATEGORY_MAP,
     get_storage_root,
@@ -3188,6 +3193,108 @@ async def api_upload_cookies(req: CookieUploadRequest):
         raise HTTPException(status_code=500, detail=f"Could not write cookies.txt: {e}")
     size_kb = f"{len(req.content.encode('utf-8')) / 1024:.1f} KB"
     return {"status": "uploaded", "filename": req.filename or "cookies.txt", "size": size_kb}
+
+
+_update_lock = threading.Lock()
+_update_state: Dict[str, Any] = {
+    "status": "idle",
+    "stage": "",
+    "message": "",
+    "error": None,
+    "updated_sha": "",
+    "updated_short_sha": "",
+}
+
+
+def _has_active_processing_jobs() -> bool:
+    for j in jobs.values():
+        if isinstance(j, dict) and j.get("status") in ("queued", "processing"):
+            return True
+    return False
+
+
+class ApplyUpdateRequest(BaseModel):
+    target_sha: Optional[str] = None
+    auto_restart: bool = True
+
+
+@app.get("/api/system/check-update")
+async def api_check_update():
+    try:
+        result = await asyncio.to_thread(check_app_updates, BASE_DIR)
+        result["busy_jobs"] = _has_active_processing_jobs()
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.get("/api/system/update-status")
+async def api_update_status():
+    with _update_lock:
+        return dict(_update_state)
+
+
+@app.post("/api/system/apply-update")
+async def api_apply_update(req: ApplyUpdateRequest = ApplyUpdateRequest()):
+    if _has_active_processing_jobs():
+        raise HTTPException(
+            status_code=409,
+            detail="A download or clip job is currently running. Wait for it to finish or cancel it before updating.",
+        )
+
+    with _update_lock:
+        if _update_state.get("status") in ("updating", "restarting"):
+            return dict(_update_state)
+        _update_state.update({
+            "status": "updating",
+            "stage": "downloading",
+            "message": "Downloading latest update...",
+            "error": None,
+            "updated_sha": "",
+            "updated_short_sha": "",
+        })
+
+    def _set_stage(stage: str, message: str) -> None:
+        with _update_lock:
+            _update_state["stage"] = stage
+            _update_state["message"] = message
+
+    def _run_update_worker() -> None:
+        try:
+            res = run_app_update(BASE_DIR, target_sha=req.target_sha, on_stage=_set_stage)
+            if req.auto_restart:
+                with _update_lock:
+                    _update_state.update({
+                        "status": "restarting",
+                        "stage": "restarting",
+                        "message": "Restarting Luna...",
+                        "error": None,
+                        "updated_sha": res.get("updated_sha", ""),
+                        "updated_short_sha": res.get("updated_short_sha", ""),
+                    })
+                schedule_server_restart(BASE_DIR, delay_sec=1.5)
+            else:
+                with _update_lock:
+                    _update_state.update({
+                        "status": "completed",
+                        "stage": "completed",
+                        "message": "Update complete",
+                        "error": None,
+                        "updated_sha": res.get("updated_sha", ""),
+                        "updated_short_sha": res.get("updated_short_sha", ""),
+                    })
+        except Exception as exc:
+            with _update_lock:
+                _update_state.update({
+                    "status": "error",
+                    "stage": "error",
+                    "message": str(exc),
+                    "error": str(exc),
+                })
+
+    threading.Thread(target=_run_update_worker, daemon=True).start()
+    with _update_lock:
+        return dict(_update_state)
 
 
 # Old job folders are temporary: the vault keeps its own copy of every saved file.

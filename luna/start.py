@@ -93,7 +93,8 @@ def main() -> None:
         print(f"Port {requested} is busy, using {port} instead.")
     print(f"Opening {url}. Add your API keys in Settings. Press Ctrl+C to stop.")
     os.environ["LUNA_PORT"] = str(port)  # the startup banner reads it
-    threading.Thread(target=open_browser_when_ready, args=(url,), daemon=True).start()
+    if os.getenv("LUNA_NO_BROWSER", "").strip() != "1":
+        threading.Thread(target=open_browser_when_ready, args=(url,), daemon=True).start()
 
     import uvicorn
 

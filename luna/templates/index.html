@@ -886,7 +886,7 @@
         </button>
       </div>
 
-      <!-- Page Header: Save Button -->
+      <!-- Page Header -->
       <div class="flex items-center justify-between gap-4 pb-6 border-b border-white/[0.08]">
         <div>
           <h1 class="font-sans text-2xl font-extrabold text-white tracking-tight">
@@ -896,6 +896,11 @@
             Configure API keys, storage, and local dependencies.
           </p>
         </div>
+        <button type="button" id="btnCheckUpdates" onclick="checkForLunaUpdates(this)"
+          class="t-btn t-btn-outline h-8 px-3 rounded-lg text-xs font-medium text-zinc-200 hover:text-white flex items-center gap-1.5 shrink-0 cursor-pointer">
+          <i data-lucide="refresh-cw" id="checkUpdatesIcon" class="w-3.5 h-3.5 text-zinc-400"></i>
+          <span id="checkUpdatesLabel">Check for Updates</span>
+        </button>
       </div>
 
       <!-- Section: AI Providers -->
@@ -1984,6 +1989,48 @@
         <button type="button" id="confirmModalProceedBtn"
           class="pill-btn pill-btn-charcoal px-5 py-1.5 text-xs font-medium cursor-pointer text-emerald-400 border border-emerald-500/30 hover:border-emerald-500/60">
           Continue
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- In-App Update Modal -->
+  <div id="updateModal"
+    class="hidden fixed inset-0 z-[118] flex items-center justify-center p-4 bg-black/80 transition-all duration-150"
+    onclick="if(event.target === this) closeUpdateModal()">
+    <div id="updateModalBox"
+      class="bg-[#171717] border border-white/[0.08] rounded-2xl p-6 max-w-sm w-full shadow-[0_25px_70px_rgba(0,0,0,0.95)] transform transition-all duration-150 scale-95 opacity-0">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h3 id="updateModalHeading" class="text-sm font-semibold text-white">Update Available</h3>
+          <p id="updateModalDesc" class="text-xs text-zinc-400 mt-1.5 leading-relaxed">
+            A newer version of Luna is ready to install.
+          </p>
+        </div>
+        <button type="button" id="updateModalCloseBtn" onclick="closeUpdateModal()" aria-label="Close update dialog"
+          class="text-zinc-500 hover:text-white transition p-1 -mr-1 -mt-1 rounded-lg cursor-pointer shrink-0">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <div id="updateModalMeta" class="hidden mt-3.5 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] space-y-1 text-[11px] font-sans">
+        <div class="flex items-center justify-between gap-2 text-zinc-400">
+          <span>Latest build</span>
+          <code id="updateModalSha" class="font-mono text-zinc-200">-</code>
+        </div>
+        <p id="updateModalCommitMsg" class="text-zinc-300 truncate"></p>
+      </div>
+      <div class="flex items-center justify-end gap-2.5 mt-6 pt-3 border-t border-white/[0.06]">
+        <button type="button" id="updateModalLaterBtn" onclick="closeUpdateModal()"
+          class="pill-btn pill-btn-charcoal px-4 py-1.5 text-xs font-medium cursor-pointer text-zinc-400 hover:text-white">
+          Later
+        </button>
+        <button type="button" id="updateModalActionBtn" onclick="startLunaUpdate()"
+          class="pill-btn pill-btn-charcoal px-5 py-1.5 text-xs font-medium cursor-pointer text-emerald-400 border border-emerald-500/30 hover:border-emerald-500/60">
+          Update
+        </button>
+        <button type="button" id="updateModalOkBtn" onclick="closeUpdateModal()"
+          class="hidden pill-btn pill-btn-charcoal px-5 py-1.5 text-xs font-medium cursor-pointer text-white">
+          OK
         </button>
       </div>
     </div>
