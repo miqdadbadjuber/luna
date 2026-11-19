@@ -154,6 +154,20 @@ class TestApiSettings(unittest.TestCase):
         with self.assertRaises(ValueError):
             ProcessRequest(url="https://www.youtube.com/watch?v=dQw4w9WgXcQ", action="type_yt_ai_clip", clip_language="ml")
 
+    def test_studio_background_setting_roundtrip_and_validation(self):
+        os.environ.pop("STUDIO_BACKGROUND", None)
+        self.assertEqual(self.client.get("/api/settings").json().get("studio_background"), "obsidian")
+
+        for preset in ("lunar-waves", "crimson-horizon", "prismatic-aurora", "obsidian"):
+            res = self.client.post("/api/settings", json={"studio_background": preset})
+            self.assertEqual(res.status_code, 200)
+            self.assertEqual(self.client.get("/api/settings").json().get("studio_background"), preset)
+            with open(self.env_path, "r", encoding="utf-8") as f:
+                self.assertIn(f"STUDIO_BACKGROUND={preset}", f.read())
+
+        bad = self.client.post("/api/settings", json={"studio_background": "invalid-theme"})
+        self.assertEqual(bad.status_code, 400)
+
     @patch("luna.app._open_windows_explorer")
     def test_open_folder_invokes_foreground_explorer_helper_on_windows(self, mock_open):
         with patch("luna.app.sys.platform", "win32"):

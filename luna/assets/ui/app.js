@@ -3341,6 +3341,11 @@ let studioBgResumeTimer = null;
 function activateStudioBackground() {
   const bgContainer = document.getElementById('studioBackgroundContainer');
   const curtainsCanvas = document.getElementById('curtains-canvas');
+  const activeBgId = typeof window.getActiveStudioBackground === 'function'
+    ? window.getActiveStudioBackground()
+    : 'obsidian';
+  const isWebGL = activeBgId === 'lunar-waves';
+
   if (bgContainer) {
     bgContainer.classList.remove('is-hidden');
     bgContainer.style.opacity = '1';
@@ -3348,13 +3353,22 @@ function activateStudioBackground() {
     bgContainer.style.pointerEvents = 'none';
     bgContainer.style.removeProperty('display');
   }
-  if (curtainsCanvas) {
-    curtainsCanvas.style.opacity = '1';
-    curtainsCanvas.style.visibility = 'visible';
-    curtainsCanvas.style.pointerEvents = 'none';
-    curtainsCanvas.style.removeProperty('display');
+  if (typeof window.applyStudioBackground === 'function') {
+    window.applyStudioBackground(activeBgId, { persistCache: false });
   }
-  if (typeof window.resumeUnicornStudio === 'function') {
+  if (curtainsCanvas) {
+    if (isWebGL) {
+      curtainsCanvas.style.opacity = '1';
+      curtainsCanvas.style.visibility = 'visible';
+      curtainsCanvas.style.pointerEvents = 'none';
+      curtainsCanvas.style.removeProperty('display');
+    } else {
+      curtainsCanvas.style.opacity = '0';
+      curtainsCanvas.style.visibility = 'hidden';
+      curtainsCanvas.style.display = 'none';
+    }
+  }
+  if (isWebGL && typeof window.resumeUnicornStudio === 'function') {
     window.resumeUnicornStudio();
   }
 }
@@ -4353,6 +4367,10 @@ async function loadSettingsData() {
       inputOpenaiModel: data.openai_model
     };
     defaultClipLanguage = data.clip_language || 'id';
+    if (data.studio_background && typeof window.applyStudioBackground === 'function') {
+      window.applyStudioBackground(data.studio_background);
+    }
+    renderStudioBackgroundCards();
     for (const [id, value] of Object.entries(openaiFields)) {
       const el = document.getElementById(id);
       if (el && value !== undefined) el.value = value;
@@ -4481,6 +4499,146 @@ async function saveSettings() {
       triggerInputError('wrapStorage', 'errStorage', err.message);
     }
     showToast(err.message || 'Could not save settings', true);
+  }
+}
+
+let __studioBgSavingId = null;
+let __studioBgStatusTimer = null;
+
+function renderStudioBackgroundCards() {
+  const grid = document.getElementById('studioBackgroundGrid');
+  const presets = Array.isArray(window.LUNA_STUDIO_BACKGROUNDS) ? window.LUNA_STUDIO_BACKGROUNDS : [];
+  if (!grid || !presets.length) return;
+
+  const activeId = typeof window.getActiveStudioBackground === 'function'
+    ? window.getActiveStudioBackground()
+    : 'obsidian';
+
+  grid.innerHTML = '';
+  presets.forEach((preset) => {
+    const isActive = preset.id === activeId;
+    const isSaving = preset.id === __studioBgSavingId;
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'bg-preset-card' + (isActive ? ' is-active' : '') + (isSaving ? ' is-saving' : '');
+    btn.setAttribute('role', 'radio');
+    btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
+    btn.setAttribute('data-bg-option', preset.id);
+    btn.onclick = () => selectStudioBackground(preset.id);
+
+    const swatch = document.createElement('div');
+    swatch.className = 'bg-preset-swatch';
+    swatch.style.background = preset.preview || preset.css;
+
+    const badge = document.createElement('span');
+    badge.className = 'bg-preset-badge absolute top-1.5 left-1.5 font-sans font-medium' + (preset.type === 'webgl' ? ' is-animated' : '');
+    badge.textContent = preset.badge || 'Static';
+    swatch.appendChild(badge);
+
+    if (isSaving) {
+      const overlay = document.createElement('div');
+      overlay.className = 'absolute inset-0 bg-black/45 flex items-center justify-center backdrop-blur-[1px]';
+      const spinner = document.createElement('span');
+      spinner.className = 'bg-preset-spinner';
+      overlay.appendChild(spinner);
+      swatch.appendChild(overlay);
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'bg-preset-meta';
+
+    const title = document.createElement('span');
+    title.className = 'text-[11px] font-sans font-medium truncate ' + (isActive ? 'text-white' : 'text-zinc-300');
+    title.textContent = preset.name;
+    meta.appendChild(title);
+
+    if (isSaving) {
+      const savingLabel = document.createElement('span');
+      savingLabel.className = 'text-[10px] font-sans text-emerald-400 shrink-0';
+      savingLabel.textContent = 'Saving...';
+      meta.appendChild(savingLabel);
+    } else if (isActive) {
+      const checkSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      checkSvg.setAttribute('class', 'w-3.5 h-3.5 text-emerald-400 shrink-0');
+      checkSvg.setAttribute('viewBox', '0 0 24 24');
+      checkSvg.setAttribute('fill', 'none');
+      checkSvg.setAttribute('stroke', 'currentColor');
+      checkSvg.setAttribute('stroke-width', '2.5');
+      checkSvg.setAttribute('stroke-linecap', 'round');
+      checkSvg.setAttribute('stroke-linejoin', 'round');
+      checkSvg.setAttribute('aria-hidden', 'true');
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', 'M20 6 9 17l-5-5');
+      checkSvg.appendChild(path);
+      meta.appendChild(checkSvg);
+    }
+
+    btn.appendChild(swatch);
+    btn.appendChild(meta);
+    grid.appendChild(btn);
+  });
+}
+
+async function selectStudioBackground(bgId) {
+  if (!bgId || __studioBgSavingId) return;
+  const previousId = typeof window.getActiveStudioBackground === 'function'
+    ? window.getActiveStudioBackground()
+    : 'obsidian';
+  if (bgId === previousId) return;
+
+  const statusEl = document.getElementById('studioBgSaveStatus');
+  __studioBgSavingId = bgId;
+  if (__studioBgStatusTimer) {
+    clearTimeout(__studioBgStatusTimer);
+    __studioBgStatusTimer = null;
+  }
+  if (statusEl) {
+    statusEl.textContent = 'Saving...';
+    statusEl.className = 'text-[11px] text-emerald-400 font-sans';
+  }
+  renderStudioBackgroundCards();
+
+  const startedAt = Date.now();
+  try {
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ studio_background: bgId }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || 'Could not save background');
+    }
+    const elapsed = Date.now() - startedAt;
+    if (elapsed < 260) {
+      await new Promise((resolve) => setTimeout(resolve, 260 - elapsed));
+    }
+    const applied = typeof window.applyStudioBackground === 'function'
+      ? window.applyStudioBackground(bgId)
+      : { name: bgId };
+    __studioBgSavingId = null;
+    renderStudioBackgroundCards();
+    if (statusEl) {
+      statusEl.textContent = 'Saved';
+      statusEl.className = 'text-[11px] text-emerald-400 font-sans';
+      __studioBgStatusTimer = setTimeout(() => {
+        statusEl.textContent = 'Auto-saves on click';
+        statusEl.className = 'text-[11px] text-zinc-500 font-sans';
+      }, 2200);
+    }
+    showToast(`Studio background set to ${applied.name || bgId}`);
+  } catch (err) {
+    __studioBgSavingId = null;
+    if (typeof window.applyStudioBackground === 'function') {
+      window.applyStudioBackground(previousId);
+    }
+    renderStudioBackgroundCards();
+    if (statusEl) {
+      statusEl.textContent = 'Auto-saves on click';
+      statusEl.className = 'text-[11px] text-zinc-500 font-sans';
+    }
+    showToast(err.message || 'Could not save studio background', true);
   }
 }
 
@@ -8607,6 +8765,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const hidden = document.getElementById('selectClipLanguage');
         if (hidden) hidden.value = data.clip_language;
         if (typeof syncClipLanguageUI === 'function') syncClipLanguageUI();
+      }
+      if (data && data.studio_background && typeof window.applyStudioBackground === 'function') {
+        window.applyStudioBackground(data.studio_background);
+        renderStudioBackgroundCards();
       }
     })
     .catch(() => {});

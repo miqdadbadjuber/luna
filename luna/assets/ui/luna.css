@@ -2721,7 +2721,7 @@ media-theme-sutro ::-webkit-scrollbar {
   }
 }
 
-/* Studio animated WebGL background container */
+/* Studio background container */
 #studioBackgroundContainer {
   position: fixed;
   inset: 0;
@@ -2729,17 +2729,110 @@ media-theme-sutro ::-webkit-scrollbar {
   zoom: calc(1 / var(--luna-ui-zoom, 1));
   pointer-events: none;
   overflow: hidden;
-  background-color: #000000;
+  background-color: #0d0d0d;
   opacity: 1;
   visibility: visible;
   transition: opacity 0.35s ease, visibility 0.35s ease;
   will-change: opacity, visibility;
 }
 
+.studio-bg-css-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: #0d0d0d;
+  transition: opacity 0.35s ease;
+}
+
+#studioBackgroundContainer[data-bg-type="webgl"] {
+  background-color: #000000;
+}
+
 #studioBackgroundContainer.is-hidden {
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;
+}
+
+/* Settings: Studio Background preset cards */
+.bg-preset-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 0.45rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.bg-preset-card:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.04);
+  transform: translateY(-1px);
+}
+
+.bg-preset-card.is-active {
+  border-color: rgba(255, 255, 255, 0.48);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+
+.bg-preset-card.is-saving {
+  border-color: rgba(52, 211, 153, 0.5);
+  pointer-events: none;
+}
+
+.bg-preset-swatch {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  background-color: #0d0d0d;
+}
+
+.bg-preset-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.375rem;
+  padding: 0.45rem 0.2rem 0.1rem;
+}
+
+.bg-preset-badge {
+  font-size: 10px;
+  line-height: 1;
+  padding: 0.18rem 0.4rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.55);
+  color: rgba(228, 228, 231, 0.85);
+  backdrop-filter: blur(4px);
+}
+
+.bg-preset-badge.is-animated {
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+.bg-preset-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #34d399;
+  animation: lunaBgSpin 0.65s linear infinite;
+}
+
+@keyframes lunaBgSpin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 [data-us-project] {

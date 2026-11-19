@@ -15,6 +15,22 @@ DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
 DEFAULT_CLIP_LANGUAGE = "id"
 SUPPORTED_CLIP_LANGUAGES = ("id", "en")
+DEFAULT_STUDIO_BACKGROUND = "obsidian"
+SUPPORTED_STUDIO_BACKGROUNDS = (
+    "obsidian",
+    "lunar-waves",
+    "crimson-horizon",
+    "emerald-horizon",
+    "dark-horizon",
+    "crimson-abyss",
+    "emerald-abyss",
+    "violet-abyss",
+    "ocean-glow",
+    "copper-forge",
+    "stellar-mist",
+    "cosmic-nebula",
+    "prismatic-aurora",
+)
 
 
 def normalize_clip_language(value: Optional[str]) -> Optional[str]:
@@ -30,6 +46,21 @@ def normalize_clip_language(value: Optional[str]) -> Optional[str]:
 def clip_language() -> str:
     """Preferred language ('id' or 'en') for AI-generated clip titles and captions."""
     return normalize_clip_language(os.getenv("CLIP_OUTPUT_LANGUAGE", "")) or DEFAULT_CLIP_LANGUAGE
+
+
+def normalize_studio_background(value: Optional[str]) -> Optional[str]:
+    """Return canonical studio background preset id, or None when unsupported."""
+    raw = str(value or "").strip().lower()
+    if raw in ("default", "minimal", "workspace", "none"):
+        return DEFAULT_STUDIO_BACKGROUND
+    if raw in SUPPORTED_STUDIO_BACKGROUNDS:
+        return raw
+    return None
+
+
+def studio_background() -> str:
+    """Active Studio background preset id (defaults to lightweight 'obsidian')."""
+    return normalize_studio_background(os.getenv("STUDIO_BACKGROUND", "")) or DEFAULT_STUDIO_BACKGROUND
 
 
 # Settings rewrites .env while the app is running, so these read os.getenv on

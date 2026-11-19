@@ -1,4 +1,123 @@
-// Global WebGL Lifecycle Controllers for UnicornStudio (original animated shader + software WebGL2 shim)
+// Studio Background Registry & WebGL Lifecycle Controllers
+const LUNA_STUDIO_BG_STORAGE_KEY = 'luna_studio_bg';
+const LUNA_DEFAULT_STUDIO_BG = 'obsidian';
+
+const LUNA_STUDIO_BACKGROUNDS = [
+  {
+    id: 'obsidian',
+    name: 'Obsidian',
+    badge: 'Default',
+    type: 'obsidian',
+    css: '#0d0d0d',
+    preview: '#0d0d0d',
+  },
+  {
+    id: 'lunar-waves',
+    name: 'Lunar Waves',
+    badge: 'Animated',
+    type: 'webgl',
+    css: '#000000',
+    preview: 'radial-gradient(circle at 50% 95%, rgba(160, 160, 160, 0.28), transparent 48%), linear-gradient(155deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.03) 34%, transparent 52%, rgba(255, 255, 255, 0.11) 70%, transparent 88%), #050505',
+  },
+  {
+    id: 'crimson-horizon',
+    name: 'Crimson Horizon',
+    badge: 'Static',
+    type: 'css',
+    css: 'radial-gradient(125% 125% at 50% 100%, #000000 40%, #2b0707 100%)',
+  },
+  {
+    id: 'emerald-horizon',
+    name: 'Emerald Horizon',
+    badge: 'Static',
+    type: 'css',
+    css: 'radial-gradient(125% 125% at 50% 90%, #000000 40%, #072607 100%)',
+  },
+  {
+    id: 'dark-horizon',
+    name: 'Dark Horizon',
+    badge: 'Static',
+    type: 'css',
+    css: 'radial-gradient(125% 125% at 50% 90%, #000000 40%, #0d1a36 100%)',
+  },
+  {
+    id: 'crimson-abyss',
+    name: 'Crimson Abyss',
+    badge: 'Static',
+    type: 'css',
+    css: 'radial-gradient(125% 125% at 50% 10%, #000000 40%, #2b0707 100%)',
+  },
+  {
+    id: 'emerald-abyss',
+    name: 'Emerald Abyss',
+    badge: 'Static',
+    type: 'css',
+    css: 'radial-gradient(125% 125% at 50% 10%, #000000 40%, #072607 100%)',
+  },
+  {
+    id: 'violet-abyss',
+    name: 'Violet Abyss',
+    badge: 'Static',
+    type: 'css',
+    css: 'radial-gradient(125% 125% at 50% 10%, #000000 40%, #2b092b 100%)',
+  },
+  {
+    id: 'ocean-glow',
+    name: 'Ocean Glow',
+    badge: 'Static',
+    type: 'css',
+    css: 'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(6, 182, 212, 0.25), transparent 70%), #000000',
+  },
+  {
+    id: 'copper-forge',
+    name: 'Copper Forge',
+    badge: 'Static',
+    type: 'css',
+    css: 'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(249, 115, 22, 0.25), transparent 70%), #000000',
+  },
+  {
+    id: 'stellar-mist',
+    name: 'Stellar Mist',
+    badge: 'Static',
+    type: 'css',
+    css: 'radial-gradient(ellipse 140% 50% at 15% 60%, rgba(124, 58, 237, 0.11), transparent 48%), radial-gradient(ellipse 90% 80% at 85% 25%, rgba(245, 101, 101, 0.09), transparent 58%), radial-gradient(ellipse 120% 65% at 40% 90%, rgba(34, 197, 94, 0.13), transparent 52%), radial-gradient(ellipse 100% 45% at 70% 5%, rgba(251, 191, 36, 0.07), transparent 42%), radial-gradient(ellipse 80% 75% at 90% 80%, rgba(168, 85, 247, 0.10), transparent 55%), #000000',
+  },
+  {
+    id: 'cosmic-nebula',
+    name: 'Cosmic Nebula',
+    badge: 'Static',
+    type: 'css',
+    css: 'radial-gradient(ellipse 110% 70% at 25% 80%, rgba(147, 51, 234, 0.12), transparent 55%), radial-gradient(ellipse 130% 60% at 75% 15%, rgba(59, 130, 246, 0.10), transparent 65%), radial-gradient(ellipse 80% 90% at 20% 30%, rgba(236, 72, 153, 0.14), transparent 50%), radial-gradient(ellipse 100% 40% at 60% 70%, rgba(16, 185, 129, 0.08), transparent 45%), #000000',
+  },
+  {
+    id: 'prismatic-aurora',
+    name: 'Prismatic Aurora',
+    badge: 'Static',
+    type: 'css',
+    css: 'radial-gradient(ellipse 120% 80% at 70% 20%, rgba(255, 20, 147, 0.15), transparent 50%), radial-gradient(ellipse 100% 60% at 30% 10%, rgba(0, 255, 255, 0.12), transparent 60%), radial-gradient(ellipse 90% 70% at 50% 0%, rgba(138, 43, 226, 0.18), transparent 65%), radial-gradient(ellipse 110% 50% at 80% 30%, rgba(255, 215, 0, 0.08), transparent 40%), #000000',
+  },
+];
+
+window.LUNA_STUDIO_BACKGROUNDS = LUNA_STUDIO_BACKGROUNDS;
+
+function __resolveStudioBackground(bgId) {
+  const raw = String(bgId || '').trim().toLowerCase();
+  const match = LUNA_STUDIO_BACKGROUNDS.find(function (item) {
+    return item.id === raw;
+  });
+  return match || LUNA_STUDIO_BACKGROUNDS[0];
+}
+
+function __readCachedStudioBackground() {
+  try {
+    return __resolveStudioBackground(window.localStorage.getItem(LUNA_STUDIO_BG_STORAGE_KEY)).id;
+  } catch (e) {
+    return LUNA_DEFAULT_STUDIO_BG;
+  }
+}
+
+let __activeStudioBackgroundId = __readCachedStudioBackground();
+let __unicornScriptRequested = false;
 let __unicornLastViewport = {
   w: window.innerWidth,
   h: window.innerHeight,
@@ -8,6 +127,14 @@ let __unicornNeedsResize = false;
 let __unicornNeedsRefresh = false;
 let __unicornResizeTimer = null;
 let __unicornBootPending = false;
+
+window.getActiveStudioBackground = function () {
+  return __activeStudioBackgroundId;
+};
+
+function __isWebGLBackgroundActive() {
+  return __activeStudioBackgroundId === 'lunar-waves';
+}
 
 (function installUnicornWebGLShim() {
   if (window.__lunaWebGLShimInstalled || typeof HTMLCanvasElement === 'undefined') return;
@@ -23,7 +150,6 @@ let __unicornBootPending = false;
       attrs &&
       attrs.failIfMajorPerformanceCaveat
     ) {
-      // Allow UnicornStudio to use software WebGL2 (VirtualBox / basic display driver) when strict HW context fails.
       ctx = origGetContext.call(
         this,
         type,
@@ -86,7 +212,7 @@ function __bindSceneContextHandlers(scene) {
   });
   canvas.addEventListener('webglcontextrestored', function () {
     __unicornNeedsRefresh = true;
-    if (__isStudioTabActive() && !document.hidden) {
+    if (__isWebGLBackgroundActive() && __isStudioTabActive() && !document.hidden) {
       requestAnimationFrame(function () {
         window.resumeUnicornStudio();
       });
@@ -95,10 +221,14 @@ function __bindSceneContextHandlers(scene) {
 }
 
 function __initUnicornStudioNow() {
+  if (!__isWebGLBackgroundActive()) {
+    __unicornBootPending = false;
+    return;
+  }
   if (!window.UnicornStudio || window.UnicornStudio.isInitialized || typeof window.UnicornStudio.init !== 'function') {
     return;
   }
-  if (!__isStudioTabActive() && document.documentElement.hasAttribute('data-init-route')) {
+  if (!__isStudioTabActive()) {
     __unicornBootPending = true;
     return;
   }
@@ -115,20 +245,62 @@ function __initUnicornStudioNow() {
         if (scene.interactivity && scene.interactivity.mouse) {
           scene.interactivity.mouse.disabled = true;
         }
-        // Keep static wave/gradient planes drawable so background FBO evictions cannot wipe the wave black.
         scene.disablePlanes = function () {};
         __keepUnicornPlanesDrawable(scene, false);
         __bindSceneContextHandlers(scene);
       });
     }
-    // If loaded while on non-studio tab or hidden browser tab, pause WebGL cleanly until visible
-    if (!__isStudioTabActive() || document.hidden) {
+    if (!__isWebGLBackgroundActive() || !__isStudioTabActive() || document.hidden) {
       window.pauseUnicornStudio();
+    } else {
+      const curtainsCanvas = document.getElementById('curtains-canvas');
+      if (curtainsCanvas) {
+        curtainsCanvas.style.removeProperty('display');
+        curtainsCanvas.style.opacity = '1';
+        curtainsCanvas.style.visibility = 'visible';
+      }
+      window.resumeUnicornStudio();
     }
   }).catch(function (e) {
     window.UnicornStudio.isInitialized = false;
-    console.warn('[UnicornStudio]', e);
+    console.warn('[StudioBackground]', e);
   });
+}
+
+function __ensureUnicornStudioLoaded() {
+  if (!__isWebGLBackgroundActive()) return;
+  if (window.UnicornStudio && typeof window.UnicornStudio.init === 'function') {
+    __initUnicornStudioNow();
+    return;
+  }
+  if (__unicornScriptRequested) return;
+  __unicornScriptRequested = true;
+
+  const cdnUrls = [
+    'https://cdn.jsdelivr.net/gh/hiunicornstudio/unicornstudio.js@v1.4.30/dist/unicornStudio.umd.js',
+    'https://fastly.jsdelivr.net/gh/hiunicornstudio/unicornstudio.js@v1.4.30/dist/unicornStudio.umd.js',
+  ];
+
+  function loadUnicornScript(attempt) {
+    if (attempt >= cdnUrls.length) {
+      __unicornScriptRequested = false;
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = cdnUrls[attempt];
+    s.onload = function () {
+      __initUnicornStudioNow();
+    };
+    s.onerror = function () {
+      loadUnicornScript(attempt + 1);
+    };
+    (document.head || document.body).appendChild(s);
+  }
+
+  if (!window.UnicornStudio) {
+    window.UnicornStudio = { isInitialized: false };
+  }
+  loadUnicornScript(0);
 }
 
 window.pauseUnicornStudio = function () {
@@ -145,13 +317,23 @@ window.pauseUnicornStudio = function () {
       });
     }
   } catch (e) {
-    console.debug('[UnicornStudio pause]', e);
+    console.debug('[StudioBackground pause]', e);
   }
 };
 
 window.resumeUnicornStudio = function () {
-  if (__unicornBootPending && __isStudioTabActive()) {
-    __initUnicornStudioNow();
+  if (!__isWebGLBackgroundActive()) {
+    window.pauseUnicornStudio();
+    return;
+  }
+  if (__isStudioTabActive()) {
+    if (!window.UnicornStudio || typeof window.UnicornStudio.init !== 'function') {
+      __ensureUnicornStudioLoaded();
+      return;
+    }
+    if (__unicornBootPending || !window.UnicornStudio.isInitialized) {
+      __initUnicornStudioNow();
+    }
   }
   try {
     if (__isStudioTabActive() && !document.hidden) {
@@ -193,11 +375,67 @@ window.resumeUnicornStudio = function () {
       }
     }
   } catch (e) {
-    console.debug('[UnicornStudio resume]', e);
+    console.debug('[StudioBackground resume]', e);
   }
 };
 
+window.applyStudioBackground = function (bgId, options) {
+  const preset = __resolveStudioBackground(bgId);
+  __activeStudioBackgroundId = preset.id;
+  if (!options || options.persistCache !== false) {
+    try {
+      window.localStorage.setItem(LUNA_STUDIO_BG_STORAGE_KEY, preset.id);
+    } catch (e) {}
+  }
+
+  const bgContainer = document.getElementById('studioBackgroundContainer');
+  const cssLayer = document.getElementById('studioBgCssLayer');
+  const usNode = bgContainer ? bgContainer.querySelector('[data-us-project]') : null;
+  const curtainsCanvas = document.getElementById('curtains-canvas');
+
+  if (bgContainer) {
+    bgContainer.setAttribute('data-bg-id', preset.id);
+    bgContainer.setAttribute('data-bg-type', preset.type);
+  }
+
+  if (preset.type === 'webgl') {
+    if (cssLayer) {
+      cssLayer.style.background = '#000000';
+      cssLayer.style.opacity = '0';
+    }
+    if (usNode) {
+      usNode.style.display = '';
+    }
+    if (curtainsCanvas && __isStudioTabActive()) {
+      curtainsCanvas.style.removeProperty('display');
+      curtainsCanvas.style.opacity = '1';
+      curtainsCanvas.style.visibility = 'visible';
+    }
+    __ensureUnicornStudioLoaded();
+    if (__isStudioTabActive()) {
+      window.resumeUnicornStudio();
+    }
+  } else {
+    window.pauseUnicornStudio();
+    if (usNode) {
+      usNode.style.display = 'none';
+    }
+    if (curtainsCanvas) {
+      curtainsCanvas.style.opacity = '0';
+      curtainsCanvas.style.visibility = 'hidden';
+      curtainsCanvas.style.display = 'none';
+    }
+    if (cssLayer) {
+      cssLayer.style.background = preset.css;
+      cssLayer.style.opacity = '1';
+    }
+  }
+
+  return preset;
+};
+
 window.addEventListener('resize', function () {
+  if (!__isWebGLBackgroundActive()) return;
   __unicornNeedsResize = true;
   if (__unicornResizeTimer) clearTimeout(__unicornResizeTimer);
   __unicornResizeTimer = setTimeout(function () {
@@ -208,8 +446,8 @@ window.addEventListener('resize', function () {
   }, 120);
 });
 
-// Pause WebGL + shader clock while tab is hidden and restore cleanly on return or bfcache wake
 document.addEventListener('visibilitychange', function () {
+  if (!__isWebGLBackgroundActive()) return;
   if (document.hidden) {
     window.pauseUnicornStudio();
   } else if (__isStudioTabActive()) {
@@ -218,6 +456,7 @@ document.addEventListener('visibilitychange', function () {
 });
 
 window.addEventListener('pageshow', function (event) {
+  if (!__isWebGLBackgroundActive()) return;
   if (event && event.persisted) {
     __unicornNeedsRefresh = true;
   }
@@ -230,30 +469,14 @@ window.addEventListener('pagehide', function () {
   window.pauseUnicornStudio();
 });
 
-!function () {
-  const cdnUrls = [
-    'https://cdn.jsdelivr.net/gh/hiunicornstudio/unicornstudio.js@v1.4.30/dist/unicornStudio.umd.js',
-    'https://fastly.jsdelivr.net/gh/hiunicornstudio/unicornstudio.js@v1.4.30/dist/unicornStudio.umd.js',
-  ];
-
-  function loadUnicornScript(attempt) {
-    if (attempt >= cdnUrls.length) return;
-    const s = document.createElement('script');
-    s.src = cdnUrls[attempt];
-    s.onload = function () {
-      __initUnicornStudioNow();
-    };
-    s.onerror = function () {
-      loadUnicornScript(attempt + 1);
-    };
-    (document.head || document.body).appendChild(s);
-  }
-
-  if (!window.UnicornStudio) {
-    window.UnicornStudio = { isInitialized: false };
-    loadUnicornScript(0);
-  }
-}();
+// Apply initial background immediately without loading WebGL unless lunar-waves is selected
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function () {
+    window.applyStudioBackground(__activeStudioBackgroundId, { persistCache: false });
+  });
+} else {
+  window.applyStudioBackground(__activeStudioBackgroundId, { persistCache: false });
+}
 
 // Guide Script Functions
 const GUIDE_DOCS_ORDER = [

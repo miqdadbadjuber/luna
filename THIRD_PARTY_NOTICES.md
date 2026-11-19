@@ -35,7 +35,8 @@ Dependencies are installed from `requirements.txt` under their own licenses, and
 | Lucide Icons (`0.469.0`) | Interface icons | `https://unpkg.com/lucide@0.469.0` |
 | Google Fonts (`Inter`, `Sora`) | Body and heading typefaces | `https://fonts.googleapis.com` |
 | player.style (`sutro`) | Video and audio player web component (`media-theme-sutro`) | `https://cdn.jsdelivr.net/npm/player.style/sutro/+esm` |
-| Unicorn Studio (`1.4.30`) | Desktop animated WebGL background runtime | `https://cdn.jsdelivr.net/gh/hiunicornstudio/unicornstudio.js@v1.4.30/dist/unicornStudio.umd.js` |
+| Unicorn Studio (`1.4.30`) | Optional animated WebGL background runtime | `https://cdn.jsdelivr.net/gh/hiunicornstudio/unicornstudio.js@v1.4.30/dist/unicornStudio.umd.js` |
+| PatternCraft | Optional CSS radial gradient presets for the Studio background selector | `https://patterncraft.store/` |
 | Transitions.dev | Reference patterns for sliding tabs, collapsible task rows, shake validation, and clipper tooltips | `https://transitions.dev` |
 | coss UI | Reference patterns for primary buttons and stacked toast notifications | `https://coss.com/ui` |
 

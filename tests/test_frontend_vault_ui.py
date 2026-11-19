@@ -527,6 +527,47 @@ class TestFrontendVaultUI(unittest.TestCase):
         ):
             self.assertIn(expected, bg_js)
 
+    def test_studio_background_selector_defaults_to_obsidian_and_lazy_loads_webgl(self):
+        """Studio defaults to lightweight Workspace dark ('obsidian'), offers 13 presets at bottom of Settings with auto-save, and lazy-loads WebGL."""
+        html = self.source
+        for expected in (
+            'id="studioBgCssLayer"',
+            'data-bg-id="obsidian"',
+            'id="settingsStudioBackgroundSection"',
+            'id="studioBackgroundGrid"',
+            'id="studioBgSaveStatus"',
+            "function renderStudioBackgroundCards",
+            "async function selectStudioBackground",
+        ):
+            self.assertIn(expected, html)
+
+        # Settings Studio Background section sits at the bottom after System Status
+        self.assertGreater(
+            html.index('id="settingsStudioBackgroundSection"'),
+            html.index('id="cookieStatusBadge"'),
+        )
+
+        bg_js = self.client.get("/assets/ui/background.js").text
+        for preset_id in (
+            "'obsidian'",
+            "'lunar-waves'",
+            "'crimson-horizon'",
+            "'emerald-horizon'",
+            "'dark-horizon'",
+            "'crimson-abyss'",
+            "'emerald-abyss'",
+            "'violet-abyss'",
+            "'ocean-glow'",
+            "'copper-forge'",
+            "'stellar-mist'",
+            "'cosmic-nebula'",
+            "'prismatic-aurora'",
+        ):
+            self.assertIn(preset_id, bg_js)
+        self.assertIn("function __ensureUnicornStudioLoaded", bg_js)
+        self.assertIn("window.applyStudioBackground", bg_js)
+        self.assertNotIn("patterncraft", bg_js.lower())
+
 
 if __name__ == "__main__":
     unittest.main()

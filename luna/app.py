@@ -65,8 +65,10 @@ from .clipper.config import (
     DEFAULT_OPENAI_BASE_URL,
     clip_language,
     normalize_clip_language,
+    normalize_studio_background,
     openai_base_url,
     openai_model,
+    studio_background,
     transcribe_provider,
     transcribe_provider_label,
 )
@@ -2819,6 +2821,7 @@ class SettingsUpdateRequest(BaseModel):
     llm_provider: Optional[str] = None
     transcribe_provider: Optional[str] = None
     clip_language: Optional[str] = None
+    studio_background: Optional[str] = None
     openai_api_key: Optional[str] = None
     openai_base_url: Optional[str] = None
     openai_model: Optional[str] = None
@@ -2884,6 +2887,7 @@ async def api_get_settings():
         "llm_provider": os.getenv("LLM_PROVIDER", "").strip().lower(),
         "transcribe_provider": transcribe_provider(),
         "clip_language": clip_language(),
+        "studio_background": studio_background(),
         # Secrets are never echoed back; only a hint plus a configured flag.
         "openai_api_key": _mask_key(openai_key),
         "openai_api_key_set": bool(openai_key.strip()),
@@ -2931,6 +2935,11 @@ async def api_save_settings(req: SettingsUpdateRequest):
         if not normalized_lang:
             raise HTTPException(status_code=400, detail="Unsupported clip language; use 'id' or 'en'")
         updates["CLIP_OUTPUT_LANGUAGE"] = normalized_lang
+    if req.studio_background is not None:
+        normalized_bg = normalize_studio_background(req.studio_background)
+        if not normalized_bg:
+            raise HTTPException(status_code=400, detail="Unsupported studio background preset")
+        updates["STUDIO_BACKGROUND"] = normalized_bg
     if req.openai_base_url is not None and req.openai_base_url.strip():
         if not req.openai_base_url.strip().startswith(("http://", "https://")):
             raise HTTPException(status_code=400, detail="Base URL must start with http:// or https://")
