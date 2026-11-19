@@ -5,11 +5,9 @@
     <img src="luna/assets/light-banner.png" alt="Luna" width="100%" />
   </picture>
 </p>
-
 <div align="center">
-
 ### Local-First Video Downloader & AI Clipper
-
+---
 <code>beta version</code>
 
 [Requirements](#requirements) · [Install](#install) · [Features](#features) · [Update](#update) · [MCP](MCP.md) · [Docker](#docker) · [FAQ](#faq)
