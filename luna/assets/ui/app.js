@@ -8934,7 +8934,12 @@ async function checkForLunaUpdates(btn) {
     showNoticeModal('Update check failed', err.message || 'Could not reach GitHub to check for updates.');
   } finally {
     if (trigger) trigger.disabled = false;
-    if (icon) icon.classList.remove('animate-spin');
+    const currentIcon = document.getElementById('checkUpdatesIcon');
+    if (currentIcon) {
+      currentIcon.classList.remove('animate-spin');
+      currentIcon.querySelectorAll('.animate-spin').forEach((el) => el.classList.remove('animate-spin'));
+    }
+    if (icon && icon !== currentIcon) icon.classList.remove('animate-spin');
     if (label) label.textContent = 'Check for Updates';
   }
 }
