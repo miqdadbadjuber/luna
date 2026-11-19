@@ -25,7 +25,7 @@ class TestYoutubeDownloadOpts(unittest.TestCase):
     def test_app_downloads(self):
         opts = get_ytdl_base_opts({"format": "best"})
         self.assert_tuning_with_warnings(opts)
-        self.assertEqual(opts["format_sort"], ["res", "vcodec:h264"])
+        self.assertEqual(opts["format_sort"], ["lang", "res", "vcodec:h264"])
 
     def test_clipper_download(self):
         seen = {}
@@ -39,8 +39,9 @@ class TestYoutubeDownloadOpts(unittest.TestCase):
             with self.assertRaises(_Captured):
                 downloader.download_youtube_local("https://www.youtube.com/watch?v=aqz-KE-bpKQ", out_dir=out)
         self.assert_tuning_with_warnings(seen)
-        self.assertEqual(seen["format_sort"], ["res", "proto:https", "+size", "+br"])
+        self.assertEqual(seen["format_sort"], ["lang", "res", "proto:https", "+vbr"])
         self.assertIn("height<=1080", seen["format"])
+        self.assertIn("bestaudio[format_note*=original]", seen["format"])
 
     def test_trimmer_uses_smallest_https_while_full_video_keeps_h264(self):
         trim_seen = {}
@@ -57,6 +58,7 @@ class TestYoutubeDownloadOpts(unittest.TestCase):
                 with self.assertRaises(_Captured):
                     app_module.download_youtube_video("https://www.youtube.com/watch?v=aqz-KE-bpKQ", out, "1080")
             self.assertEqual(full_seen["format_sort"], downloader.YOUTUBE_FORMAT_SORT)
+            self.assertIn("bestaudio[format_note*=original]", full_seen["format"])
 
             req = ProcessRequest(url="https://www.youtube.com/watch?v=aqz-KE-bpKQ", action="type_yt_clip")
             app_module.jobs["trim_opts_test"] = {
@@ -75,6 +77,7 @@ class TestYoutubeDownloadOpts(unittest.TestCase):
             finally:
                 app_module.jobs.pop("trim_opts_test", None)
             self.assertEqual(trim_seen["format_sort"], downloader.CLIPPER_FORMAT_SORT)
+            self.assertIn("bestaudio[format_note*=original]", trim_seen["format"])
 
     def test_format_for_defaults_to_1080_and_honors_explicit_choice(self):
         self.assertIn("height<=1080", downloader._format_for("1080"))

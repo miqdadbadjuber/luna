@@ -188,6 +188,22 @@ class TestVideoFormatOptions(unittest.TestCase):
                 app_module.job_requests.pop(job_id, None)
                 app_module.job_cancel_events.pop(job_id, None)
 
+    def test_hardware_encoder_candidates_specify_quality_rate_control(self):
+        """Every hardware encoder candidate must set explicit quality/rate-control flags (never bare h264_mf 200kbps default)."""
+        from luna.clipper import clipper
+
+        quality_tokens = {"-cq", "-qp_i", "-global_quality", "-rate_control", "-b:v", "-crf"}
+        for label, flags in clipper._HARDWARE_ENCODER_CANDIDATES:
+            self.assertTrue(
+                any(tok in flags for tok in quality_tokens),
+                f"{label} missing explicit quality/rate-control flags: {flags}",
+            )
+            if "h264_mf" in flags:
+                self.assertIn("-rate_control", flags)
+            if "h264_amf" in flags:
+                self.assertIn("-rc", flags)
+                self.assertIn("-qp_i", flags)
+
 
 if __name__ == "__main__":
     unittest.main()

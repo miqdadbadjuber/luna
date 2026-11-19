@@ -222,8 +222,9 @@ class TestOpenAICompatible(unittest.TestCase):
         self.assertEqual(res.json(), {"models": ["a-chat", "z-chat"]})
 
     def test_gemini_fallback_on_503_and_404_with_model_discovery(self):
+        import threading
         from types import SimpleNamespace
-        from luna.clipper import llm
+        from luna.clipper import highlights, llm
 
         seen_models = []
 
@@ -232,7 +233,9 @@ class TestOpenAICompatible(unittest.TestCase):
                 seen_models.append(model)
                 if model == "gemini-3.8-flash":
                     raise RuntimeError("503 UNAVAILABLE")
-                if model in ("gemini-3.5-flash", "gemini-3.5-flash-lite"):
+                if model == "gemini-3.5-flash":
+                    raise RuntimeError("504 DEADLINE_EXCEEDED")
+                if model in ("gemini-3.5-flash-lite", "gemini-3.7-flash", "gemini-3.6-flash"):
                     raise RuntimeError("404 NOT_FOUND")
                 if model == "gemini-3.9-flash":
                     return SimpleNamespace(text="ok from discovered")
@@ -241,6 +244,7 @@ class TestOpenAICompatible(unittest.TestCase):
             def list(self):
                 return [
                     SimpleNamespace(name="models/gemini-3.9-flash-tts", supported_actions=["generateContent"]),
+                    SimpleNamespace(name="models/gemini-omni-flash-preview", supported_actions=["generateContent"]),
                     SimpleNamespace(name="models/gemini-3.9-flash", supported_actions=["generateContent"]),
                 ]
 
@@ -248,15 +252,37 @@ class TestOpenAICompatible(unittest.TestCase):
         with patch.dict(os.environ, {"GEMINI_MODEL": ""}), patch("luna.clipper.llm.time.sleep"):
             resp = llm.gemini_generate_with_fallback(fake_client, contents="hi", config={})
         self.assertEqual(resp.text, "ok from discovered")
+        # Pass 1 fails over immediately (1 attempt per model) without getting stuck retrying 503/504,
+        # and excludes omni/tts models during dynamic discovery.
         self.assertEqual(
             seen_models,
             [
-                "gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.8-flash",
+                "gemini-3.8-flash",
                 "gemini-3.5-flash",
                 "gemini-3.5-flash-lite",
+                "gemini-3.7-flash",
+                "gemini-3.6-flash",
                 "gemini-3.9-flash",
             ],
         )
+
+        # Exhausted Gemini cascade should NOT be multiplied 3x by call_highlight_api.
+        outer_calls = []
+
+        def exhausted_llm(_prompt):
+            outer_calls.append(1)
+            raise llm.GeminiFallbackExhaustedError("503 UNAVAILABLE")
+
+        with patch("luna.clipper.highlights.time.sleep"):
+            with self.assertRaises(RuntimeError):
+                highlights.call_highlight_api("prompt", llm_fn=exhausted_llm)
+        self.assertEqual(len(outer_calls), 1)
+
+        # Cancelled event aborts immediately before invoking any model.
+        cancel = threading.Event()
+        cancel.set()
+        with self.assertRaisesRegex(RuntimeError, "CANCELLED_BY_USER"):
+            llm.gemini_generate_with_fallback(fake_client, contents="hi", config={}, cancel_event=cancel)
 
 
 if __name__ == "__main__":

@@ -50,7 +50,11 @@ def generate_shorts(
     if on_status:
         on_status("ranking_highlights")
     highlights_result = get_highlights(
-        transcript, num_clips=num_clips, llm_fn=call_llm, clip_language=clip_language
+        transcript,
+        num_clips=num_clips,
+        llm_fn=call_llm,
+        clip_language=clip_language,
+        cancel_event=cancel_event,
     )
     all_highlights: List[Dict] = highlights_result.get("highlights", [])
     if not all_highlights:

@@ -28,13 +28,13 @@ def _import_ytdlp():
     return yt_dlp
 
 
-# Prefer H.264 for direct full-video downloads so files play everywhere without re-encoding.
-YOUTUBE_FORMAT_SORT = ["res", "vcodec:h264"]
+# Prefer original audio language first, then H.264 for direct full-video downloads so files play everywhere.
+YOUTUBE_FORMAT_SORT = ["lang", "res", "vcodec:h264"]
 
 # Clipper and Trimmer always re-encode clips to H.264 MP4, so pick the smallest
-# https stream at the chosen resolution (often AV1 ~88 MB vs H.264 ~178 MB at 1080p)
-# to halve download time and keep FastHttpFD active instead of bloated HLS streams.
-CLIPPER_FORMAT_SORT = ["res", "proto:https", "+size", "+br"]
+# https video stream (+vbr only, NOT +size/+br which would override `lang` and pull
+# low-bitrate AI-dubbed audio tracks instead of the original audio).
+CLIPPER_FORMAT_SORT = ["lang", "res", "proto:https", "+vbr"]
 
 # Single source of truth for yt-dlp network tuning across all downloaders:
 # 4 concurrent fragments beats 12 under congested links, and dropping forced
@@ -49,13 +49,15 @@ YTDLP_DOWNLOAD_TUNING = {
 
 
 def _format_for(fmt: str) -> str:
-    """Map our '720' / '1080' shorthand to a fast yt-dlp format selector."""
+    """Map our '720' / '1080' shorthand to a yt-dlp selector that preserves original audio."""
     try:
         height = int(fmt)
     except ValueError:
         height = 1080
     return (
-        f"bestvideo[height<={height}]+bestaudio/best[height<={height}]/best"
+        f"bestvideo[height<={height}]+bestaudio[format_note*=original]/"
+        f"bestvideo[height<={height}]+bestaudio/"
+        f"best[height<={height}]/best"
     )
 
 

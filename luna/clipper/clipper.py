@@ -30,8 +30,33 @@ FACE_DETECT_SAMPLE_EVERY = 30
 # Ceiling for long/non-clip ffmpeg calls; individual clip encodes use a tighter duration-based budget.
 FFMPEG_TIMEOUT_SECONDS = 3600
 
-_HARDWARE_ENCODERS = ("h264_amf", "h264_mf")
+_HARDWARE_ENCODERS = ("h264_nvenc", "h264_amf", "h264_qsv", "h264_mf")
 _SOFTWARE_ENCODER_FLAGS = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-threads", "0"]
+
+# Hardware encoder candidates ordered by quality/speed reliability. Every candidate carries
+# explicit rate-control / quality flags (never bare `-c:v h264_mf`, which defaults to ~200-350 kbps).
+_HARDWARE_ENCODER_CANDIDATES: Tuple[Tuple[str, List[str]], ...] = (
+    (
+        "NVIDIA NVENC Hardware Acceleration (h264_nvenc)",
+        ["-c:v", "h264_nvenc", "-preset", "p4", "-rc", "vbr", "-cq", "20", "-b:v", "0"],
+    ),
+    (
+        "AMD AMF Hardware Acceleration (h264_amf)",
+        ["-c:v", "h264_amf", "-quality", "balanced", "-rc", "cqp", "-qp_i", "20", "-qp_p", "20"],
+    ),
+    (
+        "Intel QSV Hardware Acceleration (h264_qsv)",
+        ["-c:v", "h264_qsv", "-preset", "veryfast", "-global_quality", "20"],
+    ),
+    (
+        "MediaFoundation Hardware Acceleration (h264_mf)",
+        ["-c:v", "h264_mf", "-rate_control", "quality", "-quality", "80"],
+    ),
+    (
+        "MediaFoundation Hardware Acceleration (h264_mf VBR)",
+        ["-c:v", "h264_mf", "-rate_control", "pc_vbr", "-b:v", "5M", "-maxrate", "8M"],
+    ),
+)
 
 
 def _is_hardware_encoder(enc_flags: List[str]) -> bool:
@@ -247,33 +272,29 @@ def _get_encoder_flags() -> List[str]:
     global _DETECTED_ENCODER_FLAGS
     if _DETECTED_ENCODER_FLAGS is not None:
         return _DETECTED_ENCODER_FLAGS
-    # Test AMD AMF hardware encoder
-    try:
-        res = subprocess.run(
-            ["ffmpeg", "-y", "-f", "lavfi", "-i", "testsrc=duration=0.1:size=256x256:rate=30", "-c:v", "h264_amf", "-f", "null", "-"],
-            capture_output=True, text=True, timeout=4
-        )
-        if res.returncode == 0:
-            print("[clip/local] Using AMD AMF Hardware Acceleration (h264_amf)", flush=True)
-            _DETECTED_ENCODER_FLAGS = ["-c:v", "h264_amf", "-quality", "speed"]
-            return _DETECTED_ENCODER_FLAGS
-    except Exception:
-        pass
 
-    # Test MediaFoundation
-    try:
-        res = subprocess.run(
-            ["ffmpeg", "-y", "-f", "lavfi", "-i", "testsrc=duration=0.1:size=256x256:rate=30", "-c:v", "h264_mf", "-f", "null", "-"],
-            capture_output=True, text=True, timeout=4
-        )
-        if res.returncode == 0:
-            print("[clip/local] Using MediaFoundation Hardware Acceleration (h264_mf)", flush=True)
-            _DETECTED_ENCODER_FLAGS = ["-c:v", "h264_mf"]
-            return _DETECTED_ENCODER_FLAGS
-    except Exception:
-        pass
+    # Probe each candidate with its exact quality/rate-control flags so unsupported driver modes
+    # fall through cleanly instead of encoding blurry ~200 kbps defaults or failing mid-clip.
+    for label, flags in _HARDWARE_ENCODER_CANDIDATES:
+        try:
+            res = subprocess.run(
+                [
+                    "ffmpeg", "-y", "-f", "lavfi",
+                    "-i", "testsrc=duration=0.1:size=256x256:rate=30",
+                    *flags,
+                    "-pix_fmt", "yuv420p",
+                    "-f", "null", "-",
+                ],
+                capture_output=True, text=True, timeout=4,
+            )
+            if res.returncode == 0:
+                print(f"[clip/local] Using {label}", flush=True)
+                _DETECTED_ENCODER_FLAGS = list(flags)
+                return _DETECTED_ENCODER_FLAGS
+        except Exception:
+            pass
 
-    _DETECTED_ENCODER_FLAGS = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-threads", "0"]
+    _DETECTED_ENCODER_FLAGS = list(_SOFTWARE_ENCODER_FLAGS)
     return _DETECTED_ENCODER_FLAGS
 
 

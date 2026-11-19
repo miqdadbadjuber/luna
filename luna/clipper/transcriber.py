@@ -681,7 +681,9 @@ Rules:
 - Output pure JSON only.
 """
 
-        client = genai.Client(api_key=require_gemini_key())
+        from .llm import GEMINI_AUDIO_TIMEOUT_MS, build_gemini_client
+
+        client = build_gemini_client(require_gemini_key(), timeout_ms=GEMINI_AUDIO_TIMEOUT_MS)
         model_name = gemini_model()
         segments: List[Dict] = []
         total_duration = 0.0

@@ -704,7 +704,11 @@ def create_progress_hook(job_id: str, finished_pct: Optional[float] = None):
 def download_youtube_video(url: str, output_dir: str, quality: str = "1080", progress_hook: Optional[Callable] = None) -> str:
     h = {"1080": 1080, "720": 720, "480": 480, "360": 360}.get(quality, 1080)
     base_opts = {
-        "format": f"bestvideo[height<={h}]+bestaudio/best[height<={h}]/best",
+        "format": (
+            f"bestvideo[height<={h}]+bestaudio[format_note*=original]/"
+            f"bestvideo[height<={h}]+bestaudio/"
+            f"best[height<={h}]/best"
+        ),
         "outtmpl": os.path.join(output_dir, "video.%(ext)s"),
         "merge_output_format": "mp4",
         "noplaylist": True,
@@ -921,7 +925,7 @@ def download_mp3(
     meta_out: Optional[Dict[str, Any]] = None,
 ) -> str:
     base_opts = {
-        "format": "bestaudio/best",
+        "format": "bestaudio[format_note*=original]/bestaudio/best",
         "outtmpl": os.path.join(output_dir, "audio.%(ext)s"),
         "noplaylist": True,
         "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "320"}],
@@ -2241,7 +2245,10 @@ def _worker_process(job_id: str, req: ProcessRequest):
                 })
 
             base_opts = {
-                "format": "bestvideo[height<=1080]+bestaudio/best",
+                "format": (
+                    "bestvideo[height<=1080]+bestaudio[format_note*=original]/"
+                    "bestvideo[height<=1080]+bestaudio/best"
+                ),
                 "format_sort": CLIPPER_FORMAT_SORT,
                 "outtmpl": os.path.join(job_output_dir, "full.%(ext)s"),
                 "merge_output_format": "mp4",

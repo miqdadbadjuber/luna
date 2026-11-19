@@ -13,11 +13,12 @@ that is not in the video. Long transcripts go to the model in windows.
 import json
 import math
 import re
+import threading
 import time
 from typing import Callable, Dict, List, Optional
 
 from .config import clip_language as cfg_clip_language, normalize_clip_language
-from .llm import call_llm
+from .llm import GeminiFallbackExhaustedError, call_llm
 
 LLMFn = Callable[[str], str]
 
@@ -128,15 +129,28 @@ def _parse(raw: str) -> List[Dict]:
     return [c for c in clips if isinstance(c, dict)]
 
 
-def call_highlight_api(prompt: str, llm_fn: LLMFn = call_llm) -> List[Dict]:
-    """Ask the model, retrying with a short backoff; raise the last error if every attempt fails."""
+def call_highlight_api(
+    prompt: str,
+    llm_fn: LLMFn = call_llm,
+    cancel_event: Optional[threading.Event] = None,
+) -> List[Dict]:
+    """Ask the model, retrying parse/transient issues without multiplying full Gemini fallback cascades."""
     error: Optional[Exception] = None
     for attempt in range(ATTEMPTS):
+        if cancel_event is not None and cancel_event.is_set():
+            raise RuntimeError("CANCELLED_BY_USER")
         if attempt:
             time.sleep(2 * attempt)
         try:
-            return _parse(llm_fn(prompt))
+            raw = llm_fn(prompt, cancel_event=cancel_event) if llm_fn is call_llm else llm_fn(prompt)
+            return _parse(raw)
+        except GeminiFallbackExhaustedError as e:
+            # All Gemini fallback models already failed; do not multiply the entire cascade by ATTEMPTS.
+            print(f"[highlights] Gemini fallback cascade exhausted: {e}", flush=True)
+            raise RuntimeError(f"The AI model could not pick clips: {e}") from e
         except Exception as e:  # provider errors and bad JSON are both worth a retry
+            if str(e) == "CANCELLED_BY_USER":
+                raise
             error = e
             print(f"[highlights] attempt {attempt + 1}/{ATTEMPTS} failed: {e}", flush=True)
     raise RuntimeError(f"The AI model could not pick clips: {error}")
@@ -231,6 +245,7 @@ def get_highlights(
     num_clips: int = 3,
     llm_fn: Optional[LLMFn] = None,
     clip_language: Optional[str] = None,
+    cancel_event: Optional[threading.Event] = None,
 ) -> Dict:
     """Return {"highlights": [...]} sorted by score, best first, filling num_clips when possible."""
     llm_fn = llm_fn or call_llm
@@ -251,6 +266,8 @@ def get_highlights(
     succeeded_windows: List[range] = []
     error: Optional[Exception] = None
     for window in windows:
+        if cancel_event is not None and cancel_event.is_set():
+            raise RuntimeError("CANCELLED_BY_USER")
         span = segments[window.stop - 1]["end"] - segments[window.start]["start"]
         count = wanted if len(windows) == 1 else min(10, max(2, math.ceil(wanted * span / max(duration, 1))))
         win_target = target if len(windows) == 1 else min(count, max(1, math.ceil(target * span / max(duration, 1))))
@@ -264,8 +281,10 @@ def get_highlights(
             lines=lines,
         )
         try:
-            clips = call_highlight_api(prompt, llm_fn=llm_fn)
+            clips = call_highlight_api(prompt, llm_fn=llm_fn, cancel_event=cancel_event)
         except RuntimeError as e:
+            if str(e) == "CANCELLED_BY_USER":
+                raise
             error = e  # one bad window should not throw away the others
             continue
         succeeded_windows.append(window)
@@ -279,6 +298,8 @@ def get_highlights(
     # and the transcript still has at least one unused stretch >= MIN_CLIP_SECONDS.
     if 0 < len(highlights) < target and succeeded_windows and _has_unused_span(highlights, duration):
         for window in succeeded_windows:
+            if cancel_event is not None and cancel_event.is_set():
+                raise RuntimeError("CANCELLED_BY_USER")
             missing = target - len(highlights)
             if missing <= 0:
                 break
@@ -297,8 +318,10 @@ def get_highlights(
                 lines=_format_window_lines(segments, window),
             )
             try:
-                extra_clips = call_highlight_api(topup_prompt, llm_fn=llm_fn)
-            except RuntimeError:
+                extra_clips = call_highlight_api(topup_prompt, llm_fn=llm_fn, cancel_event=cancel_event)
+            except RuntimeError as e:
+                if str(e) == "CANCELLED_BY_USER":
+                    raise
                 continue
             found += [h for h in (_to_highlight(c, segments, window, duration) for c in extra_clips) if h]
             highlights = _drop_overlaps(found)

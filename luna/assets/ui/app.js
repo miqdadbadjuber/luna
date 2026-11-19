@@ -491,18 +491,7 @@ function selectTrimRatioFromMenu(r, label) {
   requestAnimationFrame(alignExtraTrimSegments);
 }
 var currentLang = 'id';
-var selectedClipLanguage = 'id';
 var defaultClipLanguage = 'id';
-
-function setWorkspaceClipLanguage(lang) {
-  selectedClipLanguage = (lang === 'en') ? 'en' : 'id';
-  const btnId = document.getElementById('wsLangBtnId');
-  const btnEn = document.getElementById('wsLangBtnEn');
-  const activeCls = 'px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer bg-white/[0.1] text-white shadow-sm';
-  const idleCls = 'px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer text-zinc-400 hover:text-white';
-  if (btnId) btnId.className = selectedClipLanguage === 'id' ? activeCls : idleCls;
-  if (btnEn) btnEn.className = selectedClipLanguage === 'en' ? activeCls : idleCls;
-}
 
 var activeJobId = null;
 var pollInterval = null;
@@ -2462,15 +2451,6 @@ async function openWorkspaceModal(action) {
     pipelineSummary.innerText = getPipelineLabel(action);
   }
 
-  const clipLangRow = document.getElementById('wsClipLanguageRow');
-  const isAiClipAction = (action === 'type_yt_ai_clip' || action === 'type_ig_ai_clip' || action === 'ai_clip');
-  if (clipLangRow) {
-    clipLangRow.classList.toggle('hidden', !isAiClipAction);
-  }
-  if (isAiClipAction) {
-    setWorkspaceClipLanguage(defaultClipLanguage || 'id');
-  }
-
   let nextNum = nextWorkspaceIndex || 1;
 
   // Refresh vault projects list to have the freshest workspaces
@@ -2616,7 +2596,7 @@ async function executeActualProcess(workspaceName) {
       fps: action === 'type_yt_video' ? selectedVideoFps : 'auto',
       use_face_detect: selectedFaceDetect,
       quality: selectedQuality,
-      clip_language: (action === 'type_yt_ai_clip' || action === 'type_ig_ai_clip' || action === 'ai_clip') ? selectedClipLanguage : undefined,
+      clip_language: (action === 'type_yt_ai_clip' || action === 'type_ig_ai_clip' || action === 'ai_clip') ? defaultClipLanguage : undefined,
       start_time: action === 'type_yt_clip' ? (getAllTrimSegments()[0]?.start_time || '00:00') : '00:00',
       end_time: action === 'type_yt_clip' ? (getAllTrimSegments()[0]?.end_time || '00:30') : '00:30',
       segments: action === 'type_yt_clip' ? getAllTrimSegments() : undefined,
@@ -4373,7 +4353,6 @@ async function loadSettingsData() {
       inputOpenaiModel: data.openai_model
     };
     defaultClipLanguage = data.clip_language || 'id';
-    selectedClipLanguage = defaultClipLanguage;
     for (const [id, value] of Object.entries(openaiFields)) {
       const el = document.getElementById(id);
       if (el && value !== undefined) el.value = value;
@@ -4471,7 +4450,6 @@ async function saveSettings() {
 
     currentStorageDir = storageInput.value.trim();
     defaultClipLanguage = nextClipLang;
-    selectedClipLanguage = nextClipLang;
     savedSettingsSnapshot = getSettingsSnapshot();
     dismissSettingsPromptToast();
 
@@ -8626,7 +8604,6 @@ document.addEventListener('DOMContentLoaded', () => {
     .then((data) => {
       if (data && data.clip_language) {
         defaultClipLanguage = data.clip_language;
-        selectedClipLanguage = data.clip_language;
         const hidden = document.getElementById('selectClipLanguage');
         if (hidden) hidden.value = data.clip_language;
         if (typeof syncClipLanguageUI === 'function') syncClipLanguageUI();

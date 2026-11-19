@@ -444,19 +444,23 @@ class TestFrontendVaultUI(unittest.TestCase):
             self.assertIn(expected, html)
 
     def test_clip_language_controls_and_original_unicorn_background(self):
-        """AI clip language selector (ID/EN) and original UnicornStudio WebGL background (with software WebGL2 shim) exist cleanly."""
+        """AI clip language selector (ID/EN) lives in Settings only (no modal duplicate), and original UnicornStudio WebGL background exists cleanly."""
         html = self.source
         for expected in (
             'id="selectClipLanguage"',
             'id="clipLanguageMenu"',
-            'id="wsClipLanguageRow"',
-            'id="wsLangBtnId"',
-            'id="wsLangBtnEn"',
             "function setClipLanguage",
-            "function setWorkspaceClipLanguage",
             'data-us-project="N9XzvQXu7fA5SY2ewADJ"',
         ):
             self.assertIn(expected, html)
+
+        for removed_dup in (
+            'id="wsClipLanguageRow"',
+            'id="wsLangBtnId"',
+            'id="wsLangBtnEn"',
+            "function setWorkspaceClipLanguage",
+        ):
+            self.assertNotIn(removed_dup, html)
 
         self.assertNotIn("studioFallbackCanvas", html)
         self.assertNotIn('data-bg-mode="fallback"', html)
