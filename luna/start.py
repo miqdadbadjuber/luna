@@ -15,11 +15,14 @@ browser to some other application:
 """
 import os
 import socket
+import subprocess
 import sys
 import threading
 import time
 import urllib.request
 import webbrowser
+
+from .updater import RESTART_EXIT_CODE
 
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8000
@@ -77,7 +80,48 @@ def open_browser_when_ready(url: str) -> None:
     webbrowser.open(url)
 
 
-def main() -> None:
+def _wait_for_port_release(port: int, timeout_sec: float = 8.0) -> None:
+    deadline = time.monotonic() + timeout_sec
+    while time.monotonic() < deadline:
+        if not port_in_use(port):
+            return
+        time.sleep(0.2)
+
+
+def run_supervised_server(port: int, url: str, *, no_browser: bool = False) -> int:
+    """Run uvicorn as a child in the same terminal and restart in-place on RESTART_EXIT_CODE."""
+    if not no_browser:
+        threading.Thread(target=open_browser_when_ready, args=(url,), daemon=True).start()
+
+    while True:
+        child_env = dict(os.environ)
+        child_env["LUNA_PORT"] = str(port)
+        child_env["LUNA_SUPERVISED"] = "1"
+        child_env["LUNA_NO_BROWSER"] = "1"
+
+        proc = subprocess.Popen(
+            [sys.executable, "-m", "uvicorn", "luna.app:app", "--host", HOST, "--port", str(port)],
+            env=child_env,
+        )
+        try:
+            rc = proc.wait()
+        except KeyboardInterrupt:
+            try:
+                proc.terminate()
+                proc.wait(timeout=5)
+            except Exception:
+                proc.kill()
+            return 0
+
+        if rc == RESTART_EXIT_CODE:
+            print(f"[Luna] Update applied — restarting server on {url}...", flush=True)
+            _wait_for_port_release(port)
+            continue
+
+        return rc
+
+
+def main() -> int:
     raw = os.getenv("LUNA_PORT", "").strip()
     try:
         requested = int(raw) if raw else DEFAULT_PORT
@@ -85,20 +129,17 @@ def main() -> None:
         raise SystemExit(f"LUNA_PORT must be a number, got {raw!r}.")
     port, running = choose_port(requested, fixed=bool(raw))
     url = f"http://localhost:{port}"
+    no_browser = os.getenv("LUNA_NO_BROWSER", "").strip() == "1"
     if running:
-        print(f"Luna is already running. Opening {url}")
-        webbrowser.open(url)
-        return
+        print(f"Luna is already running at {url}")
+        if not no_browser:
+            webbrowser.open(url)
+        return 0
     if port != requested:
         print(f"Port {requested} is busy, using {port} instead.")
     print(f"Opening {url}. Add your API keys in Settings. Press Ctrl+C to stop.")
     os.environ["LUNA_PORT"] = str(port)  # the startup banner reads it
-    if os.getenv("LUNA_NO_BROWSER", "").strip() != "1":
-        threading.Thread(target=open_browser_when_ready, args=(url,), daemon=True).start()
-
-    import uvicorn
-
-    uvicorn.run("luna.app:app", host=HOST, port=port)
+    return run_supervised_server(port, url, no_browser=no_browser)
 
 
 if __name__ == "__main__":

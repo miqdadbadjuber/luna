@@ -288,16 +288,33 @@ def apply_update(
     }
 
 
+RESTART_EXIT_CODE = 42
+
+
 def schedule_server_restart(base_dir: str, delay_sec: float = 1.4) -> None:
-    """Spawn a detached cross-platform helper that restarts Luna on the same port after exit."""
+    """Restart Luna cleanly in the same terminal when supervised, or via fallback helper otherwise."""
     port = os.getenv("LUNA_PORT", "8000").strip() or "8000"
     pid = os.getpid()
+    supervised = os.getenv("LUNA_SUPERVISED", "").strip() == "1"
+
+    if supervised:
+        def _exit_for_supervisor() -> None:
+            import time as _time
+            _time.sleep(max(0.4, delay_sec))
+            print(f"[updater] Update applied. Restarting Luna in place (pid={pid}, port={port})...", flush=True)
+            os._exit(RESTART_EXIT_CODE)
+
+        import threading
+        threading.Thread(target=_exit_for_supervisor, daemon=True).start()
+        return
+
+    wait_before_probe = max(1.6, delay_sec + 0.5)
     helper = (
         "import os, socket, subprocess, sys, time\n"
         f"port = int({port!r})\n"
         f"base_dir = {base_dir!r}\n"
-        "time.sleep(1.2)\n"
-        "for _ in range(30):\n"
+        f"time.sleep({wait_before_probe!r})\n"
+        "for _ in range(40):\n"
         "    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:\n"
         "        s.settimeout(0.3)\n"
         "        if s.connect_ex(('127.0.0.1', port)) != 0:\n"
@@ -308,7 +325,7 @@ def schedule_server_restart(base_dir: str, delay_sec: float = 1.4) -> None:
         "env['LUNA_NO_BROWSER'] = '1'\n"
         "kwargs = {'cwd': base_dir, 'env': env}\n"
         "if sys.platform == 'win32':\n"
-        "    kwargs['creationflags'] = getattr(subprocess, 'DETACHED_PROCESS', 0) | getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)\n"
+        "    kwargs['creationflags'] = getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)\n"
         "else:\n"
         "    kwargs['start_new_session'] = True\n"
         "subprocess.Popen([sys.executable, '-m', 'luna.start'], **kwargs)\n"
@@ -316,10 +333,7 @@ def schedule_server_restart(base_dir: str, delay_sec: float = 1.4) -> None:
 
     spawn_kwargs: Dict = {"cwd": base_dir}
     if sys.platform == "win32":
-        spawn_kwargs["creationflags"] = (
-            getattr(subprocess, "DETACHED_PROCESS", 0)
-            | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-        )
+        spawn_kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     else:
         spawn_kwargs["start_new_session"] = True
 

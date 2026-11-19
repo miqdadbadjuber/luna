@@ -58,6 +58,42 @@ class ChoosePortTest(unittest.TestCase):
         port = server.server_address[1]
         self.assertEqual(choose_port(port, fixed=False), (port, True))
 
+    def test_supervisor_restarts_in_place_without_opening_duplicate_browser(self):
+        import os
+        from unittest.mock import MagicMock, patch
+        import luna.start as start_mod
+
+        procs = [MagicMock(), MagicMock()]
+        procs[0].wait.return_value = start_mod.RESTART_EXIT_CODE
+        procs[1].wait.return_value = 0
+        spawned_envs = []
+
+        def fake_popen(cmd, env=None, **kwargs):
+            spawned_envs.append(dict(env or {}))
+            return procs[len(spawned_envs) - 1]
+
+        with patch.object(start_mod.subprocess, "Popen", side_effect=fake_popen), \
+                patch.object(start_mod, "_wait_for_port_release") as mock_wait, \
+                patch.object(start_mod.threading, "Thread") as mock_thread:
+            rc = start_mod.run_supervised_server(8000, "http://localhost:8000", no_browser=False)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(len(spawned_envs), 2)
+        self.assertEqual(spawned_envs[0]["LUNA_SUPERVISED"], "1")
+        self.assertEqual(spawned_envs[0]["LUNA_NO_BROWSER"], "1")
+        self.assertEqual(spawned_envs[1]["LUNA_SUPERVISED"], "1")
+        self.assertEqual(spawned_envs[1]["LUNA_NO_BROWSER"], "1")
+        mock_wait.assert_called_once_with(8000)
+        # Browser open thread should be started at most once on initial boot, never on restart.
+        self.assertEqual(mock_thread.call_count, 1)
+
+        # Already-running branch must also respect LUNA_NO_BROWSER=1.
+        with patch.dict(os.environ, {"LUNA_NO_BROWSER": "1", "LUNA_PORT": "8000"}), \
+                patch.object(start_mod, "choose_port", return_value=(8000, True)), \
+                patch.object(start_mod.webbrowser, "open") as mock_open:
+            self.assertEqual(start_mod.main(), 0)
+            mock_open.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

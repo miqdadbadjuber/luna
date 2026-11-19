@@ -146,6 +146,25 @@ class TestUpdater(unittest.TestCase):
             self.assertEqual(st["status"], "completed")
             self.assertEqual(st["updated_short_sha"], "2222222")
 
+    def test_supervised_restart_exits_with_restart_code_without_spawning_new_terminal(self):
+        import threading
+        exit_codes = []
+        done = threading.Event()
+
+        def fake_exit(code):
+            exit_codes.append(code)
+            done.set()
+
+        with patch.dict(os.environ, {"LUNA_SUPERVISED": "1", "LUNA_PORT": "8000"}), \
+                patch.object(updater.subprocess, "Popen") as mock_popen, \
+                patch.object(updater.os, "_exit", side_effect=fake_exit), \
+                patch("time.sleep"):
+            updater.schedule_server_restart(".", delay_sec=0.01)
+            self.assertTrue(done.wait(timeout=2.0))
+
+        mock_popen.assert_not_called()
+        self.assertEqual(exit_codes, [updater.RESTART_EXIT_CODE])
+
 
 if __name__ == "__main__":
     unittest.main()
