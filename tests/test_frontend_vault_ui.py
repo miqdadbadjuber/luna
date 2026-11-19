@@ -592,8 +592,23 @@ class TestFrontendVaultUI(unittest.TestCase):
             ".luna-toast-card.is-attention",
             ".luna-toast-progress-track",
             ".luna-toast-progress-bar",
+            ".luna-toast-link",
         ):
             self.assertIn(expected_css, css)
+
+        # Preflight API key toast with subtle "Go to Settings" link & refined Check for Updates button (no bounce .t-btn)
+        for expected_preflight in (
+            "function showMissingApiKeyToast",
+            "async function checkAiClipApiKeysBeforeGenerate",
+            "Go to Settings",
+            "X-Luna-Error-Code",
+            'id="checkUpdatesSpinner"',
+            'data-lucide="arrow-down-to-line"',
+        ):
+            self.assertIn(expected_preflight, html)
+        btn_slice = html[html.index('id="btnCheckUpdates"'):html.index('id="btnCheckUpdates"') + 340]
+        self.assertNotIn("t-btn", btn_slice)
+        self.assertIn("font-normal", btn_slice)
 
 
 if __name__ == "__main__":

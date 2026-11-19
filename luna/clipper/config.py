@@ -140,13 +140,13 @@ def transcribe_provider_label() -> str:
 # These read the environment on each call so a Settings save applies to the next job.
 # `or` also covers the blank values .env files carry: the SDK would use "" as a literal base URL.
 def llm_provider() -> str:
-    """LLM_PROVIDER wins. Left blank, a Gemini-only setup still works without editing .env."""
+    """LLM_PROVIDER wins. Left blank, default to Gemini for fresh/Gemini-only setups, or OpenAI if OPENAI_API_KEY is set."""
     configured = os.getenv("LLM_PROVIDER", "").strip().lower()
     if configured:
         return configured
-    if not os.getenv("OPENAI_API_KEY", "").strip() and os.getenv("GEMINI_API_KEY", "").strip():
-        return "gemini"
-    return "openai"
+    if os.getenv("OPENAI_API_KEY", "").strip():
+        return "openai"
+    return "gemini"
 
 
 def openai_base_url() -> str:

@@ -200,9 +200,27 @@ class TestVideoFormatOptions(unittest.TestCase):
             )
             if "h264_mf" in flags:
                 self.assertIn("-rate_control", flags)
+                self.assertIn("-hw_encoding", flags)
+                hw_idx = flags.index("-hw_encoding")
+                self.assertEqual(flags[hw_idx + 1], "1")
             if "h264_amf" in flags:
                 self.assertIn("-rc", flags)
                 self.assertIn("-qp_i", flags)
+
+    def test_clipper_software_preset_and_permanent_hardware_downgrade(self):
+        """Non-GPU fallback uses fast libx264 superfast and hardware failure downgrades cached encoder permanently."""
+        from luna.clipper import clipper
+
+        self.assertIn("libx264", clipper._SOFTWARE_ENCODER_FLAGS)
+        self.assertIn("superfast", clipper._SOFTWARE_ENCODER_FLAGS)
+        prev = clipper._DETECTED_ENCODER_FLAGS
+        try:
+            clipper._DETECTED_ENCODER_FLAGS = ["-c:v", "h264_amf", "-rc", "cqp"]
+            downgraded = clipper._downgrade_to_software_encoder()
+            self.assertEqual(downgraded, clipper._SOFTWARE_ENCODER_FLAGS)
+            self.assertEqual(clipper._get_encoder_flags(), clipper._SOFTWARE_ENCODER_FLAGS)
+        finally:
+            clipper._DETECTED_ENCODER_FLAGS = prev
 
 
 if __name__ == "__main__":

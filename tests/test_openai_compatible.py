@@ -284,6 +284,80 @@ class TestOpenAICompatible(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "CANCELLED_BY_USER"):
             llm.gemini_generate_with_fallback(fake_client, contents="hi", config={}, cancel_event=cancel)
 
+    def test_fresh_user_defaults_to_gemini_and_process_preflight_blocks_missing_keys(self):
+        """Brand-new users default to Gemini (not OpenAI) and /api/process blocks AI Short Clips before download when keys are missing."""
+        from fastapi.testclient import TestClient
+        import luna.app as app_module
+        from luna.clipper.config import llm_provider
+
+        client = TestClient(app_module.app)
+
+        # Fresh user (all keys blank, LLM_PROVIDER blank) -> defaults to Gemini, NOT OpenAI
+        with patch.dict(
+            os.environ,
+            {
+                "LLM_PROVIDER": "",
+                "LOCAL_TRANSCRIBE_PROVIDER": "groq",
+                "OPENAI_API_KEY": "",
+                "GEMINI_API_KEY": "",
+                "GROQ_API_KEY": "",
+            },
+            clear=False,
+        ):
+            self.assertEqual(llm_provider(), "gemini")
+            res = client.post(
+                "/api/process",
+                json={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "action": "type_yt_ai_clip"},
+            )
+            self.assertEqual(res.status_code, 400)
+            self.assertEqual(res.headers.get("X-Luna-Error-Code"), "MISSING_API_KEYS")
+            detail = res.json()["detail"]
+            self.assertIn("Gemini", detail)
+            self.assertIn("Groq", detail)
+            self.assertNotIn("OpenAI", detail)
+
+        # Gemini present, Groq missing while transcribe=groq -> blocks and asks for Groq
+        with patch.dict(
+            os.environ,
+            {
+                "LLM_PROVIDER": "",
+                "LOCAL_TRANSCRIBE_PROVIDER": "groq",
+                "OPENAI_API_KEY": "",
+                "GEMINI_API_KEY": "gem-test",
+                "GROQ_API_KEY": "",
+            },
+            clear=False,
+        ):
+            res = client.post(
+                "/api/process",
+                json={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "action": "type_yt_ai_clip"},
+            )
+            self.assertEqual(res.status_code, 400)
+            self.assertEqual(res.headers.get("X-Luna-Error-Code"), "MISSING_API_KEYS")
+            self.assertIn("Groq", res.json()["detail"])
+
+        # Both Gemini & Groq present -> allowed to queue job
+        with patch.dict(
+            os.environ,
+            {
+                "LLM_PROVIDER": "",
+                "LOCAL_TRANSCRIBE_PROVIDER": "groq",
+                "OPENAI_API_KEY": "",
+                "GEMINI_API_KEY": "gem-test",
+                "GROQ_API_KEY": "groq-test",
+            },
+            clear=False,
+        ), patch.object(app_module, "_worker_process"):
+            res = client.post(
+                "/api/process",
+                json={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "action": "type_yt_ai_clip"},
+            )
+            self.assertEqual(res.status_code, 200)
+            job_id = res.json()["job_id"]
+            app_module.jobs.pop(job_id, None)
+            app_module.job_requests.pop(job_id, None)
+            app_module.job_cancel_events.pop(job_id, None)
+
 
 if __name__ == "__main__":
     unittest.main()

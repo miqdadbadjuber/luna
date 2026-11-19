@@ -64,6 +64,7 @@ from .clipper.config import (
     DEFAULT_GEMINI_MODEL,
     DEFAULT_OPENAI_BASE_URL,
     clip_language,
+    llm_provider,
     normalize_clip_language,
     normalize_studio_background,
     openai_base_url,
@@ -2393,12 +2394,51 @@ def _worker_process(job_id: str, req: ProcessRequest):
                 logger.warning(f"Could not save job {job_id}: {e}")
 
 
+def _missing_ai_clip_api_keys() -> Optional[str]:
+    """Return a clear message if required AI Short Clips API keys are missing before starting download."""
+    missing: List[str] = []
+    active_llm = llm_provider()
+    if active_llm == "gemini":
+        if not os.getenv("GEMINI_API_KEY", "").strip():
+            missing.append("Gemini")
+    elif active_llm == "openai":
+        if not os.getenv("OPENAI_API_KEY", "").strip():
+            missing.append("OpenAI")
+
+    active_transcribe = transcribe_provider()
+    if active_transcribe == "groq":
+        if not os.getenv("GROQ_API_KEY", "").strip() and "Groq" not in missing:
+            missing.append("Groq")
+    elif active_transcribe == "gemini":
+        if not os.getenv("GEMINI_API_KEY", "").strip() and "Gemini" not in missing:
+            missing.append("Gemini")
+
+    if not missing:
+        return None
+    if len(missing) == 1:
+        only = missing[0]
+        if only == "Groq":
+            return "Groq API key is required for audio transcription in AI Short Clips."
+        return f"{only} API key is required for AI Short Clips."
+    joined = " and ".join(missing)
+    return f"{joined} API keys are required for AI Short Clips."
+
+
 @app.post("/api/process")
 async def api_process(req: ProcessRequest, background_tasks: BackgroundTasks):
     problem = external_url_problem(req.url)
     if problem:
         raise HTTPException(status_code=400, detail=problem)
     req = _enforce_youtube_short_policy(req)
+
+    if req.action in ("type_yt_ai_clip", "type_ig_ai_clip", "ai_clip"):
+        missing_key_msg = _missing_ai_clip_api_keys()
+        if missing_key_msg:
+            raise HTTPException(
+                status_code=400,
+                detail=missing_key_msg,
+                headers={"X-Luna-Error-Code": "MISSING_API_KEYS"},
+            )
 
     # Validate trim input before accepting the job: a bad timestamp used to become
     # a clip rendered at the wrong offset instead of a 400.

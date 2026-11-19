@@ -2223,7 +2223,62 @@ function isValidMediaUrl(str) {
   }
 }
 
-function triggerAction() {
+function showMissingApiKeyToast(message) {
+  lunaToast.add({
+    type: 'warning',
+    title: 'API key required',
+    description: message || 'Gemini and Groq API keys are required for AI Short Clips.',
+    timeout: 6500,
+    link: {
+      label: 'Go to Settings',
+      onClick: (toastId) => {
+        lunaToast.close(toastId);
+        switchMainTab('settings');
+        setTimeout(() => {
+          const el = document.getElementById('inputGeminiKey') || document.getElementById('sectionSettings');
+          if (el && typeof el.scrollIntoView === 'function') {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 120);
+      },
+    },
+  });
+}
+
+async function checkAiClipApiKeysBeforeGenerate() {
+  try {
+    const res = await fetch('/api/settings', { cache: 'no-store' });
+    if (!res.ok) return { ok: true };
+    const cfg = await res.json();
+    const activeLlm = (cfg.llm_provider || '').trim().toLowerCase() || (cfg.has_openai_api_key ? 'openai' : 'gemini');
+    const activeTranscribe = (cfg.transcribe_provider || 'groq').trim().toLowerCase();
+    const missing = [];
+
+    if (activeLlm === 'gemini' && !cfg.has_gemini_api_key) {
+      missing.push('Gemini');
+    } else if (activeLlm === 'openai' && !cfg.has_openai_api_key) {
+      missing.push('OpenAI');
+    }
+
+    if (activeTranscribe === 'groq' && !cfg.has_groq_api_key && !missing.includes('Groq')) {
+      missing.push('Groq');
+    } else if (activeTranscribe === 'gemini' && !cfg.has_gemini_api_key && !missing.includes('Gemini')) {
+      missing.push('Gemini');
+    }
+
+    if (missing.length === 0) return { ok: true };
+    const message = missing.length === 1
+      ? (missing[0] === 'Groq'
+        ? 'Groq API key is required for audio transcription in AI Short Clips.'
+        : `${missing[0]} API key is required for AI Short Clips.`)
+      : `${missing.join(' and ')} API keys are required for AI Short Clips.`;
+    return { ok: false, message };
+  } catch (e) {
+    return { ok: true };
+  }
+}
+
+async function triggerAction() {
   if (activeJobId || isProcessStarting) {
     showNoticeModal('A job is in progress', 'Another job is running. Wait for it to finish or cancel it before starting a new one.');
     return;
@@ -2249,6 +2304,14 @@ function triggerAction() {
   if (currentPlatform === 'youtube') action = currentYtSub;
   else if (currentPlatform === 'instagram') action = currentIgSub;
   else if (currentPlatform === 'tiktok') action = currentTtSub;
+
+  if (action === 'type_yt_ai_clip' || action === 'type_ig_ai_clip' || action === 'ai_clip') {
+    const keyCheck = await checkAiClipApiKeysBeforeGenerate();
+    if (!keyCheck.ok) {
+      showMissingApiKeyToast(keyCheck.message);
+      return;
+    }
+  }
 
   openWorkspaceModal(action);
 }
@@ -2611,6 +2674,14 @@ async function executeActualProcess(workspaceName) {
 
       if (!res.ok) {
         const err = await res.json();
+        if (res.headers.get('X-Luna-Error-Code') === 'MISSING_API_KEYS') {
+          clearSavedJobStorage();
+          mainActionBtn.disabled = false;
+          mainActionBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+          progressStateCard.classList.add('hidden');
+          showMissingApiKeyToast(err.detail);
+          return;
+        }
         throw new Error(err.detail || 'Could not start the job');
       }
 
@@ -3784,6 +3855,23 @@ const lunaToast = (() => {
       <div class="luna-toast-actions"></div>
       ${progressHtml}
     `;
+
+    if (normalized.link && normalized.link.label) {
+      const bodyEl = card.querySelector('.luna-toast-body');
+      if (bodyEl) {
+        const linkBtn = document.createElement('button');
+        linkBtn.type = 'button';
+        linkBtn.className = 'luna-toast-link';
+        linkBtn.textContent = String(normalized.link.label);
+        linkBtn.onclick = (e) => {
+          e.stopPropagation();
+          if (typeof normalized.link.onClick === 'function') {
+            normalized.link.onClick(id, linkBtn);
+          }
+        };
+        bodyEl.appendChild(linkBtn);
+      }
+    }
 
     const actionsEl = card.querySelector('.luna-toast-actions');
     const actionItems = Array.isArray(normalized.actions)
@@ -8918,9 +9006,11 @@ async function checkForLunaUpdates(btn) {
   if (__lunaUpdateInFlight) return;
   const trigger = btn || document.getElementById('btnCheckUpdates');
   const icon = document.getElementById('checkUpdatesIcon');
+  const spinner = document.getElementById('checkUpdatesSpinner');
   const label = document.getElementById('checkUpdatesLabel');
   if (trigger) trigger.disabled = true;
-  if (icon) icon.classList.add('animate-spin');
+  if (icon) icon.classList.add('hidden');
+  if (spinner) spinner.classList.remove('hidden');
   if (label) label.textContent = 'Checking...';
 
   try {
@@ -8935,11 +9025,9 @@ async function checkForLunaUpdates(btn) {
   } finally {
     if (trigger) trigger.disabled = false;
     const currentIcon = document.getElementById('checkUpdatesIcon');
-    if (currentIcon) {
-      currentIcon.classList.remove('animate-spin');
-      currentIcon.querySelectorAll('.animate-spin').forEach((el) => el.classList.remove('animate-spin'));
-    }
-    if (icon && icon !== currentIcon) icon.classList.remove('animate-spin');
+    const currentSpinner = document.getElementById('checkUpdatesSpinner');
+    if (currentIcon) currentIcon.classList.remove('hidden');
+    if (currentSpinner) currentSpinner.classList.add('hidden');
     if (label) label.textContent = 'Check for Updates';
   }
 }

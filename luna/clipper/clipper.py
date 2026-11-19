@@ -31,10 +31,13 @@ FACE_DETECT_SAMPLE_EVERY = 30
 FFMPEG_TIMEOUT_SECONDS = 3600
 
 _HARDWARE_ENCODERS = ("h264_nvenc", "h264_amf", "h264_qsv", "h264_mf")
-_SOFTWARE_ENCODER_FLAGS = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-threads", "0"]
+_SERIAL_HARDWARE_ENCODERS = ("h264_amf", "h264_mf")
+_SOFTWARE_ENCODER_FLAGS = ["-c:v", "libx264", "-preset", "superfast", "-crf", "21", "-threads", "0"]
 
 # Hardware encoder candidates ordered by quality/speed reliability. Every candidate carries
-# explicit rate-control / quality flags (never bare `-c:v h264_mf`, which defaults to ~200-350 kbps).
+# explicit rate-control / quality flags (never bare `-c:v h264_mf`, which defaults to ~200-350 kbps),
+# and `h264_mf` requires `-hw_encoding 1` so CPU-only VMs / Windows PCs do not pick Microsoft's
+# slow software MFT and accidentally serialize all clip renders.
 _HARDWARE_ENCODER_CANDIDATES: Tuple[Tuple[str, List[str]], ...] = (
     (
         "NVIDIA NVENC Hardware Acceleration (h264_nvenc)",
@@ -50,17 +53,21 @@ _HARDWARE_ENCODER_CANDIDATES: Tuple[Tuple[str, List[str]], ...] = (
     ),
     (
         "MediaFoundation Hardware Acceleration (h264_mf)",
-        ["-c:v", "h264_mf", "-rate_control", "quality", "-quality", "80"],
+        ["-c:v", "h264_mf", "-hw_encoding", "1", "-rate_control", "quality", "-quality", "80"],
     ),
     (
         "MediaFoundation Hardware Acceleration (h264_mf VBR)",
-        ["-c:v", "h264_mf", "-rate_control", "pc_vbr", "-b:v", "5M", "-maxrate", "8M"],
+        ["-c:v", "h264_mf", "-hw_encoding", "1", "-rate_control", "pc_vbr", "-b:v", "5M", "-maxrate", "8M"],
     ),
 )
 
 
 def _is_hardware_encoder(enc_flags: List[str]) -> bool:
     return any(codec in enc_flags for codec in _HARDWARE_ENCODERS)
+
+
+def _is_serial_hardware_encoder(enc_flags: List[str]) -> bool:
+    return any(codec in enc_flags for codec in _SERIAL_HARDWARE_ENCODERS)
 
 
 def _run_ffmpeg(
@@ -266,12 +273,22 @@ def _sample_face_centers(
 
 
 _DETECTED_ENCODER_FLAGS: Optional[List[str]] = None
+_ENCODER_LOCK = threading.Lock()
+
+
+def _downgrade_to_software_encoder() -> List[str]:
+    """Permanently switch cached encoder to libx264 after a hardware hang/failure."""
+    global _DETECTED_ENCODER_FLAGS
+    with _ENCODER_LOCK:
+        _DETECTED_ENCODER_FLAGS = list(_SOFTWARE_ENCODER_FLAGS)
+        return _DETECTED_ENCODER_FLAGS
 
 
 def _get_encoder_flags() -> List[str]:
     global _DETECTED_ENCODER_FLAGS
-    if _DETECTED_ENCODER_FLAGS is not None:
-        return _DETECTED_ENCODER_FLAGS
+    with _ENCODER_LOCK:
+        if _DETECTED_ENCODER_FLAGS is not None:
+            return _DETECTED_ENCODER_FLAGS
 
     # Probe each candidate with its exact quality/rate-control flags so unsupported driver modes
     # fall through cleanly instead of encoding blurry ~200 kbps defaults or failing mid-clip.
@@ -289,13 +306,15 @@ def _get_encoder_flags() -> List[str]:
             )
             if res.returncode == 0:
                 print(f"[clip/local] Using {label}", flush=True)
-                _DETECTED_ENCODER_FLAGS = list(flags)
-                return _DETECTED_ENCODER_FLAGS
+                with _ENCODER_LOCK:
+                    _DETECTED_ENCODER_FLAGS = list(flags)
+                    return _DETECTED_ENCODER_FLAGS
         except Exception:
             pass
 
-    _DETECTED_ENCODER_FLAGS = list(_SOFTWARE_ENCODER_FLAGS)
-    return _DETECTED_ENCODER_FLAGS
+    with _ENCODER_LOCK:
+        _DETECTED_ENCODER_FLAGS = list(_SOFTWARE_ENCODER_FLAGS)
+        return _DETECTED_ENCODER_FLAGS
 
 
 def _encode(
@@ -312,7 +331,7 @@ def _encode(
     cancel_event: Optional[threading.Event] = None,
 ) -> None:
     clip_dur = max(0.1, end_time - start_time)
-    clip_timeout = max(180.0, clip_dur * 5.0 + 60.0)
+    clip_timeout = max(75.0, clip_dur * 2.0 + 30.0)
     cmd = [
         "ffmpeg", "-y", "-loglevel", "error",
         "-ss", f"{start_time:.3f}",
@@ -349,8 +368,10 @@ def _encode(
             raise
         if not _is_hardware_encoder(enc_flags):
             raise
-        # Hardware drivers (e.g. h264_amf) can hang or fail mid-stream; discard partial MP4 and fall back cleanly.
-        print(f"[clip/local] hardware encode failed ({exc}), retrying with libx264", flush=True)
+        # Hardware drivers (e.g. h264_amf / h264_mf) can hang or fail mid-stream; discard partial MP4,
+        # downgrade the cached encoder so later clips do not repeat the stall, and fall back cleanly.
+        print(f"[clip/local] hardware encode failed ({exc}), switching to libx264", flush=True)
+        _downgrade_to_software_encoder()
         if os.path.exists(out_path):
             try:
                 os.remove(out_path)
@@ -451,10 +472,13 @@ def crop_highlights_local(
     )
 
     results: List[Dict] = [{} for _ in highlights]
-    # GPU hardware encoders (AMD AMF / MediaFoundation) can deadlock under concurrent encodes,
-    # so serialize hardware jobs while keeping multi-worker encoding for software libx264.
-    if _is_hardware_encoder(enc_flags):
+    # AMD AMF and Windows MediaFoundation hardware sessions can deadlock under concurrent encodes,
+    # whereas NVENC/QSV support 2 concurrent encodes and software libx264 scales up to 3 parallel workers.
+    if _is_serial_hardware_encoder(enc_flags):
         max_workers = 1
+        worker_threads = 0
+    elif _is_hardware_encoder(enc_flags):
+        max_workers = 2
         worker_threads = 0
     else:
         max_workers = min(3, max(1, (os.cpu_count() or 4) - 1))
