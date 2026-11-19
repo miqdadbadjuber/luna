@@ -8,7 +8,7 @@
 
 <div align="center">
 
-# Luna: Local-First Video Downloader & AI Clipper
+# Local-First Video Downloader & AI Clipper
 
 <code>beta version</code>
 
