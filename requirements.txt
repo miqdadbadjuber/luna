@@ -8,7 +8,7 @@ requests==2.34.2
 # Chrome TLS + HTTP/2 for multi-connection YouTube range downloads and TikTok impersonation.
 curl-cffi==0.11.1
 google-genai==3.0.0
-openai==3.45.0
+openai==3.51.0
 yt-dlp>=2026.10.26
 # YouTube formats need its JS challenge solved: the solver scripts plus a JS runtime.
 # Without them yt-dlp reports "No video formats found".
