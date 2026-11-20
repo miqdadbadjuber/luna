@@ -141,7 +141,7 @@ class BrowserSmokeTest(unittest.TestCase):
         # Opening the tab reloads settings into the form, so change it after that lands.
         with self.page.expect_response(lambda r: r.url.endswith("/api/settings") and r.request.method == "GET"):
             self.page.click("#btnNavSettings")
-        self.page.wait_for_timeout(300)
+        expect(self.page.locator("#transcribeTrigger")).to_be_visible(timeout=5000)
         self.page.click("#transcribeTrigger")
         self.page.click("#transcribeMenu [data-value='gemini']")
         self.page.click("#btnToastSaveSettings")
@@ -244,6 +244,12 @@ class BrowserSmokeTest(unittest.TestCase):
         # Auto-saved preset must not block leaving Settings
         self.page.click("#tabBtnStudio")
         expect(self.page.locator("#section-settings")).to_be_hidden(timeout=5000)
+        # Preset must persist across a full page reload from backend settings
+        self.page.reload(wait_until="domcontentloaded")
+        self.page.wait_for_function("typeof triggerAction === 'function' && typeof saveSettings === 'function'")
+        expect(self.page.locator("#studioBackgroundContainer")).to_have_attribute(
+            "data-bg-id", "crimson-horizon", timeout=5000
+        )
         self.assertEqual(self.errors, [])
 
     def test_qa5_url_validation_and_shorts_and_16_9_lock_rules(self):
@@ -260,6 +266,67 @@ class BrowserSmokeTest(unittest.TestCase):
         # YouTube Shorts URL switches away from AI Short Clips and disables Shorts-locked items
         self.page.fill("#mainUrlInput", "https://www.youtube.com/shorts/abcdefghijk")
         expect(self.page.locator("#currentSubFeatureLabel")).not_to_have_text("AI Short Clips", timeout=5000)
+        self.assertEqual(self.errors, [])
+
+    def test_qa6_workspace_projects_tab_and_trimmer_segment_alignment(self):
+        self._stub_settings()
+        self.page.route("**/api/vault/projects", lambda r: r.fulfill(json={
+            "projects": [{
+                "project_id": "proj_qa6",
+                "workspace_name": "Workspace QA 01",
+                "source_title": "Smoke QA Source Video",
+                "platform": "youtube",
+                "category": "ai-clips",
+                "mode": "clips",
+                "file_count": 2,
+                "total_size_mb": 12.4,
+                "created_at": 1700000000,
+                "items": [],
+            }],
+            "stats": {"total_files": 2, "total_size_mb": 12.4, "storage_path": self.tmp.name},
+            "next_workspace_index": 2,
+        }))
+        self._open()
+        # Workspace tab renders mocked project without page errors
+        self.page.click("#tabBtnVault")
+        expect(self.page.locator("#section-vault")).to_be_visible(timeout=5000)
+        expect(self.page.locator("#vault-proj-card-proj_qa6")).to_be_visible(timeout=5000)
+        expect(self.page.locator("#vault-proj-card-proj_qa6")).to_contain_text("Workspace QA 01")
+        # Return to Studio, switch to Video Trimmer, add extra segment, and verify alignment after ratio change
+        self.page.click("#tabBtnStudio")
+        expect(self.page.locator("#section-vault")).to_be_hidden(timeout=5000)
+        self.page.click("#subFeatureDropdownBtn")
+        self.page.click("#subFeatureMenu .sub-menu-item[data-sub='type_yt_clip']")
+        expect(self.page.locator("#drawer-trimmer")).to_be_visible(timeout=5000)
+        self.page.click("#btnAddTrimSegment")
+        extra_start = self.page.locator("#trimExtraSegmentsWrapper .trim-extra-row .pill-control").first
+        expect(extra_start).to_be_visible(timeout=5000)
+        self.page.click("#trimRatioDropdownBtn")
+        self.page.click("#trimRatioMenu [data-tratio='9:16']")
+        self.page.wait_for_function(
+            """() => {
+                const a = document.getElementById('trimStartPill_0')?.getBoundingClientRect();
+                const b = document.querySelector('#trimExtraSegmentsWrapper .trim-extra-row .pill-control')?.getBoundingClientRect();
+                return Boolean(a && b && Math.abs(a.left - b.left) <= 2);
+            }""",
+            timeout=5000,
+        )
+        self.assertEqual(self.errors, [])
+
+    def test_qa7_instagram_expired_link_shows_unavailable_without_hanging(self):
+        self._stub_settings()
+        self.page.route("**/api/info", lambda r: r.fulfill(json={
+            "title": "Media Item",
+            "duration": 0,
+            "thumbnail": "",
+            "platform": "instagram",
+            "warning": "This link cannot be read anymore. Instagram and TikTok links expire, so copy a fresh link from the app and try again.",
+        }))
+        self._open()
+        self.page.fill("#mainUrlInput", "https://www.instagram.com/reel/DfV5ZbDId02/")
+        expect(self.page.locator("#videoInfoCard")).to_be_visible(timeout=5000)
+        expect(self.page.locator("#previewPlatformTag")).to_have_text("Unavailable", timeout=5000)
+        expect(self.page.locator("#previewTitle")).to_have_text("Link unavailable", timeout=5000)
         self.assertEqual(self.errors, [])
 
 

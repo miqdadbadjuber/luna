@@ -175,5 +175,103 @@ class TestApiSettings(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         mock_open.assert_called_once()
 
+    def test_check_system_contract_schema(self):
+        res = self.client.post("/api/settings/check-system")
+        self.assertEqual(res.status_code, 200)
+        self.assertIn("application/json", res.headers.get("content-type", ""))
+        data = res.json()
+        expected_keys = {
+            "status",
+            "ffmpeg",
+            "ffmpeg_version",
+            "ytdlp",
+            "js_runtime",
+            "opencv",
+            "opencv_version",
+            "storage",
+            "storage_path",
+            "cookies",
+        }
+        self.assertEqual(set(data.keys()), expected_keys)
+        self.assertEqual(data["status"], "success")
+        self.assertIsInstance(data["ffmpeg"], bool)
+        self.assertIsInstance(data["js_runtime"], bool)
+        self.assertIsInstance(data["opencv"], bool)
+        self.assertIsInstance(data["storage"], bool)
+        self.assertIsInstance(data["ytdlp"], str)
+        self.assertEqual(set(data["cookies"].keys()), {"exists", "name", "size"})
+        self.assertIsInstance(data["cookies"]["exists"], bool)
+
+    def test_upload_cookies_happy_path_and_validation_errors(self):
+        sample = "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t0\tSID\ttest_val\n"
+        res = self.client.post(
+            "/api/settings/upload-cookies",
+            json={"filename": "my_cookies.txt", "content": sample},
+        )
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["status"], "uploaded")
+        self.assertEqual(data["filename"], "my_cookies.txt")
+        self.assertTrue(data["size"].endswith(" KB"))
+
+        cookie_path = os.path.join(os.path.dirname(self.env_path), "cookies.txt")
+        with open(cookie_path, "r", encoding="utf-8") as f:
+            self.assertEqual(f.read(), sample)
+
+        binary_res = self.client.post(
+            "/api/settings/upload-cookies",
+            json={"filename": "bad.txt", "content": "abc\x00def"},
+        )
+        self.assertEqual(binary_res.status_code, 422)
+
+        oversized_res = self.client.post(
+            "/api/settings/upload-cookies",
+            json={"filename": "huge.txt", "content": "a" * (5 * 1024 * 1024 + 1)},
+        )
+        self.assertEqual(oversized_res.status_code, 422)
+
+    def test_download_zip_happy_path_and_error_paths(self):
+        import io
+        import zipfile
+        import luna.app as app_module
+
+        # Missing job returns 400
+        missing = self.client.get("/api/download-zip/nonexistent_job_id")
+        self.assertEqual(missing.status_code, 400)
+
+        job_id = "zip_contract_test_job"
+        job_dir = os.path.join(os.path.dirname(self.env_path), "output", job_id)
+        os.makedirs(job_dir, exist_ok=True)
+        clip_path = os.path.join(job_dir, "clip_01.mp4")
+        with open(clip_path, "wb") as f:
+            f.write(b"fake-mp4-bytes")
+
+        with patch.object(app_module, "OUTPUT_DIR", os.path.join(os.path.dirname(self.env_path), "output")):
+            try:
+                # Non-completed job returns 400
+                app_module.jobs[job_id] = {"id": job_id, "status": "processing", "results": []}
+                in_progress = self.client.get(f"/api/download-zip/{job_id}")
+                self.assertEqual(in_progress.status_code, 400)
+
+                # Completed job streams a valid ZIP archive containing only safe output files
+                app_module.jobs[job_id] = {
+                    "id": job_id,
+                    "status": "completed",
+                    "results": [
+                        {"filename": "clip_01.mp4"},
+                        {"filename": "../escape.txt"},
+                    ],
+                }
+                res = self.client.get(f"/api/download-zip/{job_id}")
+                self.assertEqual(res.status_code, 200)
+                self.assertIn("application/zip", res.headers.get("content-type", ""))
+                self.assertIn(f"media_{job_id}.zip", res.headers.get("content-disposition", ""))
+
+                with zipfile.ZipFile(io.BytesIO(res.content), "r") as zf:
+                    self.assertEqual(zf.namelist(), ["clip_01.mp4"])
+                    self.assertEqual(zf.read("clip_01.mp4"), b"fake-mp4-bytes")
+            finally:
+                app_module.jobs.pop(job_id, None)
+
 if __name__ == "__main__":
     unittest.main()

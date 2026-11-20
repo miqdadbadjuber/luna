@@ -147,6 +147,25 @@ class TestApiInfo(unittest.TestCase):
         self.assertEqual(data["thumbnail"], "https://p16.tiktokcdn.com/html.jpg")
         self.assertEqual(data["channel"], "HtmlCreator")
 
+    def test_instagram_empty_media_response_returns_expired_warning(self):
+        import luna.app as app_module
+
+        ydl_ctx = MagicMock()
+        ydl_ctx.__enter__.return_value.extract_info.side_effect = RuntimeError(
+            "ERROR: [Instagram] DfV5ZbDId02: Instagram sent an empty media response. "
+            "Check if this post is accessible in your browser without being logged-in."
+        )
+
+        with patch.object(app_module, "external_url_problem", return_value=None), \
+                patch.object(app_module, "create_youtube_dl", return_value=ydl_ctx):
+            res = self.client.post("/api/info", json={"url": "https://www.instagram.com/reel/DfV5ZbDId02/"})
+
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["title"], "Media Item")
+        self.assertEqual(data["platform"], "instagram")
+        self.assertIn("expire", data.get("warning", "").lower())
+
     def test_frontend_format_duration_logic(self):
         res = self.client.get("/")
         self.assertEqual(res.status_code, 200)
