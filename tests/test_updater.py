@@ -165,6 +165,33 @@ class TestUpdater(unittest.TestCase):
         mock_popen.assert_not_called()
         self.assertEqual(exit_codes, [updater.RESTART_EXIT_CODE])
 
+    def test_safe_extract_zip_rejects_traversal_and_symlinks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp) / "extracted"
+
+            # Path traversal entry must be rejected without writing outside dest
+            traversal_buf = io.BytesIO()
+            with zipfile.ZipFile(traversal_buf, "w") as zf:
+                zf.writestr("../escaped.txt", "pwned")
+            with zipfile.ZipFile(io.BytesIO(traversal_buf.getvalue()), "r") as zf:
+                with self.assertRaises(RuntimeError):
+                    updater._safe_extract_zip(zf, dest)
+            self.assertFalse((Path(tmp) / "escaped.txt").exists())
+
+            # Symlink entry must be rejected
+            symlink_buf = io.BytesIO()
+            with zipfile.ZipFile(symlink_buf, "w") as zf:
+                info = zipfile.ZipInfo("luna-main/evil_link")
+                info.create_system = 3  # Unix
+                info.external_attr = (0o120777 << 16)
+                zf.writestr(info, "/etc/passwd")
+            with zipfile.ZipFile(io.BytesIO(symlink_buf.getvalue()), "r") as zf:
+                with self.assertRaises(RuntimeError):
+                    updater._safe_extract_zip(zf, dest)
+
+        self.assertIn("media-vault", updater.PRESERVED_TOP_LEVEL)
+        self.assertIn("skills", updater.PRESERVED_TOP_LEVEL)
+
 
 if __name__ == "__main__":
     unittest.main()

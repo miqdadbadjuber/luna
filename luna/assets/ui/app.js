@@ -3168,7 +3168,7 @@ function renderOpusResults(data) {
           <div class="flex items-center justify-between pt-2.5 border-t border-white/[0.06]">
             <span class="text-[10.5px] font-mono text-zinc-500">MP3 Audio</span>
             <div class="vault-file-actions flex items-center gap-2">
-              <a href="${downloadUrl}" download="${escapeHtml(item.filename || 'audio.mp3')}" class="luna-download-icon-link" aria-label="Download File">
+              <a href="${escapeHtml(encodeMediaUrl(downloadUrl))}" download="${escapeHtml(item.filename || 'audio.mp3')}" class="luna-download-icon-link" aria-label="Download File">
                 <i data-lucide="download" class="w-4 h-4"></i>
               </a>
             </div>
@@ -3241,7 +3241,7 @@ function renderOpusResults(data) {
             </div>
             <div class="vault-file-actions flex items-center gap-2">
               ${copyBtn}
-              <a href="${downloadUrl}" download="${escapeHtml(item.filename || 'video.mp4')}" class="luna-download-icon-link" aria-label="Download File">
+              <a href="${escapeHtml(encodeMediaUrl(downloadUrl))}" download="${escapeHtml(item.filename || 'video.mp4')}" class="luna-download-icon-link" aria-label="Download File">
                 <i data-lucide="download" class="w-4 h-4"></i>
               </a>
             </div>
@@ -3289,7 +3289,7 @@ function copyText(text, btn) {
 }
 
 function escapeHtml(str) {
-  return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  return String(str ?? '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
 
 function escapeQuotes(str) {
@@ -3302,9 +3302,11 @@ function escapeQuotes(str) {
 }
 
 function encodeMediaUrl(rawUrl) {
-  if (!rawUrl || rawUrl === '#') return '#';
-  if (/^https?:\/\//i.test(rawUrl)) return encodeURI(rawUrl);
-  return rawUrl.split('/').map((seg, idx) => {
+  const value = String(rawUrl || '').trim();
+  if (!value || value === '#') return '#';
+  if (/^https?:\/\//i.test(value)) return encodeURI(value);
+  if (/^[a-z][a-z0-9+.-]*:/i.test(value)) return '#';
+  return value.split('/').map((seg, idx) => {
     if (idx === 0 && seg === '') return '';
     try {
       return encodeURIComponent(decodeURIComponent(seg));
@@ -4722,7 +4724,7 @@ async function saveSettings() {
         const stEl = document.getElementById(meta.statusId);
         if (!testRes.ok || !testData.valid) {
           const errMsg = testData.message || 'Invalid key';
-          if (stEl) stEl.innerHTML = `<span class="text-red-400">✗ ${errMsg}</span>`;
+          if (stEl) stEl.innerHTML = `<span class="text-red-400">✗ ${escapeHtml(errMsg)}</span>`;
           triggerInputError(meta.wrapId, meta.wrapId.replace('wrap', 'err'), `Key ${provider} is invalid: ${errMsg}`);
           throw new Error(`Key ${provider.toUpperCase()} is invalid: ${errMsg}`);
         }
@@ -5029,7 +5031,7 @@ async function testApiKey(provider, wrapId, inputId, statusElId, btn) {
       if (provider === 'openai') loadOpenaiModels();
     } else {
       const errMsg = data.message || 'Invalid key';
-      if (statusEl) statusEl.innerHTML = `<span class="text-red-400">✗ ${errMsg}</span>`;
+      if (statusEl) statusEl.innerHTML = `<span class="text-red-400">✗ ${escapeHtml(errMsg)}</span>`;
       triggerInputError(wrapId, wrapId.replace('wrap', 'err'), `Key ${provider} is invalid: ${errMsg}`);
       showToast(`Key ${provider.toUpperCase()} is invalid`, true);
     }
@@ -8013,7 +8015,7 @@ function renderClipperWorkflow(proj) {
                 </svg>
               </button>
               <span class="vault-card-action-sep" aria-hidden="true"></span>
-              <a href="${downloadUrl}" download="${escapeHtml(file.filename || `clip_${idx + 1}.mp4`)}" class="luna-download-icon-link" data-no-drag="true" aria-label="Download Clip">
+              <a href="${escapeHtml(downloadUrl)}" download="${escapeHtml(file.filename || `clip_${idx + 1}.mp4`)}" class="luna-download-icon-link" data-no-drag="true" aria-label="Download Clip">
                 <i data-lucide="download" class="w-4 h-4"></i>
               </a>
             </div>

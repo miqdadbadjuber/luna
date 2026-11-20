@@ -8,6 +8,7 @@ import hashlib
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -29,8 +30,10 @@ PRESERVED_TOP_LEVEL = frozenset({
     "cookies.txt",
     "output",
     "media",
+    "media-vault",
     "__pycache__",
     "issue",
+    "skills",
 })
 
 _GITHUB_REPO_RE = re.compile(r"github\.com[:/](?P<owner>[^/]+)/(?P<repo>[^/.]+?)(?:\.git)?/?$", re.IGNORECASE)
@@ -204,6 +207,31 @@ def _install_requirements(base_dir: str) -> None:
         raise RuntimeError(f"Failed to install updated dependencies: {tail or 'unknown error'}")
 
 
+def _safe_extract_zip(zf: zipfile.ZipFile, dest_dir: Path) -> None:
+    """Extract a ZIP archive while blocking Zip Slip path traversal and symlinks."""
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest_root = dest_dir.resolve()
+    for member in zf.infolist():
+        mode = member.external_attr >> 16
+        if stat.S_ISLNK(mode):
+            raise RuntimeError(f"Unsafe symlink in update archive: {member.filename}")
+        raw_name = member.filename
+        if not raw_name or raw_name.startswith(("/", "\\")):
+            raise RuntimeError(f"Unsafe absolute path in update archive: {raw_name}")
+        norm_parts = Path(raw_name.replace("\\", "/")).parts
+        if any(part in ("..", "") or ":" in part for part in norm_parts):
+            raise RuntimeError(f"Unsafe path traversal in update archive: {raw_name}")
+        target = (dest_root / Path(*norm_parts)).resolve()
+        if os.path.commonpath([str(dest_root), str(target)]) != str(dest_root):
+            raise RuntimeError(f"Update archive entry escapes target directory: {raw_name}")
+        if member.is_dir():
+            target.mkdir(parents=True, exist_ok=True)
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with zf.open(member, "r") as src, target.open("wb") as dst:
+                shutil.copyfileobj(src, dst)
+
+
 def _apply_archive_update(base_dir: str, repo_url: str, ref: str, target_sha: str) -> None:
     archive_url = f"{repo_url.rstrip('/')}/archive/refs/heads/{ref}.zip"
     root = Path(base_dir)
@@ -218,7 +246,7 @@ def _apply_archive_update(base_dir: str, repo_url: str, ref: str, target_sha: st
 
         extract_dir = Path(tmp) / "extracted"
         with zipfile.ZipFile(zip_path, "r") as zf:
-            zf.extractall(extract_dir)
+            _safe_extract_zip(zf, extract_dir)
 
         entries = [p for p in extract_dir.iterdir() if p.is_dir()]
         if not entries:

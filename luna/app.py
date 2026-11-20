@@ -34,9 +34,9 @@ from typing import Any, Callable, Dict, List, Literal, Optional
 import requests
 import yt_dlp
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Query, Request
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -170,6 +170,32 @@ def allowed_hosts() -> List[str]:
 
 
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts())
+
+
+_MUTATING_HTTP_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+def _origin_is_allowed(origin: str) -> bool:
+    """Return True only when an Origin header matches Luna's local host allowlist."""
+    parsed = urllib.parse.urlparse((origin or "").strip())
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return False
+    host = parsed.hostname.lower().strip("[]")
+    allowed = {h.lower().strip("[]") for h in allowed_hosts()}
+    return "*" in allowed or host in allowed
+
+
+@app.middleware("http")
+async def _reject_cross_origin_mutations(request: Request, call_next):
+    """Block cross-origin browser CSRF on state-changing routes while preserving local/CLI calls."""
+    if request.method in _MUTATING_HTTP_METHODS:
+        origin = (request.headers.get("origin") or "").strip()
+        if origin:
+            if not _origin_is_allowed(origin):
+                return JSONResponse(status_code=403, content={"detail": "Cross-origin requests are not allowed."})
+        elif (request.headers.get("sec-fetch-site") or "").strip().lower() == "cross-site":
+            return JSONResponse(status_code=403, content={"detail": "Cross-origin requests are not allowed."})
+    return await call_next(request)
 
 storage_root = get_storage_root()
 os.makedirs(storage_root, exist_ok=True)
@@ -1241,6 +1267,40 @@ def _extract_meta_content(page_html: str, prop: str) -> Optional[str]:
     return None
 
 
+def _resolve_safe_redirect(url: str, headers: Dict[str, str], max_hops: int = 5) -> str:
+    """Follow HTTP redirects manually, validating every hop against SSRF rules before connecting."""
+    current = url
+    for _ in range(max_hops):
+        if external_url_problem(current) is not None:
+            return url
+        r = requests.get(
+            current,
+            headers=headers,
+            timeout=4.0,
+            allow_redirects=False,
+            stream=True,
+        )
+        try:
+            status = getattr(r, "status_code", None)
+            if status in (301, 302, 303, 307, 308):
+                raw_headers = getattr(r, "headers", None)
+                loc = raw_headers.get("location") if hasattr(raw_headers, "get") else None
+                if not isinstance(loc, str) or not loc.strip():
+                    return current
+                next_url = urllib.parse.urljoin(current, loc.strip())
+                if external_url_problem(next_url) is not None:
+                    return current
+                current = next_url
+                continue
+            final_url = getattr(r, "url", None)
+            if isinstance(final_url, str) and final_url.strip() and external_url_problem(final_url.strip()) is None:
+                return final_url.strip()
+            return current
+        finally:
+            r.close()
+    return current
+
+
 def _fetch_tiktok_preview(url: str):
     """Resolve TikTok shortlinks safely and gather fast metadata via oEmbed / HTML meta tags."""
     resolved_url = url
@@ -1251,19 +1311,7 @@ def _fetch_tiktok_preview(url: str):
 
     if is_shortlink:
         try:
-            r = requests.get(
-                url,
-                headers=_TIKTOK_BROWSER_HEADERS,
-                timeout=4.0,
-                allow_redirects=True,
-                stream=True,
-            )
-            try:
-                final_url = (r.url or "").strip()
-                if final_url and external_url_problem(final_url) is None:
-                    resolved_url = final_url
-            finally:
-                r.close()
+            resolved_url = _resolve_safe_redirect(url, _TIKTOK_BROWSER_HEADERS)
         except Exception:
             pass
 
@@ -1287,7 +1335,7 @@ def _fetch_tiktok_preview(url: str):
 
     if not t and external_url_problem(clean_url) is None:
         try:
-            r = requests.get(clean_url, headers=_TIKTOK_BROWSER_HEADERS, timeout=4.0)
+            r = requests.get(clean_url, headers=_TIKTOK_BROWSER_HEADERS, timeout=4.0, allow_redirects=False)
             if r.status_code == 200:
                 page_html = r.text[:250_000]
                 t = _extract_meta_content(page_html, "og:title") or _extract_meta_content(page_html, "twitter:title")

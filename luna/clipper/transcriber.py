@@ -538,19 +538,10 @@ def _transcribe_local_whisper(media_path: str, language: Optional[str] = None) -
     segments_iter, info = model.transcribe(**transcribe_kwargs)
 
     segments = []
-    import tempfile
-    prog_file = os.path.join(tempfile.gettempdir(), "ai_transcribe_progress.txt")
-    try: os.remove(prog_file)
-    except: pass
-    
     total_dur = getattr(info, "duration", 0.0)
     for s in segments_iter:
         if total_dur > 0:
             pct = (float(s.end) / float(total_dur)) * 100
-            try:
-                with open(prog_file, "w") as f:
-                    f.write(f"{pct:.1f},{s.end:.1f},{total_dur:.1f}")
-            except: pass
             print(f"[transcribe/local] {s.end:.1f}s / {total_dur:.1f}s ({pct:.1f}%)", flush=True)
 
         segments.append({
