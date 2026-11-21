@@ -1616,7 +1616,7 @@ const TASK_CONFIGS = {
       amount: 'Cloud API',
       details: [
         { label: 'Speech-to-text fallback', meta: 'When no subtitles' },
-        { label: 'Groq, Gemini or local Faster-Whisper', meta: 'Many languages' }
+        { label: 'Groq, Gemini, ElevenLabs or local Faster-Whisper', meta: 'Many languages' }
       ]
     },
     {
@@ -2264,12 +2264,14 @@ async function checkAiClipApiKeysBeforeGenerate() {
       missing.push('Groq');
     } else if (activeTranscribe === 'gemini' && !cfg.has_gemini_api_key && !missing.includes('Gemini')) {
       missing.push('Gemini');
+    } else if (activeTranscribe === 'elevenlabs' && !cfg.has_elevenlabs_api_key) {
+      missing.push('ElevenLabs');
     }
 
     if (missing.length === 0) return { ok: true };
     const message = missing.length === 1
-      ? (missing[0] === 'Groq'
-        ? 'Groq API key is required for audio transcription in AI Short Clips.'
+      ? (missing[0] === 'Groq' || missing[0] === 'ElevenLabs'
+        ? `${missing[0]} API key is required for audio transcription in AI Short Clips.`
         : `${missing[0]} API key is required for AI Short Clips.`)
       : `${missing.join(' and ')} API keys are required for AI Short Clips.`;
     return { ok: false, message };
@@ -4044,10 +4046,16 @@ let currentStorageDir = '';
 const providerKeyUi = {
   openai: { configured: false, editing: true, validated: false, hint: '' },
   gemini: { configured: false, editing: true, validated: false, hint: '' },
-  groq: { configured: false, editing: true, validated: false, hint: '' }
+  groq: { configured: false, editing: true, validated: false, hint: '' },
+  elevenlabs: { configured: false, editing: true, validated: false, hint: '' }
 };
-const providerKeyFields = { openai: 'inputOpenai', gemini: 'inputGemini', groq: 'inputGroq' };
-const providerKeyPlaceholders = { openai: 'Enter your API key...', gemini: 'Enter your Gemini API key...', groq: 'Enter your Groq API key...' };
+const providerKeyFields = { openai: 'inputOpenai', gemini: 'inputGemini', groq: 'inputGroq', elevenlabs: 'inputElevenlabs' };
+const providerKeyPlaceholders = {
+  openai: 'Enter your API key...',
+  gemini: 'Enter your Gemini API key...',
+  groq: 'Enter your Groq API key...',
+  elevenlabs: 'Enter your ElevenLabs API key...'
+};
 
 function updateProviderKeyUI(provider) {
   const state = providerKeyUi[provider];
@@ -4072,7 +4080,7 @@ function updateProviderKeyUI(provider) {
   }
   document.getElementById(`cancel${provider[0].toUpperCase()}${provider.slice(1)}Key`)?.classList.toggle('hidden', !state.editing || !state.configured);
   const hasUnsavedTypedKey = Boolean(state.editing && input.value.trim());
-  const statusId = { openai: 'statusOpenai', gemini: 'statusGemini', groq: 'statusGroq' }[provider];
+  const statusId = { openai: 'statusOpenai', gemini: 'statusGemini', groq: 'statusGroq', elevenlabs: 'statusElevenlabs' }[provider];
   const statusEl = document.getElementById(statusId);
   const stateLabel = document.getElementById(`${provider}KeyState`);
   if (stateLabel) {
@@ -4107,7 +4115,7 @@ function beginKeyChange(provider) {
   state.validated = false;
   const input = document.getElementById(providerKeyFields[provider]);
   if (input) input.value = '';
-  const statusId = { openai: 'statusOpenai', gemini: 'statusGemini', groq: 'statusGroq' }[provider];
+  const statusId = { openai: 'statusOpenai', gemini: 'statusGemini', groq: 'statusGroq', elevenlabs: 'statusElevenlabs' }[provider];
   const status = document.getElementById(statusId);
   if (status) status.textContent = '';
   updateProviderKeyUI(provider);
@@ -4122,7 +4130,7 @@ function cancelKeyChange(provider) {
   const input = document.getElementById(providerKeyFields[provider]);
   if (input) input.value = '';
   updateProviderKeyUI(provider);
-  const status = document.getElementById(`${provider === 'openai' ? 'statusOpenai' : provider === 'gemini' ? 'statusGemini' : 'statusGroq'}`);
+  const status = document.getElementById({ openai: 'statusOpenai', gemini: 'statusGemini', groq: 'statusGroq', elevenlabs: 'statusElevenlabs' }[provider]);
   if (status) status.textContent = '';
   syncSettingsDirtyState();
 }
@@ -4131,7 +4139,7 @@ function providerKeyInputChanged(provider) {
   const state = providerKeyUi[provider];
   if (!state?.editing) return;
   state.validated = false;
-  const statusId = { openai: 'statusOpenai', gemini: 'statusGemini', groq: 'statusGroq' }[provider];
+  const statusId = { openai: 'statusOpenai', gemini: 'statusGemini', groq: 'statusGroq', elevenlabs: 'statusElevenlabs' }[provider];
   const status = document.getElementById(statusId);
   if (status) status.textContent = '';
   updateProviderKeyUI(provider);
@@ -4142,7 +4150,7 @@ async function saveProviderKey(provider, options = {}) {
   const state = providerKeyUi[provider];
   const input = document.getElementById(providerKeyFields[provider]);
   if (!state?.editing || !state.validated || !input?.value.trim()) return false;
-  const field = { openai: 'openai_api_key', gemini: 'gemini_api_key', groq: 'groq_api_key' }[provider];
+  const field = { openai: 'openai_api_key', gemini: 'gemini_api_key', groq: 'groq_api_key', elevenlabs: 'elevenlabs_api_key' }[provider];
   const payload = { [field]: input.value.trim() };
   if (provider === 'openai') {
     payload.openai_base_url = document.getElementById('inputOpenaiBase')?.value.trim();
@@ -4527,7 +4535,7 @@ function revertSettingsToSnapshot() {
       if (typeof syncModelMenu === 'function') syncModelMenu();
     }
   }
-  const statusMap = { openai: 'statusOpenai', gemini: 'statusGemini', groq: 'statusGroq' };
+  const statusMap = { openai: 'statusOpenai', gemini: 'statusGemini', groq: 'statusGroq', elevenlabs: 'statusElevenlabs' };
   Object.keys(providerKeyFields).forEach((provider) => {
     const state = providerKeyUi[provider];
     const input = document.getElementById(providerKeyFields[provider]);
@@ -4651,6 +4659,15 @@ async function loadSettingsData() {
     if (inputGroq) inputGroq.value = '';
     updateProviderKeyUI('groq');
     if (labelGroqModel && data.groq_model) labelGroqModel.innerText = data.groq_model;
+    const inputElevenlabs = document.getElementById('inputElevenlabs');
+    const labelElevenlabsModel = document.getElementById('labelElevenlabsModel');
+    providerKeyUi.elevenlabs.configured = Boolean(data.has_elevenlabs_api_key);
+    providerKeyUi.elevenlabs.hint = String(data.elevenlabs_api_key || '').slice(-4);
+    providerKeyUi.elevenlabs.editing = !providerKeyUi.elevenlabs.configured;
+    providerKeyUi.elevenlabs.validated = false;
+    if (inputElevenlabs) inputElevenlabs.value = '';
+    updateProviderKeyUI('elevenlabs');
+    if (labelElevenlabsModel && data.elevenlabs_model) labelElevenlabsModel.innerText = data.elevenlabs_model;
     if (inputStorage && data.storage_dir) {
       inputStorage.value = data.storage_dir;
       currentStorageDir = data.storage_dir;
@@ -4703,6 +4720,7 @@ async function saveSettings() {
       openai: { field: 'openai_api_key', wrapId: 'wrapOpenai', statusId: 'statusOpenai' },
       gemini: { field: 'gemini_api_key', wrapId: 'wrapGemini', statusId: 'statusGemini' },
       groq: { field: 'groq_api_key', wrapId: 'wrapGroq', statusId: 'statusGroq' },
+      elevenlabs: { field: 'elevenlabs_api_key', wrapId: 'wrapElevenlabs', statusId: 'statusElevenlabs' },
     };
     const verifiedProviders = [];
     for (const [provider, meta] of Object.entries(keyMeta)) {

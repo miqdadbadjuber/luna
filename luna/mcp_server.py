@@ -93,6 +93,7 @@ async def check_setup() -> Dict[str, Any]:
             "openai": s.get("has_openai_api_key", False),
             "gemini": s.get("has_gemini_api_key", False),
             "groq": s.get("has_groq_api_key", False),
+            "elevenlabs": s.get("has_elevenlabs_api_key", False),
         },
         "system": s.get("status", {}),
     }
