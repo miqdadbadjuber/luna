@@ -27,7 +27,9 @@ class TestMcpServer(unittest.TestCase):
 
     def test_setup_reports_keys_as_flags_only(self):
         setup = self.answers["check_setup"]
-        self.assertEqual(setup["api_keys_set"], {"openai": False, "gemini": True, "groq": True})
+        self.assertEqual(
+            setup["api_keys_set"], {"openai": False, "gemini": True, "groq": True, "elevenlabs": False}
+        )
         self.assertNotIn("AIz", str(setup))
 
     def test_luna_errors_reach_the_agent(self):
