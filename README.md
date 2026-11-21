@@ -178,17 +178,32 @@ Luna picks the next free port and prints it. Set `LUNA_PORT` if you want to pin 
 **What about cookies and copyright?**
 Cookies are optional and sensitive, so never share or commit `cookies.txt`. Platform changes can affect `yt-dlp`, and you are responsible for having the rights to any videos you download, cut, and publish.
 
-## Contributors
+## Maintainers
 
-Thanks to everyone who helps make Luna better.
+Luna is built and maintained by:
 
-<p align="center">
-  <a href="https://github.com/miqdadbadjuber/luna/graphs/contributors">
-    <img src="https://contrib.rocks/image?repo=miqdadbadjuber/luna" alt="Luna contributors" />
-  </a>
-</p>
+<div align="center">
+  <table align="center">
+    <tr>
+      <td align="center">
+        <a href="https://github.com/miqdadbadjuber">
+          <img src="https://avatars.githubusercontent.com/u/226378907?v=4&s=128" width="64" height="64" alt="miqdadbadjuber" /><br />
+          <sub><b>Miqdad Badjuber</b></sub>
+        </a><br />
+        <sub><code>@miqdadbadjuber</code></sub>
+      </td>
+      <td align="center">
+        <a href="https://github.com/fajarhide">
+          <img src="https://avatars.githubusercontent.com/u/4769529?v=4&s=128" width="64" height="64" alt="fajarhide" /><br />
+          <sub><b>Fajar Hidayat</b></sub>
+        </a><br />
+        <sub><code>@fajarhide</code></sub>
+      </td>
+    </tr>
+  </table>
+</div>
 
-Found a bug or want to send a change? Open an [issue](https://github.com/miqdadbadjuber/luna/issues). What a pull request needs is covered in [CONTRIBUTING.md](CONTRIBUTING.md).
+Want to contribute? Open an [issue](https://github.com/miqdadbadjuber/luna/issues) for bugs or ideas, or read [CONTRIBUTING.md](CONTRIBUTING.md) before sending a pull request.
 
 ## License
 
