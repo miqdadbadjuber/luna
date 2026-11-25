@@ -5,6 +5,7 @@
 
 """Cross-platform in-app updater (Windows, macOS, Linux) for Git and archive installs."""
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -12,15 +13,20 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
 from typing import Callable, Dict, Optional, Tuple
 
+from .__version__ import __version__ as APP_VERSION
+
 DEFAULT_REPO_URL = "https://github.com/miqdadbadjuber/luna"
 DEFAULT_BRANCH = "main"
 VERSION_MARKER_FILENAME = ".luna-version"
+RELEASE_CACHE_TTL_SECONDS = 3600
 
 # Never overwrite user secrets, virtualenvs, cookies, media workspaces, or git state on archive updates.
 PRESERVED_TOP_LEVEL = frozenset({
@@ -37,6 +43,62 @@ PRESERVED_TOP_LEVEL = frozenset({
 })
 
 _GITHUB_REPO_RE = re.compile(r"github\.com[:/](?P<owner>[^/]+)/(?P<repo>[^/.]+?)(?:\.git)?/?$", re.IGNORECASE)
+_SEMVER_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?$")
+_SAFE_TAG_RE = re.compile(r"^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$")
+
+_release_cache_lock = threading.Lock()
+_release_cache: Dict[str, Dict] = {}
+
+
+def parse_semver(raw: Optional[str]) -> Optional[Tuple[int, int, int]]:
+    if not raw:
+        return None
+    m = _SEMVER_RE.match(str(raw).strip())
+    if not m:
+        return None
+    return int(m.group(1)), int(m.group(2)), int(m.group(3))
+
+
+def normalize_version(raw: Optional[str]) -> str:
+    parsed = parse_semver(raw)
+    if not parsed:
+        return ""
+    return f"v{parsed[0]}.{parsed[1]}.{parsed[2]}"
+
+
+def is_newer_version(latest: Optional[str], current: Optional[str]) -> bool:
+    p_latest = parse_semver(latest)
+    p_current = parse_semver(current)
+    if not p_latest or not p_current:
+        return False
+    return p_latest > p_current
+
+
+def get_app_version(base_dir: Optional[str] = None) -> str:
+    """Return the installed Luna release version in vX.Y.Z format."""
+    if base_dir:
+        root = Path(base_dir)
+        version_file = root / "luna" / "__version__.py"
+        if version_file.is_file():
+            try:
+                text = version_file.read_text(encoding="utf-8")
+                m = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', text)
+                if m:
+                    norm = normalize_version(m.group(1))
+                    if norm:
+                        return norm
+            except Exception:
+                pass
+        marker = root / VERSION_MARKER_FILENAME
+        if marker.is_file():
+            try:
+                first_line = marker.read_text(encoding="utf-8").strip().splitlines()[0].strip()
+                norm = normalize_version(first_line)
+                if norm:
+                    return norm
+            except Exception:
+                pass
+    return normalize_version(APP_VERSION) or "v1.0.0"
 
 
 def _repo_url() -> str:
@@ -145,13 +207,130 @@ def _git_is_ancestor(base_dir: str, ancestor_sha: str) -> bool:
         return False
 
 
+def fetch_latest_release(
+    repo_url: Optional[str] = None,
+    timeout: float = 12.0,
+    use_cache: bool = False,
+) -> Optional[Dict[str, str]]:
+    """Fetch latest published GitHub Release metadata using ETag + optional TTL cache."""
+    resolved_url = (repo_url or _repo_url()).rstrip("/")
+    owner, repo = _parse_github_owner_repo(resolved_url)
+    cache_key = f"{owner.lower()}/{repo.lower()}"
+    now = time.monotonic()
+
+    cached_etag = ""
+    cached_data: Optional[Dict[str, str]] = None
+    with _release_cache_lock:
+        entry = _release_cache.get(cache_key)
+        if entry:
+            cached_etag = str(entry.get("etag") or "")
+            cached_data = entry.get("data")
+            if use_cache and (now - float(entry.get("ts") or 0.0)) < RELEASE_CACHE_TTL_SECONDS:
+                return dict(cached_data) if isinstance(cached_data, dict) else None
+
+    api_url = f"https://api.github.com/repos/{owner}/{repo}/releases/latest"
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "Luna-Updater",
+    }
+    if cached_etag:
+        headers["If-None-Match"] = cached_etag
+
+    req = urllib.request.Request(api_url, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+            new_etag = str(resp.headers.get("ETag") or "").strip()
+    except urllib.error.HTTPError as e:
+        if e.code == 304 and isinstance(cached_data, dict):
+            with _release_cache_lock:
+                _release_cache[cache_key] = {
+                    "ts": now,
+                    "etag": cached_etag,
+                    "data": dict(cached_data),
+                }
+            return dict(cached_data)
+        if e.code == 404:
+            with _release_cache_lock:
+                _release_cache[cache_key] = {"ts": now, "etag": "", "data": None}
+            return None
+        raise RuntimeError(f"GitHub update check failed (HTTP {e.code}).") from e
+    except Exception as e:
+        raise RuntimeError(f"Could not reach GitHub to check for updates: {e}") from e
+
+    tag_name = str(payload.get("tag_name") or "").strip()
+    norm_version = normalize_version(tag_name)
+    if not norm_version:
+        return None
+
+    release_title = str(payload.get("name") or "").strip() or norm_version
+    release_notes = str(payload.get("body") or "").strip()
+    published_at = str(payload.get("published_at") or payload.get("created_at") or "").strip()
+    release_url = str(payload.get("html_url") or f"{resolved_url}/releases/tag/{tag_name}").strip()
+
+    result = {
+        "tag_name": tag_name,
+        "version": norm_version,
+        "title": release_title,
+        "notes": release_notes,
+        "published_at": published_at,
+        "url": release_url,
+    }
+    with _release_cache_lock:
+        _release_cache[cache_key] = {
+            "ts": now,
+            "etag": new_etag,
+            "data": dict(result),
+        }
+    return result
+
+
 def check_for_updates(
     base_dir: str,
     repo_url: Optional[str] = None,
     ref: Optional[str] = None,
+    use_cache: bool = False,
 ) -> Dict:
-    """Compare local install version against GitHub `main` and return update availability."""
+    """Compare local install version against the latest GitHub Release (with commit fallback)."""
     local_sha, install_mode = get_local_version(base_dir)
+    release = fetch_latest_release(repo_url=repo_url, use_cache=use_cache)
+
+    if release and release.get("version"):
+        current_version = get_app_version(base_dir)
+        latest_version = release["version"]
+        p_cur = parse_semver(current_version)
+        p_lat = parse_semver(latest_version)
+
+        if p_lat and p_cur and p_lat > p_cur:
+            update_available = True
+            reason = "new_release"
+        elif p_lat and p_cur and p_cur > p_lat:
+            update_available = False
+            reason = "local_ahead"
+        else:
+            update_available = False
+            reason = "up_to_date"
+
+        return {
+            "update_available": update_available,
+            "reason": reason,
+            "source": "release",
+            "install_mode": install_mode,
+            "current_version": current_version,
+            "latest_version": latest_version,
+            "target_tag": release["tag_name"],
+            "release_title": release["title"],
+            "release_notes": release["notes"],
+            "release_url": release["url"],
+            "current_sha": local_sha or "",
+            "current_short_sha": current_version,
+            "latest_sha": "",
+            "latest_short_sha": latest_version,
+            "latest_message": release["title"],
+            "latest_date": release["published_at"],
+            "commit_url": release["url"],
+        }
+
     remote = fetch_remote_latest(repo_url=repo_url, ref=ref)
     remote_sha = remote["sha"]
 
@@ -171,7 +350,14 @@ def check_for_updates(
     return {
         "update_available": update_available,
         "reason": reason,
+        "source": "commit",
         "install_mode": install_mode,
+        "current_version": get_app_version(base_dir),
+        "latest_version": "",
+        "target_tag": "",
+        "release_title": remote["message"],
+        "release_notes": "",
+        "release_url": remote["url"],
         "current_sha": local_sha or "",
         "current_short_sha": (local_sha[:7] if local_sha else ""),
         "latest_sha": remote_sha,
@@ -232,8 +418,16 @@ def _safe_extract_zip(zf: zipfile.ZipFile, dest_dir: Path) -> None:
                 shutil.copyfileobj(src, dst)
 
 
-def _apply_archive_update(base_dir: str, repo_url: str, ref: str, target_sha: str) -> None:
-    archive_url = f"{repo_url.rstrip('/')}/archive/refs/heads/{ref}.zip"
+def _apply_archive_update(
+    base_dir: str,
+    repo_url: str,
+    ref: str,
+    target_marker: str,
+    *,
+    is_tag: bool = False,
+) -> None:
+    ref_kind = "tags" if is_tag else "heads"
+    archive_url = f"{repo_url.rstrip('/')}/archive/refs/{ref_kind}/{ref}.zip"
     root = Path(base_dir)
     with tempfile.TemporaryDirectory(prefix="luna_update_") as tmp:
         zip_path = Path(tmp) / "luna-update.zip"
@@ -262,27 +456,32 @@ def _apply_archive_update(base_dir: str, repo_url: str, ref: str, target_sha: st
             else:
                 shutil.copy2(item, dst)
 
-    if target_sha:
-        _write_version_marker(base_dir, target_sha)
+    if target_marker:
+        _write_version_marker(base_dir, target_marker)
 
 
 def apply_update(
     base_dir: str,
     *,
     target_sha: Optional[str] = None,
+    target_tag: Optional[str] = None,
     repo_url: Optional[str] = None,
     ref: Optional[str] = None,
     on_stage: Optional[Callable[[str, str], None]] = None,
 ) -> Dict[str, str]:
-    """Download and apply the latest Luna update across Git or archive installs."""
+    """Download and apply a Luna release tag (or branch fallback) across Git or archive installs."""
     resolved_url = (repo_url or _repo_url()).rstrip("/")
     resolved_ref = ref or _repo_ref()
+    clean_tag = str(target_tag or "").strip()
+    if clean_tag and not _SAFE_TAG_RE.match(clean_tag):
+        raise RuntimeError(f"Invalid release tag: {clean_tag}")
+
     req_path = Path(base_dir) / "requirements.txt"
     req_before = _file_sha256(req_path)
 
     _, install_mode = get_local_version(base_dir)
     if on_stage:
-        on_stage("downloading", "Downloading latest update...")
+        on_stage("downloading", f"Downloading Luna {clean_tag}..." if clean_tag else "Downloading latest update...")
 
     if install_mode == "git":
         status = _run_git(base_dir, "status", "--porcelain", "--untracked-files=no", timeout=15.0)
@@ -291,17 +490,31 @@ def apply_update(
                 "Local code changes were detected in this Git checkout. "
                 "Commit or stash them before running an in-app update."
             )
-        pull = _run_git(base_dir, "pull", "--ff-only", "origin", resolved_ref, timeout=90.0)
-        if pull.returncode != 0:
-            err = (pull.stderr or pull.stdout or "").strip()[-400:]
-            raise RuntimeError(f"Git update failed: {err or 'pull --ff-only returned non-zero'}")
+        if clean_tag:
+            fetch = _run_git(base_dir, "fetch", "--tags", "origin", timeout=90.0)
+            if fetch.returncode != 0:
+                err = (fetch.stderr or fetch.stdout or "").strip()[-400:]
+                raise RuntimeError(f"Git tag fetch failed: {err or 'fetch --tags returned non-zero'}")
+            merge = _run_git(base_dir, "merge", "--ff-only", clean_tag, timeout=90.0)
+            if merge.returncode != 0:
+                err = (merge.stderr or merge.stdout or "").strip()[-400:]
+                raise RuntimeError(f"Git update to {clean_tag} failed: {err or 'merge --ff-only returned non-zero'}")
+        else:
+            pull = _run_git(base_dir, "pull", "--ff-only", "origin", resolved_ref, timeout=90.0)
+            if pull.returncode != 0:
+                err = (pull.stderr or pull.stdout or "").strip()[-400:]
+                raise RuntimeError(f"Git update failed: {err or 'pull --ff-only returned non-zero'}")
         new_sha, _ = get_local_version(base_dir)
     else:
-        sha_to_record = target_sha
-        if not sha_to_record:
-            sha_to_record = fetch_remote_latest(repo_url=resolved_url, ref=resolved_ref)["sha"]
-        _apply_archive_update(base_dir, resolved_url, resolved_ref, sha_to_record)
-        new_sha = sha_to_record
+        if clean_tag:
+            _apply_archive_update(base_dir, resolved_url, clean_tag, clean_tag, is_tag=True)
+            new_sha = clean_tag
+        else:
+            sha_to_record = target_sha
+            if not sha_to_record:
+                sha_to_record = fetch_remote_latest(repo_url=resolved_url, ref=resolved_ref)["sha"]
+            _apply_archive_update(base_dir, resolved_url, resolved_ref, sha_to_record, is_tag=False)
+            new_sha = sha_to_record
 
     req_after = _file_sha256(req_path)
     if req_after and req_after != req_before:
@@ -309,10 +522,12 @@ def apply_update(
             on_stage("dependencies", "Installing updated dependencies...")
         _install_requirements(base_dir)
 
+    updated_version = clean_tag or get_app_version(base_dir)
     return {
         "install_mode": install_mode,
+        "updated_version": updated_version,
         "updated_sha": new_sha or "",
-        "updated_short_sha": (new_sha[:7] if new_sha else ""),
+        "updated_short_sha": clean_tag or (new_sha[:7] if new_sha else ""),
     }
 
 

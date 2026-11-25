@@ -23,7 +23,8 @@ class TestUpdater(unittest.TestCase):
             "url": "https://github.com/miqdadbadjuber/luna/commit/aaaaaaa",
         }
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.object(updater, "fetch_remote_latest", return_value=remote):
+            with patch.object(updater, "fetch_latest_release", return_value=None), \
+                    patch.object(updater, "fetch_remote_latest", return_value=remote):
                 # Untracked archive install (no .git, no .luna-version) -> offers first-time sync update
                 res1 = updater.check_for_updates(tmp)
                 self.assertTrue(res1["update_available"])
@@ -51,11 +52,104 @@ class TestUpdater(unittest.TestCase):
             "url": "https://github.com/miqdadbadjuber/luna/commit/1111111",
         }
         with patch.object(updater, "get_local_version", return_value=("2222222222222222222222222222222222222222", "git")), \
+                patch.object(updater, "fetch_latest_release", return_value=None), \
                 patch.object(updater, "fetch_remote_latest", return_value=remote), \
                 patch.object(updater, "_git_is_ancestor", return_value=True):
             res = updater.check_for_updates("/fake/repo")
         self.assertFalse(res["update_available"])
         self.assertEqual(res["reason"], "local_ahead")
+
+    def test_check_for_updates_release_semver_and_notes(self):
+        release = {
+            "tag_name": "v1.1.0",
+            "version": "v1.1.0",
+            "title": "v1.1.0: Release Notes & Update Notifier",
+            "notes": "### Added\n- Expandable release notes in update modal.\n- Auto-check update toast.",
+            "published_at": "2026-11-26T00:00:00Z",
+            "url": "https://github.com/miqdadbadjuber/luna/releases/tag/v1.1.0",
+        }
+        with patch.object(updater, "fetch_latest_release", return_value=release), \
+                patch.object(updater, "get_local_version", return_value=("abc1234", "git")):
+            with patch.object(updater, "get_app_version", return_value="v1.0.0"):
+                res_new = updater.check_for_updates("/fake/repo")
+                self.assertTrue(res_new["update_available"])
+                self.assertEqual(res_new["reason"], "new_release")
+                self.assertEqual(res_new["latest_version"], "v1.1.0")
+                self.assertEqual(res_new["target_tag"], "v1.1.0")
+                self.assertIn("Expandable release notes", res_new["release_notes"])
+
+            with patch.object(updater, "get_app_version", return_value="v1.1.0"):
+                res_same = updater.check_for_updates("/fake/repo")
+                self.assertFalse(res_same["update_available"])
+                self.assertEqual(res_same["reason"], "up_to_date")
+
+            with patch.object(updater, "get_app_version", return_value="v1.2.0"):
+                res_ahead = updater.check_for_updates("/fake/repo")
+                self.assertFalse(res_ahead["update_available"])
+                self.assertEqual(res_ahead["reason"], "local_ahead")
+
+    def test_fetch_latest_release_etag_and_ttl_cache(self):
+        import json as _json
+
+        updater._release_cache.clear()
+        payload = _json.dumps({
+            "tag_name": "v1.1.0",
+            "name": "v1.1.0: Test",
+            "body": "### Added\n- New feature",
+            "published_at": "2026-11-26T00:00:00Z",
+            "html_url": "https://github.com/miqdadbadjuber/luna/releases/tag/v1.1.0",
+        }).encode("utf-8")
+
+        class _FakeResp(io.BytesIO):
+            headers = {"ETag": '"etag-110"'}
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                return False
+
+        seen_headers = []
+
+        def fake_urlopen(req, timeout=12.0):
+            seen_headers.append(dict(req.header_items()))
+            if len(seen_headers) == 1:
+                return _FakeResp(payload)
+            raise updater.urllib.error.HTTPError(req.full_url, 304, "Not Modified", {}, None)
+
+        with patch.object(updater.urllib.request, "urlopen", side_effect=fake_urlopen):
+            r1 = updater.fetch_latest_release("https://github.com/miqdadbadjuber/luna", use_cache=False)
+            self.assertEqual(r1["version"], "v1.1.0")
+            # Cached call within TTL must not hit network at all
+            r2 = updater.fetch_latest_release("https://github.com/miqdadbadjuber/luna", use_cache=True)
+            self.assertEqual(r2["version"], "v1.1.0")
+            self.assertEqual(len(seen_headers), 1)
+            # Manual fresh check sends If-None-Match and reuses cached data on 304
+            r3 = updater.fetch_latest_release("https://github.com/miqdadbadjuber/luna", use_cache=False)
+            self.assertEqual(r3["version"], "v1.1.0")
+            self.assertEqual(len(seen_headers), 2)
+            self.assertEqual(seen_headers[1].get("If-none-match"), '"etag-110"')
+
+    def test_apply_update_rejects_unsafe_tag_and_uses_tag_merge_for_git(self):
+        with self.assertRaises(RuntimeError):
+            updater.apply_update("/fake/repo", target_tag="v1.1.0; rm -rf /")
+
+        calls = []
+
+        def fake_run_git(base_dir, *args, timeout=30.0):
+            calls.append(args)
+            class _Res:
+                returncode = 0
+                stdout = ""
+                stderr = ""
+            return _Res()
+
+        with patch.object(updater, "get_local_version", return_value=("abc1234", "git")), \
+                patch.object(updater, "_run_git", side_effect=fake_run_git), \
+                patch.object(updater, "_file_sha256", return_value="same"):
+            res = updater.apply_update("/fake/repo", target_tag="v1.1.0")
+
+        self.assertEqual(res["updated_version"], "v1.1.0")
+        self.assertIn(("fetch", "--tags", "origin"), calls)
+        self.assertIn(("merge", "--ff-only", "v1.1.0"), calls)
 
     def test_archive_update_preserves_env_cookies_venv_and_output(self):
         buf = io.BytesIO()

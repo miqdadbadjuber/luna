@@ -3319,13 +3319,14 @@ def _has_active_processing_jobs() -> bool:
 
 class ApplyUpdateRequest(BaseModel):
     target_sha: Optional[str] = None
+    target_tag: Optional[str] = None
     auto_restart: bool = True
 
 
 @app.get("/api/system/check-update")
-async def api_check_update():
+async def api_check_update(cached: bool = Query(False)):
     try:
-        result = await asyncio.to_thread(check_app_updates, BASE_DIR)
+        result = await asyncio.to_thread(check_app_updates, BASE_DIR, use_cache=cached)
         result["busy_jobs"] = _has_active_processing_jobs()
         return result
     except Exception as e:
@@ -3365,7 +3366,12 @@ async def api_apply_update(req: ApplyUpdateRequest = ApplyUpdateRequest()):
 
     def _run_update_worker() -> None:
         try:
-            res = run_app_update(BASE_DIR, target_sha=req.target_sha, on_stage=_set_stage)
+            res = run_app_update(
+                BASE_DIR,
+                target_sha=req.target_sha,
+                target_tag=req.target_tag,
+                on_stage=_set_stage,
+            )
             if req.auto_restart:
                 with _update_lock:
                     _update_state.update({

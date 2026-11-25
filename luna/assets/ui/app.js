@@ -8969,6 +8969,101 @@ updateVaultBadge();
 let __pendingUpdateInfo = null;
 let __lunaUpdateToastId = null;
 let __lunaUpdateInFlight = false;
+let __updateModalDetailsOpen = false;
+
+function _appendSafeInlineMarkdown(parent, text) {
+  const raw = String(text || '');
+  const tokenRe = /(`[^`]+`|\*\*[^*]+\*\*)/g;
+  let lastIdx = 0;
+  let match;
+  while ((match = tokenRe.exec(raw)) !== null) {
+    if (match.index > lastIdx) {
+      parent.appendChild(document.createTextNode(raw.slice(lastIdx, match.index)));
+    }
+    const token = match[0];
+    if (token.startsWith('`') && token.endsWith('`')) {
+      const codeEl = document.createElement('code');
+      codeEl.className = 'update-notes-code';
+      codeEl.textContent = token.slice(1, -1);
+      parent.appendChild(codeEl);
+    } else if (token.startsWith('**') && token.endsWith('**')) {
+      const strongEl = document.createElement('strong');
+      strongEl.className = 'text-zinc-100 font-semibold';
+      strongEl.textContent = token.slice(2, -2);
+      parent.appendChild(strongEl);
+    }
+    lastIdx = tokenRe.lastIndex;
+  }
+  if (lastIdx < raw.length) {
+    parent.appendChild(document.createTextNode(raw.slice(lastIdx)));
+  }
+}
+
+function renderReleaseNotesSafe(container, markdownText) {
+  if (!container) return;
+  container.replaceChildren();
+  const lines = String(markdownText || '').replace(/\r\n/g, '\n').split('\n');
+  let activeList = null;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      activeList = null;
+      continue;
+    }
+
+    const headingMatch = line.match(/^#{1,4}\s+(.+)$/);
+    if (headingMatch) {
+      activeList = null;
+      const h = document.createElement('h4');
+      h.className = 'update-notes-heading';
+      h.textContent = headingMatch[1].trim();
+      container.appendChild(h);
+      continue;
+    }
+
+    const bulletMatch = line.match(/^[-*]\s+(.+)$/);
+    if (bulletMatch) {
+      if (!activeList) {
+        activeList = document.createElement('ul');
+        activeList.className = 'update-notes-list';
+        container.appendChild(activeList);
+      }
+      const li = document.createElement('li');
+      _appendSafeInlineMarkdown(li, bulletMatch[1].trim());
+      activeList.appendChild(li);
+      continue;
+    }
+
+    activeList = null;
+    const p = document.createElement('p');
+    p.className = 'update-notes-paragraph';
+    _appendSafeInlineMarkdown(p, line);
+    container.appendChild(p);
+  }
+}
+
+function setUpdateModalDetailsExpanded(expanded) {
+  const box = document.getElementById('updateModalBox');
+  const panel = document.getElementById('updateModalDetailsPanel');
+  const toggleBtn = document.getElementById('updateModalToggleDetailsBtn');
+  const toggleText = document.getElementById('updateModalToggleDetailsText');
+  const toggleIcon = document.getElementById('updateModalToggleDetailsIcon');
+
+  __updateModalDetailsOpen = Boolean(expanded);
+  if (panel) panel.classList.toggle('hidden', !__updateModalDetailsOpen);
+  if (box) {
+    box.classList.toggle('max-w-lg', __updateModalDetailsOpen);
+    box.classList.toggle('max-w-sm', !__updateModalDetailsOpen);
+  }
+  if (toggleBtn) toggleBtn.setAttribute('aria-expanded', __updateModalDetailsOpen ? 'true' : 'false');
+  if (toggleText) toggleText.textContent = __updateModalDetailsOpen ? 'Hide details' : 'View details';
+  if (toggleIcon) toggleIcon.style.transform = __updateModalDetailsOpen ? 'rotate(180deg)' : '';
+}
+
+function toggleUpdateModalDetails() {
+  setUpdateModalDetailsExpanded(!__updateModalDetailsOpen);
+}
 
 function openUpdateModal(data) {
   const modal = document.getElementById('updateModal');
@@ -8976,26 +9071,62 @@ function openUpdateModal(data) {
   const heading = document.getElementById('updateModalHeading');
   const desc = document.getElementById('updateModalDesc');
   const meta = document.getElementById('updateModalMeta');
+  const verLabel = document.getElementById('updateModalVersionLabel');
   const shaEl = document.getElementById('updateModalSha');
   const msgEl = document.getElementById('updateModalCommitMsg');
+  const toggleRow = document.getElementById('updateModalDetailsToggleRow');
+  const notesBody = document.getElementById('updateModalNotesBody');
+  const releaseLinkWrap = document.getElementById('updateModalReleaseLinkWrap');
+  const releaseLink = document.getElementById('updateModalReleaseLink');
   const laterBtn = document.getElementById('updateModalLaterBtn');
   const actionBtn = document.getElementById('updateModalActionBtn');
   const okBtn = document.getElementById('updateModalOkBtn');
   if (!modal || !box) return;
 
   __pendingUpdateInfo = data || null;
+  setUpdateModalDetailsExpanded(false);
   const available = Boolean(data && data.update_available);
+  const latestVer = (data && data.latest_version) || '';
+  const currentVer = (data && data.current_version) || '';
+  const releaseNotes = String((data && data.release_notes) || '').trim();
+  const releaseUrl = String((data && data.release_url) || '').trim();
 
   if (available) {
-    if (heading) heading.textContent = 'Update Available';
+    if (heading) heading.textContent = latestVer ? `Update ${latestVer} Available` : 'Update Available';
     if (desc) {
       desc.textContent = data.reason === 'untracked_install'
         ? 'A Luna update is available. Updating once will also sync local version tracking.'
         : 'A newer version of Luna is ready to install. Your settings and saved media will stay untouched.';
     }
     if (meta) meta.classList.remove('hidden');
-    if (shaEl) shaEl.textContent = data.latest_short_sha || '-';
-    if (msgEl) msgEl.textContent = data.latest_message || 'Latest release on main';
+    if (verLabel) verLabel.textContent = latestVer ? 'Update version' : 'Latest build';
+    if (shaEl) {
+      shaEl.textContent = latestVer
+        ? (currentVer && currentVer !== latestVer ? `${currentVer} -> ${latestVer}` : latestVer)
+        : (data.latest_short_sha || '-');
+    }
+    if (msgEl) {
+      msgEl.textContent = data.release_title || data.latest_message || 'Latest release';
+    }
+
+    if (releaseNotes) {
+      renderReleaseNotesSafe(notesBody, releaseNotes);
+      if (toggleRow) toggleRow.classList.remove('hidden');
+    } else {
+      if (notesBody) notesBody.replaceChildren();
+      if (toggleRow) toggleRow.classList.add('hidden');
+    }
+
+    if (releaseLinkWrap && releaseLink) {
+      if (/^https:\/\/github\.com\//i.test(releaseUrl)) {
+        releaseLink.href = releaseUrl;
+        releaseLinkWrap.classList.remove('hidden');
+      } else {
+        releaseLink.href = '#';
+        releaseLinkWrap.classList.add('hidden');
+      }
+    }
+
     if (laterBtn) laterBtn.classList.remove('hidden');
     if (actionBtn) {
       actionBtn.classList.remove('hidden');
@@ -9006,10 +9137,13 @@ function openUpdateModal(data) {
   } else {
     if (heading) heading.textContent = "You're up to date";
     if (desc) {
-      const shaTag = data && data.current_short_sha ? ` (${data.current_short_sha})` : '';
-      desc.textContent = `Luna${shaTag} is already running the latest version.`;
+      const verTag = currentVer || (data && data.current_short_sha ? data.current_short_sha : '');
+      desc.textContent = verTag
+        ? `Luna ${verTag} is already running the latest version.`
+        : 'Luna is already running the latest version.';
     }
     if (meta) meta.classList.add('hidden');
+    if (toggleRow) toggleRow.classList.add('hidden');
     if (laterBtn) laterBtn.classList.add('hidden');
     if (actionBtn) actionBtn.classList.add('hidden');
     if (okBtn) okBtn.classList.remove('hidden');
@@ -9034,7 +9168,67 @@ function closeUpdateModal() {
   }
   setTimeout(() => {
     if (modal) modal.classList.add('hidden');
+    setUpdateModalDetailsExpanded(false);
   }, 150);
+}
+
+function showUpdateAvailableToast(data) {
+  if (!data || !data.update_available) return;
+  const ver = String(data.latest_version || data.latest_short_sha || '').trim();
+  if (!ver) return;
+
+  try {
+    if (localStorage.getItem('luna_dismissed_update_version') === ver) return;
+    if (sessionStorage.getItem('luna_update_toast_shown_version') === ver) return;
+    sessionStorage.setItem('luna_update_toast_shown_version', ver);
+  } catch (e) {}
+
+  const titleText = `Update ${ver} is available`;
+  const rawRelTitle = String(data.release_title || '').trim();
+  const descText = rawRelTitle && rawRelTitle !== ver ? rawRelTitle : 'A new Luna release is ready to install.';
+
+  lunaToast.add({
+    type: 'info',
+    title: titleText,
+    description: descText,
+    timeout: 5000,
+    closable: false,
+    actions: [
+      {
+        id: 'btnToastUpdateDismiss',
+        label: 'Dismiss',
+        onClick: (id) => {
+          try {
+            localStorage.setItem('luna_dismissed_update_version', ver);
+          } catch (e) {}
+          lunaToast.close(id);
+        },
+      },
+      {
+        id: 'btnToastUpdateNow',
+        label: 'Update now',
+        variant: 'primary',
+        onClick: (id) => {
+          lunaToast.close(id);
+          openUpdateModal(data);
+        },
+      },
+    ],
+  });
+}
+
+async function checkForLunaUpdatesAuto() {
+  if (__lunaUpdateInFlight) return;
+  try {
+    const res = await fetch('/api/system/check-update?cached=true');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data && data.update_available) {
+      showUpdateAvailableToast(data);
+    }
+  } catch (e) {
+    // Silent background check: ignore network/offline errors.
+  }
 }
 
 async function checkForLunaUpdates(btn) {
@@ -9108,13 +9302,14 @@ async function waitForServerRestartAndReload() {
 async function startLunaUpdate() {
   if (__lunaUpdateInFlight) return;
   const targetSha = __pendingUpdateInfo ? __pendingUpdateInfo.latest_sha : null;
+  const targetTag = __pendingUpdateInfo ? __pendingUpdateInfo.target_tag : null;
   closeUpdateModal();
   __lunaUpdateInFlight = true;
 
   __lunaUpdateToastId = lunaToast.add({
     type: 'info',
     title: 'Updating Luna',
-    description: 'Downloading latest update...',
+    description: targetTag ? `Downloading Luna ${targetTag}...` : 'Downloading latest update...',
     timeout: 0,
     closable: false,
     indeterminate: true,
@@ -9124,7 +9319,7 @@ async function startLunaUpdate() {
     const res = await fetch('/api/system/apply-update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ target_sha: targetSha, auto_restart: true }),
+      body: JSON.stringify({ target_sha: targetSha, target_tag: targetTag, auto_restart: true }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -9363,7 +9558,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Check and resume running background job if page was refreshed
   try {
+    let justUpdated = false;
     if (sessionStorage.getItem('luna_update_just_completed') === '1') {
+      justUpdated = true;
       sessionStorage.removeItem('luna_update_just_completed');
       lunaToast.add({
         type: 'success',
@@ -9371,6 +9568,11 @@ document.addEventListener('DOMContentLoaded', () => {
         description: 'Luna has been updated to the latest version.',
         timeout: 3000,
       });
+    }
+    if (!justUpdated) {
+      setTimeout(() => {
+        checkForLunaUpdatesAuto();
+      }, 1200);
     }
     const savedJobId = localStorage.getItem('luna_active_job_id');
     if (savedJobId) {
