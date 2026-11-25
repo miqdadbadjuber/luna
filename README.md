@@ -10,9 +10,8 @@
 ### Local-First Video Downloader & AI Clipper
 
 ---
-<code>beta version</code>
 
-[Requirements](#requirements) · [Install](#install) · [Features](#features) · [Update](#update) · [MCP](MCP.md) · [Docker](#docker) · [FAQ](#faq)
+[Preview](#preview) · [Requirements](#requirements) · [Install](#install) · [Features](#features) · [Update](#update) · [Roadmap](ROADMAP.md) · [MCP](MCP.md) · [Docker](#docker) · [FAQ](#faq)
 
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?style=flat-square&logo=python&logoColor=white)](.python-version)
 [![FastAPI](https://img.shields.io/badge/FastAPI-local-009688?style=flat-square&logo=fastapi&logoColor=white)](requirements.txt)
@@ -24,6 +23,23 @@
 ---
 
 **Luna** is a local web app for downloading video and audio from YouTube, Instagram, and TikTok, organizing files in Workspace, and turning long videos into short clips with AI. Downloads need no API keys and run straight on your machine. For AI Short Clips, Luna uses YouTube captions first (or transcribes audio via Groq Whisper, Gemini, ElevenLabs Scribe, or local Faster-Whisper), ranks highlights with Gemini or any OpenAI-compatible model, and renders vertical or widescreen clips locally with FFmpeg.
+
+## Preview
+
+<p align="center">
+  <img src="luna/assets/screenshots/luna-home.png" alt="Luna home screen with YouTube Full HD Video downloader controls" width="100%" />
+</p>
+<p align="center"><sub>Home screen for YouTube, Instagram Reels, and TikTok downloads, trimming, and AI Short Clips.</sub></p>
+
+<p align="center">
+  <img src="luna/assets/screenshots/luna-workspace.png" alt="Luna AI Clipper canvas workspace showing source metadata, pipeline status, and ranked clip cards" width="100%" />
+</p>
+<p align="center"><sub>AI Clipper canvas workspace with source metadata, pipeline steps, virality scores, and direct entry into Studio.</sub></p>
+
+<p align="center">
+  <img src="luna/assets/screenshots/luna-studio.png" alt="Luna AI Clipper Studio with Selene subtitles, audio controls, and clip filmstrip timeline" width="100%" />
+</p>
+<p align="center"><sub>AI Clipper Studio for adding Selene subtitles, background music, and exporting MP4 clips non-destructively.</sub></p>
 
 ## Requirements
 
@@ -119,6 +135,7 @@ Inside a container, the Settings folder picker and Open Folder button cannot rea
 | --- | --- | --- |
 | Video & MP3 download | None | Downloads video or 320 kbps MP3 from YouTube, TikTok, and Instagram |
 | AI Short Clips | Gemini (or OpenAI-compatible) + Groq (or Gemini, ElevenLabs) | Picks viral moments and renders 9:16, 1:1, 3:4, or 16:9 clips with optional face tracking |
+| AI Clipper Studio | None | Edits AI-generated clips locally with Selene subtitles, background music, and non-destructive MP4 export |
 | Manual Video Trimmer | None | Cuts exact timestamp ranges without AI |
 | Workspace | None | Organizes, previews, renames, and manages local downloads and clips |
 | Local Whisper transcription | None for transcription | Install `requirements-whisper.txt` and set `LOCAL_TRANSCRIBE_PROVIDER=whisper` |
