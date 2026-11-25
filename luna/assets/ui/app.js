@@ -16,7 +16,7 @@ var currentlyPlayingAudioId = null;
 var clipperFilesCache = [];
 
 var currentPlatform = 'youtube';
-var currentYtSub = 'type_yt_ai_clip';
+var currentYtSub = 'type_yt_video';
 var currentIgSub = 'type_ig_reels';
 var currentTtSub = 'type_tt_video';
 
@@ -502,8 +502,8 @@ if (window.lucide && typeof window.lucide.createIcons === 'function') {
 
 const SUB_FEATURES = {
   youtube: [
-    { id: 'type_yt_ai_clip', label: 'AI Short Clips', desc: 'Virality Score', icon: 'clapperboard', btnText: 'Generate', drawer: 'ai-clip' },
     { id: 'type_yt_video', label: 'Full HD Video', desc: '1080p / 720p / 480p MP4', icon: 'film', btnText: 'Download', drawer: 'quality' },
+    { id: 'type_yt_ai_clip', label: 'AI Short Clips', desc: 'Virality Score', icon: 'clapperboard', btnText: 'Generate', drawer: 'ai-clip' },
     { id: 'type_yt_mp3', label: 'Audio MP3', desc: '320kbps High Quality', icon: 'music', btnText: 'Download', drawer: null },
     { id: 'type_yt_clip', label: 'Video Trimmer', desc: 'Manually trim video duration', icon: 'scissors', btnText: 'Download', drawer: 'trimmer' }
   ],
@@ -9321,7 +9321,7 @@ async function checkAndResumeSavedJob(savedJobId) {
         progressStateCard.classList.remove('hidden');
       }
       setCancelButtonVisible(true, 'Cancel');
-      const savedAction = data.action || localStorage.getItem('luna_active_action') || 'type_yt_ai_clip';
+      const savedAction = data.action || localStorage.getItem('luna_active_action') || 'type_yt_video';
       const savedQuality = data.quality || localStorage.getItem('luna_active_quality') || selectedQuality || '1080';
       currentJobWorkspaceName = data.workspace_name || localStorage.getItem('luna_active_ws') || null;
       initTaskRows(savedAction, savedQuality);

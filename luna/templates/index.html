@@ -194,7 +194,7 @@
             <div class="relative flex-shrink-0">
               <button type="button" id="subFeatureDropdownBtn" aria-expanded="false"
                 onclick="toggleSubFeatureDropdown(event)" class="pill-control">
-                <span id="currentSubFeatureLabel">AI Short Clips</span>
+                <span id="currentSubFeatureLabel">Full HD Video</span>
                 <i data-lucide="chevron-down" class="w-2.5 h-2.5 text-zinc-400 transition-transform duration-200"
                   id="subChevron"></i>
               </button>
@@ -235,7 +235,7 @@
             </div>
 
             <!-- 1. AI Short Clips Options -->
-            <div id="drawer-ai-clip" class="flex items-center gap-1.5 flex-shrink-0">
+            <div id="drawer-ai-clip" class="hidden flex items-center gap-1.5 flex-shrink-0">
 
               <!-- Aspect Ratio Pill -->
               <div class="relative flex-shrink-0">
@@ -322,7 +322,7 @@
             </div>
 
             <!-- 2. Video Ratio & FPS Dropdown Options -->
-            <div id="drawer-quality" class="hidden flex items-center gap-1.5 flex-shrink-0">
+            <div id="drawer-quality" class="flex items-center gap-1.5 flex-shrink-0">
               <!-- Aspect Ratio for Full Video -->
               <div class="relative flex-shrink-0">
                 <button type="button" id="videoRatioDropdownBtn" aria-expanded="false"
@@ -446,7 +446,7 @@
 
           <!-- Right: Action CTA Button (No logo, simple Generate or Download) -->
           <button type="button" id="mainActionBtn" onclick="triggerAction()" class="btn-luxe-cta ml-auto">
-            <span id="mainBtnText">Generate</span>
+            <span id="mainBtnText">Download</span>
           </button>
 
         </div>
