@@ -11,7 +11,7 @@
 
 ---
 
-[Preview](#preview) · [Requirements](#requirements) · [Install](#install) · [Features](#features) · [Update](#update) · [Roadmap](ROADMAP.md) · [MCP](MCP.md) · [Docker](#docker) · [FAQ](#faq)
+[Preview](#preview) · [Install](#install) · [Update](#update) · [Features](#features) · [Roadmap](ROADMAP.md) · [MCP](MCP.md) · [Docker](#docker) · [FAQ](#faq)
 
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?style=flat-square&logo=python&logoColor=white)](.python-version)
 [![FastAPI](https://img.shields.io/badge/FastAPI-local-009688?style=flat-square&logo=fastapi&logoColor=white)](requirements.txt)
@@ -27,28 +27,19 @@
 ## Preview
 
 <p align="center">
-  <img src="luna/assets/screenshots/luna-home.png" alt="Luna home screen with YouTube Full HD Video downloader controls" width="100%" />
+  <img src="luna/assets/screenshots/luna-home.png" alt="Luna home screen with YouTube Full HD Video downloader controls" width="100%" /><br />
+  <sub>Home screen for YouTube, Instagram Reels, and TikTok downloads, trimming, and AI Short Clips.</sub>
 </p>
-<p align="center"><sub>Home screen for YouTube, Instagram Reels, and TikTok downloads, trimming, and AI Short Clips.</sub></p>
 
 <p align="center">
-  <img src="luna/assets/screenshots/luna-workspace.png" alt="Luna AI Clipper canvas workspace showing source metadata, pipeline status, and ranked clip cards" width="100%" />
+  <img src="luna/assets/screenshots/luna-workspace.png" alt="Luna AI Clipper canvas workspace showing source metadata, pipeline status, and ranked clip cards" width="100%" /><br />
+  <sub>AI Clipper canvas workspace with source metadata, pipeline steps, virality scores, and direct entry into Studio.</sub>
 </p>
-<p align="center"><sub>AI Clipper canvas workspace with source metadata, pipeline steps, virality scores, and direct entry into Studio.</sub></p>
 
 <p align="center">
-  <img src="luna/assets/screenshots/luna-studio.png" alt="Luna AI Clipper Studio with Selene subtitles, audio controls, and clip filmstrip timeline" width="100%" />
+  <img src="luna/assets/screenshots/luna-studio.png" alt="Luna AI Clipper Studio with Selene subtitles, audio controls, and clip filmstrip timeline" width="100%" /><br />
+  <sub>AI Clipper Studio for adding Selene subtitles, background music, and exporting MP4 clips non-destructively.</sub>
 </p>
-<p align="center"><sub>AI Clipper Studio for adding Selene subtitles, background music, and exporting MP4 clips non-destructively.</sub></p>
-
-## Requirements
-
-- Python 3.12 or newer (installed automatically by the installer).
-- FFmpeg and FFprobe for stream merging, audio extraction, and clip rendering (added automatically if missing).
-- Internet access for downloads and cloud AI providers.
-- API keys are required for AI Short Clips only. By default Luna uses Gemini for clip analysis and Groq Whisper for transcription, and you can switch to an OpenAI-compatible provider, ElevenLabs Scribe, or local Faster-Whisper in Settings.
-
-Add your API keys in Settings with no file to edit. Only the audio or transcript needed for clipping is sent to your chosen provider, and you should never commit `.env` or `cookies.txt`.
 
 ## Install
 
@@ -129,6 +120,12 @@ docker compose -f compose.yaml -f compose.dev.yaml up --build # development, rel
 
 Inside a container, the Settings folder picker and Open Folder button cannot reach your desktop. Open `media-vault/` on the host instead, because Compose fixes `MEDIA_STORAGE_DIR` to the mounted volume.
 
+## Update
+
+Open **Settings > Check for Updates** to update directly inside Luna. It works for both Git clones and archive installs, installs updated dependencies when `requirements.txt` changes, restarts the server in place in the same terminal, and keeps your `.env`, `cookies.txt`, and media untouched.
+
+You can also update from a terminal by re-running the install command above, or running `git pull` followed by `install.ps1` or `./install.sh` when dependencies change.
+
 ## Features
 
 | Feature | API keys | What it does |
@@ -141,11 +138,7 @@ Inside a container, the Settings folder picker and Open Folder button cannot rea
 | Local Whisper transcription | None for transcription | Install `requirements-whisper.txt` and set `LOCAL_TRANSCRIBE_PROVIDER=whisper` |
 | Cookies for restricted videos | None | Optional upload in Settings for age- or login-gated sources (`cookies.txt`) |
 
-## Update
-
-Open **Settings > Check for Updates** to update directly inside Luna. It works for both Git clones and archive installs, installs updated dependencies when `requirements.txt` changes, restarts the server in place in the same terminal, and keeps your `.env`, `cookies.txt`, and media untouched.
-
-You can also update from a terminal by re-running the install command above, or running `git pull` followed by `install.ps1` or `./install.sh` when dependencies change.
+API keys are required for AI Short Clips only. Add your keys in Settings with no file to edit; only the audio or transcript needed for clipping is sent to your chosen provider, and you should never commit `.env` or `cookies.txt`.
 
 ## AI agents (MCP)
 
@@ -224,13 +217,6 @@ Want to contribute? Open an [issue](https://github.com/miqdadbadjuber/luna/issue
 
 ## License
 
-Luna is free software under the [GNU Affero General Public License, version 3 or later](LICENSE) (AGPL-3.0-or-later). Copyright (C) 2026 Miqdad.
+Luna is licensed under [AGPL-3.0-or-later](LICENSE). Copyright (C) 2026 Miqdad Badjuber. You may run, modify, and distribute it, provided you share source under the same license and keep copyright and license notices intact.
 
-You may run, study, modify, redistribute, and sell copies under two conditions:
-
-- Share the source. If you distribute a modified version or let others use it over a network, offer the complete corresponding source under the same license.
-- Keep the notices. Preserve copyright and license notices and state what you changed. The AGPL does not grant trademark rights, so the Luna name and logo stay with the project.
-
-`luna/clipper/` is based on [AI-Youtube-Shorts-Generator](https://github.com/Anil-matcha/AI-Youtube-Shorts-Generator) and stays under its upstream MIT License at [`luna/clipper/LICENSE`](luna/clipper/LICENSE). The combined work ships under AGPL-3.0-or-later with MIT notices preserved. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for full attribution.
-
-A commercial license without the AGPL conditions is available on request through the repository issue tracker.
+`luna/clipper/` keeps its upstream MIT License at [`luna/clipper/LICENSE`](luna/clipper/LICENSE); see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for full attribution. Commercial licensing without AGPL terms is available on request through the repository issue tracker.

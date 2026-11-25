@@ -16,7 +16,7 @@ MIT is compatible with the AGPL: the combined work is distributed under AGPL-3.0
 
 ## Luna original code (AGPL-3.0-or-later)
 
-Everything outside `luna/clipper/`, plus `luna/clipper/highlights.py`, is Copyright (C) 2026 Miqdad and licensed under the GNU Affero General Public License, version 3 or later. Source files carry an `SPDX-License-Identifier: AGPL-3.0-or-later` header. The AGPL requires anyone who distributes a modified version, or lets others use one over a network, to offer the corresponding source under the same license.
+Everything outside `luna/clipper/`, plus `luna/clipper/highlights.py`, is Copyright (C) 2026 Miqdad Badjuber and licensed under the GNU Affero General Public License, version 3 or later. Source files carry an `SPDX-License-Identifier: AGPL-3.0-or-later` header. The AGPL requires anyone who distributes a modified version, or lets others use one over a network, to offer the corresponding source under the same license.
 
 The license does not grant trademark rights. The Luna name and logo remain with the project and may not be used to promote a modified version or to suggest endorsement.
 
