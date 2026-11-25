@@ -64,6 +64,8 @@ from .clipper.config import (
     DEFAULT_GEMINI_MODEL,
     DEFAULT_OPENAI_BASE_URL,
     clip_language,
+    elevenlabs_base_url,
+    elevenlabs_stt_model,
     llm_provider,
     normalize_clip_language,
     normalize_studio_background,
@@ -2476,13 +2478,16 @@ def _missing_ai_clip_api_keys() -> Optional[str]:
     elif active_transcribe == "gemini":
         if not os.getenv("GEMINI_API_KEY", "").strip() and "Gemini" not in missing:
             missing.append("Gemini")
+    elif active_transcribe == "elevenlabs":
+        if not os.getenv("ELEVENLABS_API_KEY", "").strip():
+            missing.append("ElevenLabs")
 
     if not missing:
         return None
     if len(missing) == 1:
         only = missing[0]
-        if only == "Groq":
-            return "Groq API key is required for audio transcription in AI Short Clips."
+        if only in ("Groq", "ElevenLabs"):
+            return f"{only} API key is required for audio transcription in AI Short Clips."
         return f"{only} API key is required for AI Short Clips."
     joined = " and ".join(missing)
     return f"{joined} API keys are required for AI Short Clips."
@@ -2936,10 +2941,11 @@ class SettingsUpdateRequest(BaseModel):
     openai_model: Optional[str] = None
     gemini_api_key: Optional[str] = None
     groq_api_key: Optional[str] = None
+    elevenlabs_api_key: Optional[str] = None
     storage_dir: Optional[str] = None
     migrate_files: Optional[bool] = False
 
-    @field_validator("openai_api_key", "gemini_api_key", "groq_api_key")
+    @field_validator("openai_api_key", "gemini_api_key", "groq_api_key", "elevenlabs_api_key")
     @classmethod
     def _check_secret(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
@@ -2991,6 +2997,7 @@ async def api_get_settings():
     openai_key = os.getenv("OPENAI_API_KEY", "")
     gemini_key = os.getenv("GEMINI_API_KEY", "")
     groq_key = os.getenv("GROQ_API_KEY", "")
+    elevenlabs_key = os.getenv("ELEVENLABS_API_KEY", "")
 
     return {
         "llm_provider": os.getenv("LLM_PROVIDER", "").strip().lower(),
@@ -3009,6 +3016,9 @@ async def api_get_settings():
         "groq_api_key": _mask_key(groq_key),
         "has_groq_api_key": bool(groq_key.strip()),
         "groq_model": os.getenv("GROQ_WHISPER_MODEL", "whisper-large-v3-turbo"),
+        "elevenlabs_api_key": _mask_key(elevenlabs_key),
+        "has_elevenlabs_api_key": bool(elevenlabs_key.strip()),
+        "elevenlabs_model": elevenlabs_stt_model(),
         "storage_dir": curr_storage,
         "status": {
             "ffmpeg": has_ffmpeg,
@@ -3036,7 +3046,7 @@ async def api_save_settings(req: SettingsUpdateRequest):
         updates["LLM_PROVIDER"] = value
     if req.transcribe_provider is not None:
         value = req.transcribe_provider.strip().lower()
-        if value not in ("groq", "gemini", "whisper"):
+        if value not in ("groq", "gemini", "elevenlabs", "whisper"):
             raise HTTPException(status_code=400, detail="Unknown transcription provider")
         updates["LOCAL_TRANSCRIBE_PROVIDER"] = value
     if req.clip_language is not None:
@@ -3064,6 +3074,7 @@ async def api_save_settings(req: SettingsUpdateRequest):
         ("OPENAI_API_KEY", req.openai_api_key),
         ("GEMINI_API_KEY", req.gemini_api_key),
         ("GROQ_API_KEY", req.groq_api_key),
+        ("ELEVENLABS_API_KEY", req.elevenlabs_api_key),
     ):
         if value and value.strip() != _mask_key(os.getenv(env_key, "")):
             updates[env_key] = value.strip()
@@ -3212,7 +3223,12 @@ async def api_openai_models(req: OpenAIModelsRequest):
 @app.post("/api/settings/test-key")
 async def api_test_key(req: TestKeyRequest):
     provider = req.provider.lower()
-    env_key = {"openai": "OPENAI_API_KEY", "gemini": "GEMINI_API_KEY", "groq": "GROQ_API_KEY"}.get(provider)
+    env_key = {
+        "openai": "OPENAI_API_KEY",
+        "gemini": "GEMINI_API_KEY",
+        "groq": "GROQ_API_KEY",
+        "elevenlabs": "ELEVENLABS_API_KEY",
+    }.get(provider)
     if not env_key:
         return {"valid": False, "message": "Unknown provider"}
     # An empty request means test the configured key without returning it to the browser.
@@ -3271,7 +3287,32 @@ async def api_test_key(req: TestKeyRequest):
         except Exception as e:
             return {"valid": False, "message": str(e)[:40]}
 
+    elif provider == "elevenlabs":
+        try:
+            resp = await asyncio.to_thread(
+                requests.get,
+                f"{elevenlabs_base_url()}/v1/models",
+                headers={"xi-api-key": key},
+                timeout=8,
+            )
+            if resp.status_code == 200:
+                return {"valid": True, "message": "200 OK"}
+            # A key scoped to speech_to_text only cannot read /v1/models, but it is a real key.
+            if resp.status_code == 401 and _elevenlabs_error_status(resp) == "missing_permissions":
+                return {"valid": True, "message": "Key OK (scoped)"}
+            return {"valid": False, "message": f"{resp.status_code} Error"}
+        except Exception as e:
+            return {"valid": False, "message": str(e)[:40]}
+
     return {"valid": False, "message": "Unknown provider"}
+
+
+def _elevenlabs_error_status(resp) -> str:
+    try:
+        detail = resp.json().get("detail")
+    except (ValueError, AttributeError):
+        return ""
+    return str(detail.get("status") or "") if isinstance(detail, dict) else ""
 
 
 class CookieUploadRequest(BaseModel):

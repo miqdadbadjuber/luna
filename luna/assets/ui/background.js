@@ -531,7 +531,7 @@ const GUIDE_WORKFLOWS = {
     summaryId: 'wfYoutubeSummary',
     modes: {
       ai_clip: {
-        summary: 'Pipeline for AI Short Clips: requires an LLM key (and Groq/Gemini key if the video has no captions).',
+        summary: 'Pipeline for AI Short Clips: requires an LLM key (and a Groq, Gemini, or ElevenLabs key if the video has no captions).',
         phases: ['1. Input', '2. Speech & Cache', '3. AI & Render', '4. Output'],
         studio: [
           {
@@ -565,7 +565,7 @@ const GUIDE_WORKFLOWS = {
             nodes: [
               { id: 'p-stt', kind: 'box', label: 'Transcription', step: 1 },
               { id: 'p-srt', kind: 'pill', label: 'Captions / .SRT', step: 1 },
-              { id: 'p-asr', kind: 'pill', label: 'Groq · Gemini · Whisper', step: 1 },
+              { id: 'p-asr', kind: 'pill', label: 'Groq · Gemini · ElevenLabs · Whisper', step: 1 },
             ],
           },
           {
@@ -617,7 +617,7 @@ const GUIDE_WORKFLOWS = {
             detail: 'Luna ingests the clean high-resolution source stream via yt-dlp powered by the Deno JS runtime, then builds a time-synced transcript before touching your LLM quota.',
             points: [
               '<strong>1080p H.264 Stream & Cookies:</strong> Downloads video + audio and automatically attaches cookies.txt if uploaded in Settings to bypass YouTube sign-in or 403 challenges.',
-              '<strong>Transcript Priority Chain:</strong> Checks existing local .srt cache first, then official YouTube captions, before falling back to Groq Cloud Whisper, Gemini audio transcription, or local Faster-Whisper.',
+              '<strong>Transcript Priority Chain:</strong> Checks existing local .srt cache first, then official YouTube captions, before falling back to Groq Cloud Whisper, Gemini audio transcription, ElevenLabs Scribe, or local Faster-Whisper.',
             ],
           },
           {

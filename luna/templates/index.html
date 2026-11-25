@@ -985,6 +985,12 @@
                     <svg class="select-check ml-auto w-3.5 h-3.5 text-emerald-400 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
                   </button>
 
+                  <button type="button" role="option" data-value="elevenlabs" data-label="ElevenLabs Scribe" onclick="selectTranscribe('elevenlabs')"
+                    class="settings-menu-item relative z-[2] w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs text-zinc-200 transition cursor-pointer">
+                    <span>ElevenLabs Scribe</span>
+                    <svg class="select-check ml-auto w-3.5 h-3.5 text-emerald-400 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                  </button>
+
                   <button type="button" role="option" data-value="whisper" data-label="Local Whisper" onclick="selectTranscribe('whisper')"
                     class="settings-menu-item relative z-[2] w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs text-zinc-200 transition cursor-pointer">
                     <span>Local Whisper</span>
@@ -1116,6 +1122,50 @@
             <div class="flex items-center justify-between text-[11px] text-zinc-500 pt-0.5">
               <span>Model: <code class="font-mono text-zinc-400" id="labelGroqModel">whisper-large-v3-turbo</code></span>
               <span id="statusGroq" class="font-mono transition-all"></span>
+            </div>
+          </div>
+
+          <!-- ElevenLabs Key Row -->
+          <div class="space-y-1 pt-1" id="elevenlabs-key-row">
+            <div class="flex items-center justify-between text-xs">
+              <label class="font-medium text-zinc-200" for="inputElevenlabs">ElevenLabs API Key</label>
+              <div class="flex items-center gap-3">
+                <button type="button" onclick="testApiKey('elevenlabs', 'wrapElevenlabs', 'inputElevenlabs', 'statusElevenlabs', this)"
+                  class="text-[11px] text-zinc-400 hover:text-white transition flex items-center gap-1 font-sans cursor-pointer group">
+                  <i data-lucide="activity" class="w-3 h-3 text-zinc-500 group-hover:text-emerald-400 transition-colors"></i>
+                  <span>Test Connection</span>
+                </button>
+                <span class="text-zinc-700 select-none">•</span>
+                <button type="button" id="changeElevenlabsKey" onclick="beginKeyChange('elevenlabs')" class="hidden text-[11px] text-zinc-400 hover:text-white transition font-sans">Change Key</button>
+                <button type="button" id="saveElevenlabsKey" onclick="saveProviderKey('elevenlabs')" disabled class="hidden text-[11px] text-emerald-400/50 disabled:cursor-not-allowed hover:text-emerald-300 transition font-sans">Save Key</button>
+                <button type="button" id="cancelElevenlabsKey" onclick="cancelKeyChange('elevenlabs')" class="hidden text-[11px] text-zinc-500 hover:text-white transition font-sans">Cancel</button>
+                <span id="elevenlabsKeyActionDot" class="hidden text-zinc-700 select-none">•</span>
+                <a href="https://elevenlabs.io/app/api/api-keys" target="_blank" rel="noopener noreferrer"
+                  class="text-[11px] text-zinc-400 hover:text-white transition font-mono">
+                  Get Key
+                </a>
+              </div>
+            </div>
+
+            <div class="t-input-wrap" id="wrapElevenlabs">
+              <div class="t-input">
+                <input type="password" id="inputElevenlabs" value="" oninput="providerKeyInputChanged('elevenlabs')"
+                  placeholder="Enter your ElevenLabs API key..."
+                  class="w-full h-full bg-transparent px-3 text-xs font-mono text-white placeholder-zinc-500 disabled:opacity-100 disabled:cursor-default outline-none" />
+                <button type="button" onclick="toggleSecret('inputElevenlabs', 'iconElevenlabsEye')"
+                  class="p-2 text-zinc-400 hover:text-white transition cursor-pointer shrink-0"
+                  aria-label="Show / Hide">
+                  <i id="iconElevenlabsEye" data-lucide="eye" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+              <p class="t-error-msg" id="errElevenlabs">This API key is invalid or has not been entered.</p>
+            </div>
+            <p id="elevenlabsKeyState" class="text-[11px] text-zinc-500"></p>
+
+            <!-- Compact model details below the input -->
+            <div class="flex items-center justify-between text-[11px] text-zinc-500 pt-0.5">
+              <span>Model: <code class="font-mono text-zinc-400" id="labelElevenlabsModel">scribe_v3</code></span>
+              <span id="statusElevenlabs" class="font-mono transition-all"></span>
             </div>
           </div>
 
@@ -1595,7 +1645,7 @@
           </p>
           <ul class="guide-flow-step-points">
             <li><strong>Virality Ranking LLM:</strong> Supports OpenAI-compatible endpoints (OpenAI, OpenRouter, custom base URLs) or Google Gemini.</li>
-            <li><strong>Speech Transcription Fallback:</strong> Checks local <code class="font-mono text-zinc-300">.srt</code> cache and YouTube captions first; uses Groq Cloud Whisper, Gemini, or local Faster-Whisper only when captions are unavailable.</li>
+            <li><strong>Speech Transcription Fallback:</strong> Checks local <code class="font-mono text-zinc-300">.srt</code> cache and YouTube captions first; uses Groq Cloud Whisper, Gemini, ElevenLabs Scribe, or local Faster-Whisper only when captions are unavailable.</li>
             <li><strong>Privacy Boundary:</strong> Video downloads and FFmpeg cuts run locally; AI Short Clips only send transcripts (and audio when cloud transcription is used) to your configured provider.</li>
           </ul>
         </div>

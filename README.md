@@ -23,14 +23,14 @@
 
 ---
 
-**Luna** is a local web app for downloading video and audio from YouTube, Instagram, and TikTok, organizing files in Workspace, and turning long videos into short clips with AI. Downloads need no API keys and run straight on your machine. For AI Short Clips, Luna uses YouTube captions first (or transcribes audio via Groq Whisper, Gemini, or local Faster-Whisper), ranks highlights with Gemini or any OpenAI-compatible model, and renders vertical or widescreen clips locally with FFmpeg.
+**Luna** is a local web app for downloading video and audio from YouTube, Instagram, and TikTok, organizing files in Workspace, and turning long videos into short clips with AI. Downloads need no API keys and run straight on your machine. For AI Short Clips, Luna uses YouTube captions first (or transcribes audio via Groq Whisper, Gemini, ElevenLabs Scribe, or local Faster-Whisper), ranks highlights with Gemini or any OpenAI-compatible model, and renders vertical or widescreen clips locally with FFmpeg.
 
 ## Requirements
 
 - Python 3.12 or newer (installed automatically by the installer).
 - FFmpeg and FFprobe for stream merging, audio extraction, and clip rendering (added automatically if missing).
 - Internet access for downloads and cloud AI providers.
-- API keys are required for AI Short Clips only. By default Luna uses Gemini for clip analysis and Groq Whisper for transcription, and you can switch to an OpenAI-compatible provider or local Faster-Whisper in Settings.
+- API keys are required for AI Short Clips only. By default Luna uses Gemini for clip analysis and Groq Whisper for transcription, and you can switch to an OpenAI-compatible provider, ElevenLabs Scribe, or local Faster-Whisper in Settings.
 
 Add your API keys in Settings with no file to edit. Only the audio or transcript needed for clipping is sent to your chosen provider, and you should never commit `.env` or `cookies.txt`.
 
@@ -118,7 +118,7 @@ Inside a container, the Settings folder picker and Open Folder button cannot rea
 | Feature | API keys | What it does |
 | --- | --- | --- |
 | Video & MP3 download | None | Downloads video or 320 kbps MP3 from YouTube, TikTok, and Instagram |
-| AI Short Clips | Gemini (or OpenAI-compatible) + Groq (or Gemini) | Picks viral moments and renders 9:16, 1:1, 3:4, or 16:9 clips with optional face tracking |
+| AI Short Clips | Gemini (or OpenAI-compatible) + Groq (or Gemini, ElevenLabs) | Picks viral moments and renders 9:16, 1:1, 3:4, or 16:9 clips with optional face tracking |
 | Manual Video Trimmer | None | Cuts exact timestamp ranges without AI |
 | Workspace | None | Organizes, previews, renames, and manages local downloads and clips |
 | Local Whisper transcription | None for transcription | Install `requirements-whisper.txt` and set `LOCAL_TRANSCRIBE_PROVIDER=whisper` |
@@ -167,7 +167,7 @@ Without Docker, launch with `.\start.bat`, `./start.sh`, or `npm start`. With Do
 No. Video downloads, 320 kbps MP3 extraction, and Manual Video Trimmer work with zero API keys.
 
 **Which AI providers are supported?**
-Fresh setups default to Gemini for clip analysis and Groq Whisper for audio transcription. You can switch to any OpenAI-compatible endpoint or local Faster-Whisper in Settings at any time.
+Fresh setups default to Gemini for clip analysis and Groq Whisper for audio transcription. You can switch clip analysis to any OpenAI-compatible endpoint, and transcription to Gemini, ElevenLabs Scribe, or local Faster-Whisper, in Settings at any time.
 
 **Where are my files stored?**
 Temporary downloads go to `output/`. Workspace uses `MEDIA_STORAGE_DIR` when set, defaulting to `D:\Luna-Media` on Windows and `output/` on macOS and Linux.

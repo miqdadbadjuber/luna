@@ -82,6 +82,18 @@ def groq_whisper_model() -> str:
     return os.getenv("GROQ_WHISPER_MODEL", "").strip() or "whisper-large-v3-turbo"
 
 
+DEFAULT_ELEVENLABS_BASE_URL = "https://api.elevenlabs.io"
+DEFAULT_ELEVENLABS_STT_MODEL = "scribe_v3"
+
+
+def elevenlabs_base_url() -> str:
+    return (os.getenv("ELEVENLABS_BASE_URL", "").strip() or DEFAULT_ELEVENLABS_BASE_URL).rstrip("/")
+
+
+def elevenlabs_stt_model() -> str:
+    return os.getenv("ELEVENLABS_STT_MODEL", "").strip() or DEFAULT_ELEVENLABS_STT_MODEL
+
+
 def local_whisper_model() -> str:
     return os.getenv("LOCAL_WHISPER_MODEL", "").strip() or "base"
 
@@ -124,11 +136,13 @@ TRANSCRIBE_PROVIDER_LABELS = {
     "groq": "Groq Cloud Whisper",
     "gemini": "Gemini AI",
     "whisper": "Faster-Whisper Local",
+    "elevenlabs": "ElevenLabs Scribe",
 }
 
 
 def transcribe_provider() -> str:
-    """"groq" uses hosted Whisper, "gemini" the Gemini audio API, "whisper" faster-whisper on this machine."""
+    """"groq" uses hosted Whisper, "gemini" the Gemini audio API, "elevenlabs" ElevenLabs Scribe,
+    "whisper" faster-whisper on this machine."""
     return os.getenv("LOCAL_TRANSCRIBE_PROVIDER", "").strip().lower() or "groq"
 
 
@@ -178,5 +192,14 @@ def require_groq_key() -> str:
     if not api_key:
         raise RuntimeError(
             "GROQ_API_KEY is not set. Add it in Settings or .env, or set LOCAL_TRANSCRIBE_PROVIDER=whisper."
+        )
+    return api_key
+
+
+def require_elevenlabs_key() -> str:
+    api_key = os.getenv("ELEVENLABS_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError(
+            "ELEVENLABS_API_KEY is not set. Add it in Settings or .env, or choose another transcription provider."
         )
     return api_key

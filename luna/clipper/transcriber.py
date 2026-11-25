@@ -403,12 +403,16 @@ def transcribe_local(
     elif provider == "gemini":
         transcript = _transcribe_local_gemini(media_path, language=language, on_status=on_status)
         transcript["provider"] = "Gemini AI"
+    elif provider == "elevenlabs":
+        transcript = _transcribe_local_elevenlabs(media_path, language=language, on_status=on_status)
+        transcript["provider"] = "ElevenLabs Scribe"
     elif provider == "whisper":
         transcript = _transcribe_local_whisper(media_path, language=language)
         transcript["provider"] = "Faster-Whisper Local"
     else:
         raise RuntimeError(
-            f"Unknown LOCAL_TRANSCRIBE_PROVIDER={provider!r}. Use 'groq', 'gemini', or 'whisper'."
+            f"Unknown LOCAL_TRANSCRIBE_PROVIDER={provider!r}. "
+            "Use 'groq', 'gemini', 'elevenlabs', or 'whisper'."
         )
 
     cache_path = _write_srt_cache(media_path, transcript, cache_provider, language)
@@ -501,6 +505,126 @@ def _transcribe_local_groq(
         segments[-1]["end"] if segments else 0.0
     )
     print(f"[transcribe/local] {len(segments)} segments, {duration:.0f}s of audio (groq)", flush=True)
+    return {"duration": duration, "segments": segments}
+
+
+# Scribe returns words, not segments. These caps keep a segment close to what the
+# Whisper providers return, so clip ranking sees sentence-sized lines.
+ELEVENLABS_SEGMENT_PAUSE_SECONDS = 0.8
+ELEVENLABS_SEGMENT_MAX_SECONDS = 12.0
+ELEVENLABS_SEGMENT_MAX_CHARS = 220
+_SENTENCE_ENDINGS = (".", "?", "!", "…", "。", "？", "！")
+
+
+def _elevenlabs_words_to_segments(words: List[Dict]) -> List[Dict]:
+    """Group Scribe word timestamps into segments.
+
+    A segment closes at sentence punctuation, at a pause between words, before the next
+    word would push it past the time cap, or once it reaches the length cap. Audio events
+    such as "(laughter)" are dropped.
+    """
+    segments: List[Dict] = []
+    parts: List[str] = []
+    start: Optional[float] = None
+    end: Optional[float] = None
+
+    def flush() -> None:
+        nonlocal parts, start, end
+        text = "".join(parts).strip()
+        if text and start is not None and end is not None:
+            segments.append({"start": start, "end": end, "text": text})
+        parts, start, end = [], None, None
+
+    for item in words:
+        if not isinstance(item, dict):
+            continue
+        kind = item.get("type") or "word"
+        text = str(item.get("text") or "")
+        if kind == "spacing":
+            if parts:
+                parts.append(text)
+            continue
+        if kind != "word" or not text.strip():
+            continue
+        word_start = float(item.get("start") or 0.0)
+        word_end = float(item.get("end") or word_start)
+        if start is not None and end is not None and (
+            word_start - end >= ELEVENLABS_SEGMENT_PAUSE_SECONDS
+            or word_end - start > ELEVENLABS_SEGMENT_MAX_SECONDS
+        ):
+            flush()
+        if start is None:
+            start = word_start
+        end = word_end if end is None else max(end, word_end)
+        parts.append(text)
+        if text.rstrip().endswith(_SENTENCE_ENDINGS) or len("".join(parts)) >= ELEVENLABS_SEGMENT_MAX_CHARS:
+            flush()
+    flush()
+    return segments
+
+
+def _elevenlabs_error_detail(response) -> str:
+    """Return the readable part of an ElevenLabs error body, never the request itself."""
+    try:
+        body = response.json()
+    except ValueError:
+        return (response.text or "").strip()[:200]
+    detail = body.get("detail") if isinstance(body, dict) else body
+    if isinstance(detail, dict):
+        detail = detail.get("message") or detail.get("status") or detail
+    return str(detail)[:200]
+
+
+def _transcribe_local_elevenlabs(
+    media_path: str,
+    language: Optional[str] = None,
+    on_status: Optional[Callable[[str], None]] = None,
+) -> Dict:
+    """Transcribe via ElevenLabs Scribe speech-to-text (needs ELEVENLABS_API_KEY)."""
+    import requests
+
+    from .config import elevenlabs_base_url, elevenlabs_stt_model, require_elevenlabs_key
+
+    api_key = require_elevenlabs_key()
+    model_id = elevenlabs_stt_model()
+
+    if on_status:
+        on_status("extracting_audio")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        audio_path = os.path.join(tmpdir, "audio.ogg")
+        _extract_compressed_audio(media_path, audio_path)
+        audio_size = os.path.getsize(audio_path)
+        print(f"[transcribe/local] extracted audio: {audio_size / 1024 / 1024:.1f} MB", flush=True)
+
+        if on_status:
+            on_status("uploading")
+
+        form = {"model_id": model_id, "timestamps_granularity": "word", "tag_audio_events": "false"}
+        if language:
+            form["language_code"] = language
+        print(f"[transcribe/local] elevenlabs model={model_id}", flush=True)
+        with open(audio_path, "rb") as f:
+            response = requests.post(
+                f"{elevenlabs_base_url()}/v1/speech-to-text",
+                headers={"xi-api-key": api_key},
+                data=form,
+                files={"file": ("audio.ogg", f, "audio/ogg")},
+                timeout=(30, 900),
+            )
+
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"ElevenLabs transcription failed ({response.status_code}): {_elevenlabs_error_detail(response)}"
+        )
+
+    segments = _elevenlabs_words_to_segments(response.json().get("words") or [])
+    try:
+        duration = _probe_media_duration(media_path)
+    except (OSError, RuntimeError, ValueError):
+        duration = 0.0
+    duration = duration or (segments[-1]["end"] if segments else 0.0)
+    print(f"[transcribe/local] {len(segments)} segments, {duration:.0f}s of audio (elevenlabs)", flush=True)
     return {"duration": duration, "segments": segments}
 
 
