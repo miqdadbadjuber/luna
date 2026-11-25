@@ -823,6 +823,13 @@
                     id="clipperWorkspaceTitle">Workspace</h2>
                 </div>
               </div>
+              <div class="pointer-events-auto flex items-center gap-2 shrink-0">
+                <a id="btnOpenAiClipperStudio" href="#"
+                  class="hidden h-7 px-3 rounded-full bg-white text-[#0a0a0a] hover:bg-neutral-200 text-[11.5px] font-semibold inline-flex items-center gap-1.5 shadow-md transition">
+                  <i data-lucide="clapperboard" class="w-3.5 h-3.5"></i>
+                  <span>Open Studio</span>
+                </a>
+              </div>
             </div>
 
             <!-- Flow Canvas Area -->
@@ -2040,6 +2047,19 @@
   <!-- Media Vault card "more" dropdown (matches Settings dropdown styling & gliding highlight) -->
   <div id="vaultCardMenu" class="vault-card-menu" role="menu" aria-hidden="true" data-open="false">
     <span class="gliding-menu-indicator" aria-hidden="true"></span>
+    <button type="button" id="vaultCardMenuStudioBtn" role="menuitem" class="vault-card-menu-item hidden" onclick="handleVaultCardMenuAction('open-studio')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect width="18" height="18" x="3" y="3" rx="2"></rect>
+        <path d="M7 3v18"></path>
+        <path d="M3 7.5h4"></path>
+        <path d="M3 12h18"></path>
+        <path d="M3 16.5h4"></path>
+        <path d="M17 3v18"></path>
+        <path d="M17 7.5h4"></path>
+        <path d="M17 16.5h4"></path>
+      </svg>
+      <span>Open in Studio</span>
+    </button>
     <button type="button" id="vaultCardMenuSelectBtn" role="menuitem" class="vault-card-menu-item" onclick="handleVaultCardMenuAction('select')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="12" cy="12" r="9"></circle>

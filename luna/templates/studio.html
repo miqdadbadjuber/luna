@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Luna Studio — AI Clipper</title>
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="icon" type="image/png" href="/assets/logo-app.png" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@0.469.0"></script>
+  <script src="/assets/ui/tailwind-config.js?v={{ASSET_VERSION}}"></script>
+  <link rel="stylesheet" href="/assets/ui/luna.css?v={{ASSET_VERSION}}" />
+
+  <!-- Luna Keep-Scale Baseline (125% Chrome viewport parity, matches index.html) -->
+  <script>
+    (function () {
+      var TARGET_BASE_WIDTH = 1150;
+      var TARGET_MIN_HEIGHT = 610;
+      var MAX_UI_ZOOM = 1.85;
+      function applyLunaUiScale() {
+        var vw = window.innerWidth || document.documentElement.clientWidth || TARGET_BASE_WIDTH;
+        var vh = window.innerHeight || document.documentElement.clientHeight || TARGET_MIN_HEIGHT;
+        var zoom = 1;
+        if (vw > TARGET_BASE_WIDTH) {
+          var byWidth = vw / TARGET_BASE_WIDTH;
+          var byHeight = Math.max(1, vh / TARGET_MIN_HEIGHT);
+          zoom = Math.min(MAX_UI_ZOOM, byWidth, byHeight);
+          zoom = Math.round(zoom * 1000) / 1000;
+        }
+        document.documentElement.style.setProperty('--luna-ui-zoom', String(zoom));
+        document.documentElement.style.zoom = String(zoom);
+      }
+      window.__lunaApplyUiScale = applyLunaUiScale;
+      window.__getLunaUiScale = function () {
+        var z = parseFloat(document.documentElement.style.zoom || '1');
+        return (!isNaN(z) && z > 0) ? z : 1;
+      };
+      applyLunaUiScale();
+      window.addEventListener('resize', applyLunaUiScale);
+    })();
+  </script>
+
+  <style>
+    html, body {
+      height: calc(100vh / var(--luna-ui-zoom, 1)) !important;
+      max-height: calc(100vh / var(--luna-ui-zoom, 1)) !important;
+      width: 100% !important;
+      overflow: hidden !important;
+      margin: 0;
+      padding: 0;
+      background: #0a0a0a !important;
+      color: #f5f5f5;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .panel-card {
+      background: #141414;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 20px;
+    }
+
+    .stage-card {
+      background: #101010;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 22px;
+    }
+
+    .list-pill {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-radius: 9999px;
+      font-size: 12px;
+      color: #a3a3a3;
+      cursor: pointer;
+      transition: background 140ms ease, color 140ms ease;
+    }
+
+    .list-pill:hover {
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .list-pill.is-active {
+      background: #242424;
+      color: #ffffff;
+      font-weight: 500;
+    }
+
+    .check-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 9999px;
+      background: #ffffff;
+      color: #0a0a0a;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .list-pill.is-active .check-dot,
+    .flat-chip.is-active .check-dot,
+    .sub-style-card.is-active .check-dot {
+      display: inline-flex;
+    }
+
+    .flat-row {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .flat-chip {
+      flex: 1;
+      height: 28px;
+      padding: 0 6px;
+      border-radius: 9999px;
+      font-size: 11px;
+      color: #8a8a8a;
+      background: transparent;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      cursor: pointer;
+      transition: background 140ms ease, color 140ms ease;
+      white-space: nowrap;
+    }
+
+    .flat-chip:hover { color: #ffffff; }
+
+    .flat-chip.is-active {
+      background: #262626;
+      color: #ffffff;
+      font-weight: 500;
+    }
+
+    .sub-style-card {
+      height: 46px;
+      border-radius: 11px;
+      background: #1a1a1a;
+      border: 1.5px solid rgba(255, 255, 255, 0.06);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      position: relative;
+      transition: border-color 140ms ease, background 140ms ease;
+    }
+
+    .sub-style-card:hover {
+      background: #222222;
+      border-color: rgba(255, 255, 255, 0.16);
+    }
+
+    .sub-style-card.is-active {
+      border-color: rgba(255, 255, 255, 0.85);
+      background: #242424;
+    }
+
+    .sub-style-card .check-dot {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 13px;
+      height: 13px;
+    }
+
+    .ed-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      border-radius: 6px;
+      color: #737373;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      transition: color 120ms ease;
+    }
+
+    .ed-icon:hover { color: #ffffff; }
+    .ed-icon:disabled { opacity: 0.45; pointer-events: none; }
+
+    .play-circle-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 9999px;
+      background: #ffffff;
+      color: #0a0a0a;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: transform 120ms ease, background 140ms ease;
+    }
+
+    .play-circle-btn svg {
+      fill: #0a0a0a;
+      stroke: #0a0a0a;
+    }
+
+    .play-circle-btn:hover { background: #e5e5e5; }
+    .play-circle-btn:active { transform: scale(0.95); }
+
+    .export-pill-btn {
+      height: 28px;
+      padding: 0 13px;
+      border-radius: 9999px;
+      background: #ffffff;
+      color: #0a0a0a;
+      font-size: 11.5px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      cursor: pointer;
+      transition: background 140ms ease;
+    }
+
+    .export-pill-btn:hover { background: #e5e5e5; }
+    .export-pill-btn:disabled { opacity: 0.6; pointer-events: none; }
+
+    .video-track-seg {
+      position: absolute;
+      top: 2px;
+      bottom: 2px;
+      border-radius: 11px;
+      overflow: hidden;
+      background: #191919;
+      border: 1.5px solid #ffffff;
+      cursor: default;
+      user-select: none;
+      touch-action: none;
+    }
+
+    .filmstrip-canvas {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      height: 100%;
+      pointer-events: none;
+      opacity: 0.78;
+    }
+
+    .seg-grab-bar {
+      position: absolute;
+      top: 4px;
+      bottom: 4px;
+      width: 11px;
+      cursor: ew-resize;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 12;
+      background: rgba(0, 0, 0, 0.45);
+      border-radius: 6px;
+    }
+
+    .seg-grab-bar::after {
+      content: "";
+      width: 2.5px;
+      height: 18px;
+      border-radius: 9999px;
+      background: #ffffff;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+    }
+
+    .seg-grab-left { left: 3px; }
+    .seg-grab-right { right: 3px; }
+
+    .audio-track-seg {
+      position: absolute;
+      top: 3px;
+      bottom: 3px;
+      border-radius: 11px;
+      background: #171717;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      overflow: hidden;
+      cursor: pointer;
+      transition: border-color 140ms ease, background 140ms ease;
+    }
+
+    .audio-track-seg:hover {
+      border-color: rgba(255, 255, 255, 0.65);
+      background: #1e1e1e;
+    }
+
+    .playhead-line {
+      position: absolute;
+      top: 6px;
+      bottom: 4px;
+      width: 1.5px;
+      background: #ffffff;
+      pointer-events: none;
+      z-index: 30;
+    }
+
+    .playhead-dot {
+      position: absolute;
+      top: -3px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 9px;
+      height: 9px;
+      border-radius: 9999px;
+      background: #ffffff;
+      pointer-events: auto;
+      cursor: ew-resize;
+    }
+
+    /* Lightweight pure-CSS subtitle overlay (Off + Selene) */
+    #mediaFrameBox {
+      container-type: size;
+    }
+
+    .subtitle-overlay-box {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      width: 86%;
+      max-width: 86%;
+      text-align: center;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+      z-index: 15;
+      padding: 4px 6px;
+      border-radius: 6px;
+      text-rendering: geometricPrecision;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .subtitle-overlay-box:hover {
+      outline: 1px dashed rgba(255, 255, 255, 0.35);
+      outline-offset: 2px;
+    }
+
+    .snap-guide {
+      position: absolute;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 100ms ease;
+      z-index: 12;
+    }
+    .snap-guide-v {
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 1.5px;
+      transform: translateX(-50%);
+      background: rgba(255, 213, 79, 0.92);
+      box-shadow: 0 0 8px rgba(255, 213, 79, 0.55);
+    }
+    .snap-guide-h {
+      left: 0;
+      right: 0;
+      top: 50%;
+      height: 1.5px;
+      transform: translateY(-50%);
+      background: rgba(255, 213, 79, 0.92);
+      box-shadow: 0 0 8px rgba(255, 213, 79, 0.55);
+    }
+    .snap-guide.is-visible {
+      opacity: 1;
+    }
+
+    /* Full-size interactive preview stage (plain icon button, no circle/border) */
+    .stage-expand-btn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      z-index: 25;
+      width: 30px;
+      height: 30px;
+      border-radius: 6px;
+      background: transparent;
+      border: none;
+      color: #a3a3a3;
+      filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.9));
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: color 120ms ease;
+    }
+    .stage-expand-btn:hover { color: #ffffff; }
+
+    .stage-card.is-expanded {
+      position: fixed;
+      inset: 12px;
+      z-index: 85;
+      background: #0b0b0b;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 22px;
+      padding: 18px;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.92);
+    }
+    .stage-expanded-tools {
+      display: none;
+      position: absolute;
+      bottom: 16px;
+      right: 16px;
+      z-index: 25;
+      align-items: center;
+      gap: 6px;
+      padding: 6px;
+      border-radius: 9999px;
+      background: rgba(20, 20, 20, 0.84);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      backdrop-filter: blur(10px);
+    }
+    .stage-card.is-expanded .stage-expanded-tools {
+      display: inline-flex;
+    }
+    .stage-inline-edit {
+      display: none;
+      position: absolute;
+      bottom: 16px;
+      left: 16px;
+      z-index: 25;
+      width: 260px;
+      padding: 8px 10px;
+      border-radius: 14px;
+      background: rgba(20, 20, 20, 0.88);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(10px);
+    }
+    .stage-card.is-expanded .stage-inline-edit.is-open {
+      display: block;
+    }
+
+    .sub-line {
+      display: block;
+      word-break: break-word;
+    }
+
+    .sub-style-selene {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      letter-spacing: -0.015em;
+      line-height: 1.22;
+      color: #ffffff;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.78), 0 1px 3px rgba(0, 0, 0, 0.82);
+    }
+    .sub-style-selene .sub-line.is-muted {
+      font-weight: 400;
+      color: rgba(255, 255, 255, 0.88);
+    }
+
+    .panel-scroll::-webkit-scrollbar { width: 4px; }
+    .panel-scroll::-webkit-scrollbar-track { background: transparent; }
+    .panel-scroll::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.14);
+      border-radius: 9999px;
+    }
+    .panel-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.28); }
+
+    .music-window {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      cursor: grab;
+      touch-action: none;
+      z-index: 6;
+    }
+    .music-window-clip {
+      position: absolute;
+      inset: 0;
+      border-radius: 7px;
+      overflow: hidden;
+      background: #0d0d0d;
+      pointer-events: none;
+    }
+    .music-window-border {
+      position: absolute;
+      inset: 0;
+      box-sizing: border-box;
+      border: 1.5px solid #ffffff;
+      border-left-width: 3.5px;
+      border-right-width: 3.5px;
+      border-radius: 7px;
+      pointer-events: none;
+      z-index: 8;
+    }
+    .music-window:active { cursor: grabbing; }
+
+    .modal-wave-scroll {
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+    }
+    .modal-wave-scroll::-webkit-scrollbar { height: 4px; }
+    .modal-wave-scroll::-webkit-scrollbar-track { background: transparent; }
+    .modal-wave-scroll::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.16);
+      border-radius: 9999px;
+    }
+
+    .editor-toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 120;
+      background: #1a1a1a;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.8);
+      border-radius: 12px;
+      padding: 10px 14px;
+      transform: translateY(14px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 150ms ease, transform 150ms ease;
+    }
+    .editor-toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    .luna-range {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.16);
+      border-radius: 9999px;
+      outline: none;
+    }
+    .luna-range::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 11px;
+      height: 11px;
+      border-radius: 9999px;
+      background: #ffffff;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body class="overflow-hidden flex flex-col p-3 gap-2.5 select-none" data-project-id="{{PROJECT_ID}}">
+
+  <!-- TOP HEADER BAR -->
+  <header class="h-10 shrink-0 px-1 flex items-center justify-between gap-4">
+    <div class="flex items-center gap-2 text-xs font-sans min-w-0">
+      <a id="studioBackLink" href="/#vault-project/{{PROJECT_ID}}" class="luna-back-link shrink-0">
+        <svg class="luna-back-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M10 4L6 8L10 12"></path>
+        </svg>
+        <span>Back</span>
+      </a>
+      <span class="text-neutral-600 font-mono shrink-0">/</span>
+      <span id="projectTitle" class="text-sm font-medium text-neutral-100 truncate">Loading workspace...</span>
+    </div>
+
+    <!-- Right: Plain Download Icon + Slim Save -->
+    <div class="flex items-center gap-2.5 shrink-0">
+      <button type="button" id="btnDownloadClip" onclick="downloadClip()" class="ed-icon hover:text-white" title="Export & Download Clip">
+        <i id="downloadClipIcon" data-lucide="download" class="w-4 h-4"></i>
+      </button>
+      <button type="button" id="btnSaveClip" onclick="saveClip()" class="export-pill-btn">
+        <span>Save</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- MIDDLE 3-COLUMN LAYOUT -->
+  <div class="flex-1 min-h-0 flex gap-3 overflow-hidden">
+
+    <!-- LEFT BOX: AI Clips List + Audio Controls -->
+    <aside class="w-[228px] shrink-0 panel-card p-3 flex flex-col justify-between gap-3 overflow-hidden">
+      <div class="space-y-2 flex-1 min-h-0 flex flex-col">
+        <span class="text-xs font-semibold text-neutral-300 px-1">AI Clips</span>
+        <div id="aiClipsList" class="space-y-1 overflow-y-auto panel-scroll pr-0.5 flex-1"></div>
+      </div>
+
+      <div class="space-y-2 pt-3 border-t border-white/[0.06] shrink-0">
+        <span class="text-xs font-semibold text-neutral-300 px-1 block">Audio</span>
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" id="btnOrigAudio" onclick="toggleMute()"
+            class="h-14 rounded-xl bg-[#1d1d1d] border border-white/[0.08] p-2 flex flex-col items-center justify-center gap-1 hover:bg-[#252525] transition cursor-pointer"
+            title="Original clip audio (click to mute/unmute)">
+            <span class="w-5 h-5 rounded-full bg-white text-black flex items-center justify-center">
+              <i id="origAudioIcon" data-lucide="check" class="w-3 h-3"></i>
+            </span>
+            <span class="text-[11px] text-neutral-200">Original</span>
+          </button>
+
+          <label class="h-14 rounded-xl bg-[#191919] border border-white/[0.05] p-2 flex flex-col items-center justify-center gap-1 hover:bg-[#222222] transition cursor-pointer"
+            title="Add background music">
+            <i data-lucide="music" class="w-4 h-4 text-neutral-400"></i>
+            <span id="customAudioLabel" class="text-[11px] text-neutral-400 truncate max-w-full">Add Music</span>
+            <input type="file" id="customAudioInput" accept="audio/*" class="hidden" onchange="onSelectMusicFile(event)" />
+          </label>
+        </div>
+      </div>
+    </aside>
+
+    <!-- CENTER: VIDEO PREVIEW STAGE + INTERACTIVE LIVE SUBTITLE -->
+    <section id="stageSection" class="flex-1 min-w-0 stage-card relative flex items-center justify-center p-3.5 overflow-hidden">
+      <button type="button" id="btnStageExpand" onclick="toggleStageExpand()" class="stage-expand-btn" title="Full size preview (F)">
+        <i id="stageExpandIcon" data-lucide="maximize" class="w-4 h-4"></i>
+      </button>
+
+      <div id="mediaFrameBox" class="relative overflow-hidden rounded-xl bg-black flex items-center justify-center cursor-pointer h-full"
+        style="aspect-ratio: 9 / 16; max-width: 100%; max-height: 100%;"
+        onclick="if (!event.target.closest('#subtitleOverlay')) togglePlay()">
+        <video id="videoEl" class="w-full h-full object-cover block" playsinline preload="auto"></video>
+        <div id="snapGuideV" class="snap-guide snap-guide-v" aria-hidden="true"></div>
+        <div id="snapGuideH" class="snap-guide snap-guide-h" aria-hidden="true"></div>
+        <div id="subtitleOverlay" class="subtitle-overlay-box hidden" title="Click to edit text or drag to position"></div>
+      </div>
+
+      <!-- Minimal floating controls visible only in full-size preview mode -->
+      <div class="stage-expanded-tools" onclick="event.stopPropagation()">
+        <button type="button" onclick="togglePlay()" class="play-circle-btn !w-8 !h-8" title="Play / Pause (Space)">
+          <i id="expandedPlayIcon" data-lucide="play" class="w-3.5 h-3.5"></i>
+        </button>
+        <button type="button" onclick="toggleMute()" class="ed-icon !w-8 !h-8" title="Mute / Unmute">
+          <i id="expandedMuteIcon" data-lucide="volume-2" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div id="stageInlineEdit" class="stage-inline-edit" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between text-[10.5px] text-neutral-400 mb-1">
+          <span>Edit Subtitle</span>
+          <button type="button" onclick="closeStageInlineEdit()" class="text-neutral-500 hover:text-white cursor-pointer">
+            <i data-lucide="x" class="w-3 h-3"></i>
+          </button>
+        </div>
+        <textarea id="stageCueInput" rows="2" oninput="updateActiveCueText(this.value)"
+          class="w-full bg-transparent text-xs text-neutral-100 placeholder-neutral-500 resize-none focus:outline-none leading-snug"
+          placeholder="Edit current subtitle line..."></textarea>
+      </div>
+    </section>
+
+    <!-- RIGHT BOX: Subtitle | Caption Tabs -->
+    <aside class="w-[264px] shrink-0 panel-card p-3 flex flex-col gap-3 overflow-hidden">
+      <div class="flat-row shrink-0 pb-1.5 border-b border-white/[0.06]">
+        <button type="button" class="flat-chip right-tab is-active" data-tab="subtitle" onclick="switchRightTab('subtitle')">
+          <span class="check-dot"><i data-lucide="check" class="w-2.5 h-2.5"></i></span>
+          <span>Subtitle</span>
+        </button>
+        <button type="button" class="flat-chip right-tab" data-tab="caption" onclick="switchRightTab('caption')">
+          <span class="check-dot"><i data-lucide="check" class="w-2.5 h-2.5"></i></span>
+          <span>Caption</span>
+        </button>
+      </div>
+
+      <!-- TAB 1: SUBTITLE -->
+      <div id="panelSubtitle" class="flex-1 min-h-0 flex flex-col gap-3 overflow-y-auto panel-scroll pr-1 pb-1">
+        <div class="space-y-1.5 shrink-0">
+          <div class="flex items-center justify-between px-1">
+            <span class="text-xs font-medium text-neutral-300">Style</span>
+          </div>
+          <div id="subStyleGrid" class="grid grid-cols-2 gap-1.5"></div>
+        </div>
+
+        <div id="subtitleOptionsGroup" class="space-y-3 shrink-0 transition-opacity duration-150">
+          <div class="bg-[#101010] border border-white/[0.07] rounded-xl p-2.5 space-y-1.5 shrink-0">
+            <div class="flex items-center justify-between text-[11px] text-neutral-400">
+              <span>Current Line</span>
+              <span id="activeCueTime" class="tabular-nums text-neutral-500">00:00 – 00:00</span>
+            </div>
+            <textarea id="cueTextInput" rows="2" oninput="updateActiveCueText(this.value)"
+              class="w-full bg-transparent text-xs text-neutral-100 placeholder-neutral-500 resize-none focus:outline-none leading-snug"
+              placeholder="Click subtitle on video or type line here..."></textarea>
+          </div>
+
+          <div class="space-y-1.5 shrink-0">
+            <div class="flex items-center justify-between px-1">
+              <span class="text-xs font-medium text-neutral-300">Size</span>
+              <button type="button" onclick="resetSubSize()" class="text-[11px] text-neutral-500 hover:text-white transition cursor-pointer">Reset</button>
+            </div>
+            <div class="flat-row">
+              <button type="button" class="flat-chip size-chip" data-size="small" onclick="setSubSize('small')">Small</button>
+              <button type="button" class="flat-chip size-chip is-active" data-size="medium" onclick="setSubSize('medium')">Medium</button>
+              <button type="button" class="flat-chip size-chip" data-size="large" onclick="setSubSize('large')">Large</button>
+              <button type="button" class="flat-chip size-chip" data-size="custom" onclick="setSubSize('custom')">Custom</button>
+            </div>
+            <div id="customScaleWrap" class="hidden pt-1 px-1 space-y-1">
+              <div class="flex items-center justify-between text-[11px]">
+                <span class="text-neutral-500">Scale</span>
+                <div class="flex items-center gap-2">
+                  <span id="customScaleLabel" class="text-neutral-200 tabular-nums">100</span>
+                  <button type="button" onclick="resetSubSize()" class="text-[10.5px] text-neutral-500 hover:text-white transition cursor-pointer">Reset</button>
+                </div>
+              </div>
+              <input id="customScaleSlider" type="range" min="45" max="200" value="100" class="luna-range w-full" oninput="setCustomScale(this.value)" />
+            </div>
+          </div>
+
+          <div class="space-y-1.5 shrink-0">
+            <div class="flex items-center justify-between px-1">
+              <span class="text-xs font-medium text-neutral-300">Position</span>
+              <button type="button" onclick="resetSubPos()" class="text-[11px] text-neutral-500 hover:text-white transition cursor-pointer">Reset</button>
+            </div>
+            <div class="flat-row">
+              <button type="button" class="flat-chip pos-chip is-active" data-pos="bottom" onclick="setSubPos('bottom')">Bottom</button>
+              <button type="button" class="flat-chip pos-chip" data-pos="middle" onclick="setSubPos('middle')">Middle</button>
+              <button type="button" class="flat-chip pos-chip" data-pos="top" onclick="setSubPos('top')">Top</button>
+              <button type="button" class="flat-chip pos-chip" data-pos="custom" onclick="setSubPos('custom')">Custom</button>
+            </div>
+            <div id="customXYWrap" class="hidden pt-1 px-1 space-y-1.5">
+              <div class="grid grid-cols-2 gap-3">
+                <div class="space-y-1">
+                  <div class="flex items-center justify-between text-[11px]">
+                    <span class="text-neutral-500">X</span>
+                    <span id="posXLabel" class="text-neutral-200 tabular-nums">50%</span>
+                  </div>
+                  <input id="posXSlider" type="range" min="15" max="85" value="50" class="luna-range w-full" oninput="setCustomXY('x', this.value)" />
+                </div>
+                <div class="space-y-1">
+                  <div class="flex items-center justify-between text-[11px]">
+                    <span class="text-neutral-500">Y</span>
+                    <span id="posYLabel" class="text-neutral-200 tabular-nums">78%</span>
+                  </div>
+                  <input id="posYSlider" type="range" min="10" max="92" value="78" class="luna-range w-full" oninput="setCustomXY('y', this.value)" />
+                </div>
+              </div>
+              <div class="flex justify-end">
+                <button type="button" onclick="resetSubPos()" class="text-[10.5px] text-neutral-500 hover:text-white transition cursor-pointer">Reset</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: CAPTION -->
+      <div id="panelCaption" class="hidden flex-1 min-h-0 flex flex-col gap-3 overflow-y-auto panel-scroll pr-1">
+        <div class="space-y-1.5 shrink-0">
+          <div class="flex items-center justify-between px-1">
+            <span class="text-xs font-medium text-neutral-300">Caption</span>
+            <span id="captionCharCount" class="text-[10.5px] text-neutral-500 tabular-nums">0 chars</span>
+          </div>
+          <div class="bg-[#101010] border border-white/[0.07] rounded-xl p-2.5 flex flex-col gap-2">
+            <textarea id="captionBox" rows="5" oninput="saveCaptionDraft()"
+              class="w-full bg-transparent text-xs text-neutral-200 placeholder-neutral-500 resize-none focus:outline-none leading-relaxed"
+              placeholder="Write or customize clip caption..."></textarea>
+            <div class="flex items-center justify-end gap-1 pt-1 border-t border-white/[0.05]">
+              <button type="button" onclick="focusCaptionEdit()" class="ed-icon !w-7 !h-7" title="Edit Caption">
+                <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+              </button>
+              <button type="button" onclick="copyCaption()" class="ed-icon !w-7 !h-7" title="Copy Caption">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-1.5 shrink-0">
+          <span class="text-xs font-medium text-neutral-300 block px-1">Title</span>
+          <input id="clipTitleInput" type="text" oninput="saveClipMetaDraft()"
+            class="w-full bg-[#101010] border border-white/[0.07] rounded-xl px-2.5 py-2 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-white/[0.18]"
+            placeholder="Clip hook or title..." />
+        </div>
+
+        <div class="space-y-1.5 shrink-0">
+          <span class="text-xs font-medium text-neutral-300 block px-1">Hashtags</span>
+          <input id="clipTagsInput" type="text" oninput="saveClipMetaDraft()"
+            class="w-full bg-[#101010] border border-white/[0.07] rounded-xl px-2.5 py-2 text-xs text-neutral-300 placeholder-neutral-500 focus:outline-none focus:border-white/[0.18]"
+            placeholder="#topic #shorts" />
+        </div>
+
+        <button type="button" onclick="copyFullPost()"
+          class="w-full h-8 rounded-xl bg-[#1b1b1b] hover:bg-[#242424] border border-white/[0.07] text-xs font-medium text-neutral-200 flex items-center justify-center gap-1.5 transition cursor-pointer shrink-0">
+          <i data-lucide="clipboard-check" class="w-3.5 h-3.5"></i>
+          <span>Copy Caption + Hashtags</span>
+        </button>
+      </div>
+    </aside>
+  </div>
+
+  <!-- BOTTOM ROUNDED TIMELINE CARD -->
+  <section id="timelinePanel" class="h-[164px] shrink-0 panel-card px-5 py-2.5 flex flex-col justify-between relative">
+    <div class="grid grid-cols-3 items-center">
+      <div class="flex items-center justify-self-start">
+        <span id="trimRangeBadge" class="text-xs text-neutral-400 tabular-nums">00:00 – 00:00</span>
+      </div>
+
+      <div class="flex items-center gap-3 justify-self-center">
+        <button type="button" onclick="seekTo(activeClip().start)" class="ed-icon" title="Jump to start">
+          <i data-lucide="skip-back" class="w-4 h-4"></i>
+        </button>
+        <button type="button" onclick="stepTime(-5)" class="ed-icon" title="Back 5s">
+          <i data-lucide="undo-2" class="w-4 h-4"></i>
+        </button>
+        <button type="button" onclick="togglePlay()" class="play-circle-btn" title="Play / Pause (Space)">
+          <i id="playIcon" data-lucide="play" class="w-4 h-4"></i>
+        </button>
+        <button type="button" onclick="stepTime(5)" class="ed-icon" title="Forward 5s">
+          <i data-lucide="redo-2" class="w-4 h-4"></i>
+        </button>
+        <button type="button" onclick="seekTo(activeClip().end)" class="ed-icon" title="Jump to end">
+          <i data-lucide="skip-forward" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="flex items-center gap-1 justify-self-end">
+        <button type="button" onclick="toggleMute()" class="ed-icon" title="Mute / Unmute">
+          <i id="bottomMuteIcon" data-lucide="volume-2" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="relative flex-1 flex flex-col justify-center gap-1.5 pt-1">
+      <div class="flex items-center gap-3">
+        <div class="w-5 shrink-0"></div>
+        <div id="timelineRuler" class="relative flex-1 h-4 flex items-center justify-between text-[11px] text-neutral-400 cursor-ew-resize"></div>
+        <div class="w-11 shrink-0"></div>
+      </div>
+
+      <div class="relative flex flex-col gap-1.5">
+        <div class="flex items-center gap-3 h-11">
+          <div class="w-5 shrink-0 flex items-center justify-center text-neutral-500">
+            <i data-lucide="video" class="w-4 h-4"></i>
+          </div>
+          <div id="videoTrackArea" class="relative flex-1 h-full rounded-xl bg-[#0e0e0e] border border-white/[0.04] cursor-ew-resize"></div>
+          <div class="w-11 shrink-0 flex justify-end">
+            <button type="button" onclick="resetTrim()" class="text-[11px] font-medium text-neutral-400 hover:text-white transition cursor-pointer whitespace-nowrap px-1" title="Reset trim">
+              Reset
+            </button>
+          </div>
+        </div>
+
+        <div id="musicTrackRow" class="hidden relative flex items-center gap-3 h-9">
+          <div class="w-5 shrink-0 flex items-center justify-center text-neutral-500">
+            <i data-lucide="music" class="w-4 h-4"></i>
+          </div>
+          <div id="audioTrackArea" class="relative flex-1 h-full rounded-xl bg-[#0e0e0e] border border-white/[0.04] cursor-pointer"></div>
+          <div class="w-11 shrink-0 flex justify-end">
+            <button type="button" onclick="openMusicModal()" class="ed-icon !w-7 !h-7" title="Change music section">
+              <i data-lucide="ellipsis" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <div id="musicInlinePopover" class="hidden absolute bottom-11 left-1/2 -translate-x-1/2 z-50 panel-card px-3.5 py-2.5 shadow-2xl flex items-center gap-3 border border-white/[0.12]"
+            onclick="event.stopPropagation()">
+            <div class="flex items-center gap-2">
+              <i data-lucide="volume-2" class="w-3.5 h-3.5 text-neutral-400"></i>
+              <input id="inlineMusicVolSlider" type="range" min="0" max="100" value="35" class="luna-range w-24" oninput="setMusicVolume(this.value)" />
+              <span id="inlineMusicVolText" class="text-[11px] text-neutral-200 w-7 tabular-nums">35%</span>
+            </div>
+            <div class="h-4 w-px bg-white/[0.10]"></div>
+            <button type="button" onclick="closeMusicPopover(); openMusicModal();" class="ed-icon !w-6 !h-6" title="Trim song">
+              <i data-lucide="scissors" class="w-3.5 h-3.5"></i>
+            </button>
+            <button type="button" onclick="removeCustomMusic()" class="ed-icon !w-6 !h-6 hover:!text-red-400" title="Remove Music">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="pointer-events-none absolute -top-5 bottom-0" style="left: 32px; right: 56px;">
+          <div id="playhead" class="playhead-line" style="left: 0%;">
+            <div id="playheadDot" class="playhead-dot"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MUSIC SLICE PICKER MODAL -->
+  <div id="musicPickerModal" class="hidden fixed inset-0 z-[100] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="panel-card w-full max-w-md px-4 py-3.5 space-y-2.5 shadow-2xl">
+      <div class="flex items-center justify-between gap-3">
+        <div class="min-w-0">
+          <h3 class="text-[13px] font-semibold text-white truncate" id="modalMusicName">Select Music Section</h3>
+          <p class="text-[11px] text-neutral-300 mt-0.5 tabular-nums font-medium" id="modalMusicMeta">00:00 – 00:30</p>
+        </div>
+        <button type="button" onclick="toggleModalMusicPreview()" class="play-circle-btn !w-7 !h-7 shrink-0" title="Preview selected part">
+          <i id="modalPlayIcon" data-lucide="play" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+
+      <div id="modalWaveScroll" class="modal-wave-scroll pb-0.5">
+        <div id="modalWaveZoomContent" class="space-y-1" style="width: 100%;">
+          <div id="modalWaveBox" class="relative h-[58px] rounded-[10px] bg-[#0d0d0d] border border-white/[0.08] p-[3px] select-none cursor-pointer">
+            <div id="modalWaveTrack" class="relative w-full h-full rounded-[7px]">
+              <svg id="modalWaveSvg" class="w-full h-full pointer-events-none" preserveAspectRatio="none"></svg>
+              <div id="modalWindowBox" class="music-window">
+                <div class="music-window-clip">
+                  <svg id="modalWaveSelSvg" class="absolute top-0 bottom-0 h-full pointer-events-none" preserveAspectRatio="none"></svg>
+                  <div id="modalWaveFillWrap" class="absolute inset-0 pointer-events-none" style="clip-path: inset(0 100% 0 0);">
+                    <svg id="modalWaveLitSvg" class="absolute top-0 bottom-0 h-full pointer-events-none" preserveAspectRatio="none"></svg>
+                  </div>
+                </div>
+                <div class="music-window-border"></div>
+              </div>
+            </div>
+          </div>
+          <div id="modalWaveRuler" class="flex items-center justify-between text-[10px] text-neutral-500 tabular-nums px-0.5"></div>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between gap-4 pt-0.5">
+        <span class="text-[11.5px] text-neutral-400 shrink-0">Music Volume</span>
+        <div class="flex items-center gap-2.5 flex-1 max-w-[190px]">
+          <input id="modalVolumeSlider" type="range" min="0" max="100" value="35" class="luna-range w-full" oninput="updateModalVolume(this.value)" />
+          <span id="modalVolumeText" class="text-[11.5px] text-neutral-300 w-8 text-right tabular-nums">35%</span>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between pt-2 border-t border-white/[0.06]">
+        <div class="flex items-center gap-2.5">
+          <button type="button" id="btnZoomOut" onclick="stepModalZoom(-1)" class="text-neutral-500 hover:text-white transition cursor-pointer p-0.5" title="Zoom out">
+            <i data-lucide="zoom-out" class="w-3.5 h-3.5"></i>
+          </button>
+          <button type="button" id="btnZoomIn" onclick="stepModalZoom(1)" class="text-neutral-500 hover:text-white transition cursor-pointer p-0.5" title="Zoom in">
+            <i data-lucide="zoom-in" class="w-3.5 h-3.5"></i>
+          </button>
+          <button type="button" id="btnRemoveMusic" onclick="removeCustomMusic()" class="text-[11.5px] text-neutral-500 hover:text-red-400 transition cursor-pointer ml-1">
+            Remove Music
+          </button>
+        </div>
+        <div class="flex items-center gap-2 ml-auto">
+          <button type="button" onclick="closeMusicModal(false)" class="px-3 h-7 rounded-full text-xs text-neutral-300 hover:text-white hover:bg-white/[0.06] transition cursor-pointer">
+            Cancel
+          </button>
+          <button type="button" onclick="closeMusicModal(true)" class="export-pill-btn !h-7 !px-3.5 !text-xs">
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <video id="thumbVideoEl" class="hidden" muted playsinline preload="auto"></video>
+  <audio id="customAudioEl" class="hidden"></audio>
+
+  <div id="editorToast" class="editor-toast flex items-center gap-2 text-xs text-neutral-100">
+    <i data-lucide="check-circle-2" class="w-4 h-4 text-white shrink-0"></i>
+    <span id="editorToastText">Saved</span>
+  </div>
+
+  <script src="/assets/ui/studio.js?v={{ASSET_VERSION}}"></script>
+</body>
+
+</html>

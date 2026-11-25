@@ -663,6 +663,12 @@ html[data-init-route="workspace"] #vaultProjectDetailView {
   display: block !important;
 }
 
+/* Keep both workspace detail layouts hidden until openProjectPage resolves project type (eliminates empty standard workspace flash on AI Clipper refresh/back) */
+html[data-init-route="workspace"] #vaultStandardDetailView,
+html[data-init-route="workspace"] #clipperWorkflowContainer {
+  display: none !important;
+}
+
 html[data-init-route="workspace"] main {
   padding-top: 1.5rem !important;
 }
@@ -2370,7 +2376,8 @@ body.is-in-fullscreen media-control-bar button * {
   border: 0;
   background: transparent;
   font-size: 10px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: 'Inter', sans-serif;
+  font-variant-numeric: tabular-nums;
   font-weight: 500;
   color: rgba(255, 255, 255, 0.65);
   cursor: pointer;
@@ -2418,6 +2425,7 @@ body.is-in-fullscreen media-control-bar button * {
   border-radius: 8px;
   background: #262626;
   color: #f2f2f2;
+  font-family: 'Inter', sans-serif;
   font-size: 11px;
   line-height: 14px;
   font-weight: 400;

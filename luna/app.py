@@ -1760,6 +1760,22 @@ def _save_project_to_vault(
         if not saved_files:
             return None
 
+        # Preserve full-video transcript .srt alongside AI Short Clips so Studio always has synced subtitles
+        if action == "type_yt_ai_clip" and source_url:
+            try:
+                vid_match = studio_service._extract_youtube_id(source_url)
+                if vid_match and os.path.isdir(OUTPUT_DIR):
+                    srt_matches = [
+                        os.path.join(OUTPUT_DIR, fn)
+                        for fn in os.listdir(OUTPUT_DIR)
+                        if vid_match in fn and fn.lower().endswith(".srt") and os.path.isfile(os.path.join(OUTPUT_DIR, fn))
+                    ]
+                    if srt_matches:
+                        srt_matches.sort(key=os.path.getmtime, reverse=True)
+                        shutil.copy2(srt_matches[0], os.path.join(target_vault_dir, "transcript.srt"))
+            except Exception:
+                pass
+
         # Check existing meta.json in target directory to merge
         existing_meta_path = os.path.join(target_vault_dir, "meta.json")
         existing_record = None
@@ -3383,6 +3399,90 @@ async def api_apply_update(req: ApplyUpdateRequest = ApplyUpdateRequest()):
     threading.Thread(target=_run_update_worker, daemon=True).start()
     with _update_lock:
         return dict(_update_state)
+
+
+from . import studio_service
+
+
+# --- AI Clipper Studio (Isolated Page & Non-Destructive APIs) ---
+@app.get("/studio/{project_id}", response_class=HTMLResponse)
+async def studio_page(project_id: str):
+    if not studio_service.find_studio_project(project_id):
+        return RedirectResponse("/#vault")
+    html_path = os.path.join(TEMPLATES_DIR, "studio.html")
+    if not os.path.exists(html_path):
+        return HTMLResponse("<h1>Studio template not found.</h1>", status_code=404)
+    with open(html_path, "r", encoding="utf-8") as f:
+        content = (
+            f.read()
+            .replace("{{ASSET_VERSION}}", _asset_version())
+            .replace("{{PROJECT_ID}}", html.escape(project_id, quote=True))
+        )
+    return HTMLResponse(content=content, headers=_html_headers())
+
+
+@app.get("/api/studio/{project_id}")
+async def api_studio_load(project_id: str):
+    data = await asyncio.to_thread(studio_service.load_studio_project, project_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="AI Clipper project not found")
+    return data
+
+
+@app.post("/api/studio/{project_id}/save")
+async def api_studio_save(project_id: str, request: Request):
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Payload must be an object")
+    saved = await asyncio.to_thread(studio_service.save_studio_state, project_id, payload)
+    if saved is None:
+        raise HTTPException(status_code=404, detail="AI Clipper project not found")
+    return {"status": "saved", "state": saved}
+
+
+@app.post("/api/studio/{project_id}/music")
+async def api_studio_upload_music(
+    project_id: str,
+    request: Request,
+    clip_id: str = Query("clip"),
+    filename: str = Query("music.mp3"),
+):
+    body = await request.body()
+    result, err = await asyncio.to_thread(
+        studio_service.save_studio_music, project_id, clip_id, filename, body
+    )
+    if err:
+        code = 404 if err == "Project not found" else 400
+        raise HTTPException(status_code=code, detail=err)
+    return result
+
+
+@app.get("/api/studio/{project_id}/music/{asset_name}")
+async def api_studio_get_music(project_id: str, asset_name: str):
+    path = studio_service.get_studio_music_path(project_id, asset_name)
+    if not path:
+        raise HTTPException(status_code=404, detail="Music file not found")
+    return FileResponse(path)
+
+
+@app.post("/api/studio/{project_id}/export/{clip_id}")
+async def api_studio_export(project_id: str, clip_id: str, request: Request):
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+    out_path, download_name, err = await asyncio.to_thread(
+        studio_service.export_studio_clip, project_id, clip_id, payload
+    )
+    if err or not out_path or not download_name:
+        code = 404 if err in ("Project not found", "Clip not found") else 500
+        raise HTTPException(status_code=code, detail=err or "Export failed")
+    return FileResponse(out_path, media_type="video/mp4", filename=download_name)
 
 
 # Old job folders are temporary: the vault keeps its own copy of every saved file.

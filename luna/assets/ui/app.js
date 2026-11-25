@@ -5966,18 +5966,43 @@ function findActiveProjectFile(fileId) {
   return fromProj || vaultItems.find(it => it.id === fileId) || null;
 }
 
+function isAiShortClipsProject(proj) {
+  if (!proj || proj.virtual) return false;
+  const isTrim = (
+    proj.action === 'type_yt_clip' ||
+    proj.action === 'manual_clip' ||
+    (proj.category || '').toLowerCase().includes('trim')
+  );
+  return !isTrim && isAiClipperProject(proj) && Array.isArray(proj.files) && proj.files.length > 0;
+}
+
+function openAiClipperStudio(projectId, clipId = null) {
+  if (!projectId) return;
+  const base = `/studio/${encodeURIComponent(projectId)}`;
+  window.location.href = clipId ? `${base}?clip=${encodeURIComponent(clipId)}` : base;
+}
+
 function configureVaultCardMenu(context) {
+  const studioBtn = document.getElementById('vaultCardMenuStudioBtn');
   const selectBtn = document.getElementById('vaultCardMenuSelectBtn');
   const selectLabel = document.getElementById('vaultCardMenuSelectLabel');
   const renameBtn = document.getElementById('vaultCardMenuRenameBtn');
   const sepEl = document.getElementById('vaultCardMenuSep');
   const deleteBtn = document.getElementById('vaultCardMenuDeleteBtn');
 
+  if (studioBtn) studioBtn.classList.add('hidden');
   if (selectBtn) selectBtn.classList.remove('hidden');
   if (renameBtn) renameBtn.classList.remove('hidden');
   if (sepEl) sepEl.classList.remove('hidden');
   if (deleteBtn) deleteBtn.classList.remove('hidden');
   if (selectLabel) selectLabel.textContent = context.type === 'workspace-header' ? 'Select Files' : 'Select';
+
+  if (context.type === 'file' && studioBtn && currentActiveProjectId) {
+    const activeProj = vaultProjects.find(p => p.project_id === currentActiveProjectId);
+    if (isAiShortClipsProject(activeProj)) {
+      studioBtn.classList.remove('hidden');
+    }
+  }
 
   if (context.type === 'workspace-header') {
     const proj = vaultProjects.find(p => p.project_id === context.id);
@@ -6083,7 +6108,9 @@ function handleVaultCardMenuAction(action) {
   if (ctx.type === 'file') {
     const file = findActiveProjectFile(ctx.id);
     if (!file) return;
-    if (action === 'select') {
+    if (action === 'open-studio') {
+      openAiClipperStudio(currentActiveProjectId, file.id);
+    } else if (action === 'select') {
       enterFileSelectionMode(file.id);
     } else if (action === 'rename') {
       promptRenameVaultItem(file.id);
@@ -6593,6 +6620,12 @@ async function openProjectPage(projectId) {
 
   if (clipperTitle) clipperTitle.innerText = proj.workspace_name || 'Workspace';
   if (clipperId) clipperId.innerText = `ID: ${proj.project_id}`;
+  const btnOpenStudio = document.getElementById('btnOpenAiClipperStudio');
+  if (btnOpenStudio) {
+    const canOpenStudio = isAiShortClipsProject(proj);
+    btnOpenStudio.classList.toggle('hidden', !canOpenStudio);
+    btnOpenStudio.href = canOpenStudio ? `/studio/${encodeURIComponent(proj.project_id)}` : '#';
+  }
   if (btnClipperRename) {
     btnClipperRename.onclick = () => promptRenameWorkspace(proj.project_id, proj.workspace_name);
   }
