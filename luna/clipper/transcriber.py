@@ -742,7 +742,6 @@ def _transcribe_local_gemini(
 ) -> Dict:
     """Transcribe audio using Gemini Multimodal Audio API, one <=10 min chunk per request."""
     try:
-        from google import genai
         from google.genai import types
     except ImportError as e:
         raise RuntimeError(

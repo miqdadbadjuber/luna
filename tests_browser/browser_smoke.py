@@ -122,6 +122,12 @@ class BrowserSmokeTest(unittest.TestCase):
         self.page.goto(self.origin + "/", wait_until="domcontentloaded")
         self.page.wait_for_function("typeof triggerAction === 'function' && typeof saveSettings === 'function'")
 
+    def _pick_ai_clips(self):
+        # Full HD Video is the default mode since 0b58e5c; the AI clip drawer stays hidden until picked.
+        self.page.click("#subFeatureDropdownBtn")
+        self.page.click("#subFeatureMenu .sub-menu-item[data-sub='type_yt_ai_clip']")
+        expect(self.page.locator("#currentSubFeatureLabel")).to_have_text("AI Short Clips")
+
     def _start_job(self):
         self._open()
         self.page.fill("#mainUrlInput", URL)
@@ -170,6 +176,7 @@ class BrowserSmokeTest(unittest.TestCase):
     def test_qa1_preflight_blocks_missing_api_keys_and_links_to_settings(self):
         self._stub_settings(has_gemini=False, has_groq=False)
         self._open()
+        self._pick_ai_clips()
         self.page.fill("#mainUrlInput", URL)
         self.page.click("#mainActionBtn")
         link = self.page.locator(".luna-toast-link")
@@ -259,6 +266,7 @@ class BrowserSmokeTest(unittest.TestCase):
         self.page.click("#mainActionBtn")
         expect(self.page.locator("#noticeModalHeading")).to_have_text("Invalid URL", timeout=5000)
         self.page.click("#noticeModal button:has-text('OK')")
+        self._pick_ai_clips()
         # 16:9 Wide locks Face Track pill
         self.page.click("#aspectRatioDropdownBtn")
         self.page.click("#aspectRatioMenu [data-ratio='16:9']")
