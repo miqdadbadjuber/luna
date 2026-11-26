@@ -7,7 +7,7 @@ pydantic==2.14.3
 requests==2.34.2
 # Chrome TLS + HTTP/2 for multi-connection YouTube range downloads and TikTok impersonation.
 curl-cffi==0.15.0
-google-genai==3.0.0
+google-genai==3.6.1
 openai==3.45.0
 yt-dlp>=2026.10.26
 # YouTube formats need its JS challenge solved: the solver scripts plus a JS runtime.
