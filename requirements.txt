@@ -1,6 +1,6 @@
 # Pinned so an install gets reviewed versions; Dependabot proposes upgrades with CI.
 # yt-dlp stays a floor because sites change and an old release stops working.
-fastapi==0.162.2
+fastapi==0.165.0
 uvicorn==0.54.0
 python-dotenv==1.2.4
 pydantic==2.14.3
