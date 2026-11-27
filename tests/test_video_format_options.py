@@ -68,11 +68,12 @@ class TestVideoFormatOptions(unittest.TestCase):
         res = format_video_target(path, ratio="original", fps="auto")
         self.assertEqual(res, path)
 
+    @patch("luna.app._probe_source_fps", return_value=60.0)
     @patch("luna.app._run_ffmpeg")
-    def test_format_video_target_crop_and_fps(self, mock_run):
+    def test_format_video_target_crop_and_fps(self, mock_run, _mock_fps):
         mock_run.return_value = MagicMock(returncode=0)
-        res = format_video_target("/fake/path/myvideo.mp4", ratio="9:16", fps="60")
-        self.assertIn("myvideo_9x16_60fps.mp4", res)
+        res = format_video_target("/fake/path/myvideo.mp4", ratio="9:16", fps="30")
+        self.assertIn("myvideo_9x16_30fps.mp4", res)
 
         mock_run.assert_called_once()
         cmd = mock_run.call_args[0][0]
@@ -81,7 +82,7 @@ class TestVideoFormatOptions(unittest.TestCase):
         self.assertIn("crop=ih*9/16:ih,scale=1080:1920", cmd[vf_idx + 1])
         self.assertIn("-r", cmd)
         r_idx = cmd.index("-r")
-        self.assertEqual(cmd[r_idx + 1], "60")
+        self.assertEqual(cmd[r_idx + 1], "30")
         self.assertIn("+faststart", cmd)
 
     @patch("luna.app._run_ffmpeg")
@@ -104,12 +105,13 @@ class TestVideoFormatOptions(unittest.TestCase):
         self.assertIn("-quality", cmd)
         self.assertNotIn("libx264", cmd)
 
+    @patch("luna.app._probe_source_fps", return_value=60.0)
     @patch("luna.app._get_encoder_flags", return_value=["-c:v", "h264_amf", "-quality", "speed"])
     @patch("luna.app._run_ffmpeg")
-    def test_format_video_target_uses_detected_hw_encoder(self, mock_run, mock_flags):
+    def test_format_video_target_uses_detected_hw_encoder(self, mock_run, mock_flags, _mock_fps):
         mock_run.return_value = MagicMock(returncode=0)
-        out = format_video_target("/fake/in.mp4", ratio="9:16", fps="60")
-        self.assertEqual(out.replace("\\", "/"), "/fake/in_9x16_60fps.mp4")
+        out = format_video_target("/fake/in.mp4", ratio="9:16", fps="30")
+        self.assertEqual(out.replace("\\", "/"), "/fake/in_9x16_30fps.mp4")
         mock_flags.assert_called_once()
         cmd = mock_run.call_args[0][0]
         self.assertIn("h264_amf", cmd)
