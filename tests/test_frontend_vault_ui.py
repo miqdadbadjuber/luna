@@ -610,6 +610,33 @@ class TestFrontendVaultUI(unittest.TestCase):
         self.assertNotIn("t-btn", btn_slice)
         self.assertIn("font-normal", btn_slice)
 
+    def test_workspace_type_hygiene_labels_and_ai_clipper_lock(self):
+        """Audio MP3 gets its own label, Use Existing filters by matching bucket, and AI Clipper locks to Create New."""
+        html = self.source
+        for expected in (
+            "WORKSPACE_BUCKET_META",
+            "function getActionWorkspaceBucket",
+            "function getProjectWorkspaceBucket",
+            "function getCompatibleExistingWorkspaces",
+            "function suggestUniqueWorkspaceName",
+            "function syncWorkspaceModalValidation",
+            'id="wsModeExistingLockIcon"',
+            'id="btnWsConfirmStart"',
+            "workspace_mode:",
+        ):
+            self.assertIn(expected, html)
+
+        meter_block = html.split("function getProjectMeter(proj)")[1].split("function renderVaultGallery()")[0]
+        self.assertLess(meter_block.index("audio_mp3"), meter_block.index("yt_video"))
+        self.assertIn("Audio MP3", meter_block)
+
+        clipper_check = html.split("function isAiClipperProject(proj)")[1].split("function renderClipperWorkflow")[0]
+        self.assertNotIn(".includes('clip')", clipper_check)
+
+        dropdown_slice = html[html.index('id="wsDropdownMenu"'):html.index('id="wsDropdownList"')]
+        self.assertNotIn("1c1c1f", dropdown_slice)
+        self.assertIn("bg-[#171717]", dropdown_slice)
+
 
 if __name__ == "__main__":
     unittest.main()

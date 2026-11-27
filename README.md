@@ -11,7 +11,7 @@
 
 ---
 
-[Preview](#preview) · [Install](#install) · [Update](#update) · [Features](#features) · [Roadmap](ROADMAP.md) · [MCP](MCP.md) · [Docker](#docker) · [FAQ](#faq)
+[Install](#install) · [Update](#update) · [Features](#features) · [Roadmap](ROADMAP.md) · [MCP](MCP.md) · [Docker](#docker) · [FAQ](#faq)
 
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?style=flat-square&logo=python&logoColor=white)](.python-version)
 [![FastAPI](https://img.shields.io/badge/FastAPI-local-009688?style=flat-square&logo=fastapi&logoColor=white)](requirements.txt)
@@ -24,22 +24,46 @@
 
 **Luna** is a local web app for downloading video and audio from YouTube, Instagram, and TikTok, organizing files in Workspace, and turning long videos into short clips with AI. Downloads need no API keys and run straight on your machine. For AI Short Clips, Luna uses YouTube captions first (or transcribes audio via Groq Whisper, Gemini, ElevenLabs Scribe, or local Faster-Whisper), ranks highlights with Gemini or any OpenAI-compatible model, and renders vertical or widescreen clips locally with FFmpeg.
 
-## Preview
-
 <p align="center">
-  <img src="luna/assets/screenshots/luna-home.png" alt="Luna home screen with YouTube Full HD Video downloader controls" width="100%" /><br />
-  <sub>Home screen for YouTube, Instagram Reels, and TikTok downloads, trimming, and AI Short Clips.</sub>
+  <img src="luna/assets/screenshots/luna-home.png" alt="Luna home screen with YouTube Full HD Video downloader controls" width="100%" />
 </p>
 
-<p align="center">
-  <img src="luna/assets/screenshots/luna-workspace.png" alt="Luna AI Clipper canvas workspace showing source metadata, pipeline status, and ranked clip cards" width="100%" /><br />
-  <sub>AI Clipper canvas workspace with source metadata, pipeline steps, virality scores, and direct entry into Studio.</sub>
-</p>
+<br />
+
+<details>
+<summary><strong>Click here to see more previews</strong></summary>
+
+<br />
+
+### Full Video Studio
+
+Edit downloaded videos on a multi-block timeline with Auto Cut Silence, 2D Speed Curve, aspect ratio reframing, color looks, Smart Audio, and multi-layer music.
 
 <p align="center">
-  <img src="luna/assets/screenshots/luna-studio.png" alt="Luna AI Clipper Studio with Selene subtitles, audio controls, and clip filmstrip timeline" width="100%" /><br />
-  <sub>AI Clipper Studio for adding Selene subtitles, background music, and exporting MP4 clips non-destructively.</sub>
+  <img src="luna/assets/screenshots/luna-studio.png" alt="Luna Full Video Studio with multi-block filmstrip timeline, aspect ratio reframing, and Smart Audio controls" width="100%" />
 </p>
+
+<br />
+
+### Workspace
+
+Browse your local library by platform or mode, search titles and captions, and keep YouTube, Audio MP3, Video Trimmer, and AI Short Clips in separate workspaces.
+
+<p align="center">
+  <img src="luna/assets/screenshots/luna-workspace.png" alt="Luna Workspace gallery with platform filters, Audio MP3 and AI Clipper labels, and instant search" width="100%" />
+</p>
+
+<br />
+
+### AI Clipper Canvas
+
+Review source video metadata, AI pipeline steps, and virality-ranked clip cards on one canvas, then download clips in bulk or open any clip directly in Studio.
+
+<p align="center">
+  <img src="luna/assets/screenshots/luna-ai-clipper.png" alt="Luna AI Clipper canvas workspace showing source metadata, pipeline status, and ranked clip cards" width="100%" />
+</p>
+
+</details>
 
 ## Install
 
@@ -132,7 +156,8 @@ You can also update from a terminal by re-running the install command above, or 
 | --- | --- | --- |
 | Video & MP3 download | None | Downloads video or 320 kbps MP3 from YouTube, TikTok, and Instagram |
 | AI Short Clips | Gemini (or OpenAI-compatible) + Groq (or Gemini, ElevenLabs) | Picks viral moments and renders 9:16, 1:1, 3:4, or 16:9 clips with optional face tracking |
-| AI Clipper Studio | None | Edits AI-generated clips locally with Selene subtitles, background music, and non-destructive MP4 export |
+| Full Video Studio | None | Non-destructive NLE for downloaded videos: multi-block timeline cuts, Auto Cut Silence, 2D Speed Curve, reframing, 6 Looks + Adjust, Smart Audio, multi-layer audio, and GPU-accelerated export |
+| AI Clipper Studio | None | Edits AI-generated clips locally with Selene subtitles, inline transcript editing, background music, and non-destructive MP4 export |
 | Manual Video Trimmer | None | Cuts exact timestamp ranges without AI |
 | Workspace | None | Organizes, previews, renames, and manages local downloads and clips |
 | Local Whisper transcription | None for transcription | Install `requirements-whisper.txt` and set `LOCAL_TRANSCRIBE_PROVIDER=whisper` |

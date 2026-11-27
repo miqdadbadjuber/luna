@@ -505,6 +505,12 @@ const GUIDE_DOCS_ORDER = [
     subtitle: 'Compare the four download, trimming, and AI clipping modes to pick what fits your content.',
   },
   {
+    id: 'studio',
+    label: 'Luna Studio',
+    title: 'Luna Studio',
+    subtitle: 'Non-destructive Full Video Studio and AI Clipper Studio — timeline cuts, speed curves, reframing, color grading, multi-layer audio, and GPU-accelerated export.',
+  },
+  {
     id: 'setup',
     label: 'Setup & Requirements',
     title: 'Setup & Requirements',
@@ -546,8 +552,8 @@ const GUIDE_WORKFLOWS = {
           {
             align: 'bottom',
             nodes: [
+              { id: 'u-studio', kind: 'pill', label: 'AI Studio', step: 3 },
               { id: 'u-zip', kind: 'pill', label: 'Download .ZIP', step: 3 },
-              { id: 'u-prev', kind: 'pill', label: 'Preview Clips', step: 3 },
               { id: 'u-canv', kind: 'box', label: 'Clipper Canvas', step: 3 },
             ],
           },
@@ -597,8 +603,8 @@ const GUIDE_WORKFLOWS = {
           { from: 'p-ai', to: 'p-vault', route: 'h', style: 'green' },
           { from: 'p-vault', to: 'p-meta', route: 'left-branch', style: 'green' },
           { from: 'p-vault', to: 'u-canv', route: 'v-up', style: 'dashed', badge: { color: '#22c55e', text: 'Ready' } },
-          { from: 'u-canv', to: 'u-prev', route: 'right-up', style: 'green' },
           { from: 'u-canv', to: 'u-zip', route: 'right-up', style: 'green' },
+          { from: 'u-canv', to: 'u-studio', route: 'right-up', style: 'green' },
         ],
         steps: [
           {
@@ -608,7 +614,7 @@ const GUIDE_WORKFLOWS = {
             points: [
               '<strong>Target Aspect Ratio:</strong> Choose 9:16 (vertical Reels/Shorts/TikTok), 16:9, 1:1, or 3:4.',
               '<strong>Clip Count & Framing:</strong> Pick between 3 to 7 clips and select either fast Center Crop or OpenCV Face Tracking.',
-              '<strong>Workspace Destination:</strong> Outputs are routed into your active Workspace subfolder so parallel channels or projects stay separated.',
+              '<strong>Dedicated Workspace:</strong> AI Short Clips always creates a fresh new workspace so each run keeps its own Clipper Canvas, source metadata, and transcripts isolated.',
             ],
           },
           {
@@ -635,13 +641,13 @@ const GUIDE_WORKFLOWS = {
             detail: 'Finished clips are indexed atomically and handed back to the Studio UI so you can inspect results right away.',
             points: [
               '<strong>Folder Structure:</strong> Saves every rendered MP4 along with meta.json (score, timestamps, summary, and provider metadata) into 01-AI-Clips\\{Workspace}.',
-              '<strong>Interactive Review & Export:</strong> Opens clips inside Clipper Canvas for instant preview, individual downloads, or a one-click batch .ZIP archive.',
+              '<strong>Clipper Canvas & AI Studio:</strong> Preview clips, export a batch .ZIP archive, or open any clip in AI Clipper Studio to burn in Selene subtitles and mix background music non-destructively.',
             ],
           },
         ],
       },
       video: {
-        summary: 'Standard YouTube video download with optional resolution, aspect ratio crop, and FPS conversion. No API key needed.',
+        summary: 'Default YouTube mode: direct Full HD video download with optional crop, native FPS preservation, and Full Video Studio editing. No API key needed.',
         phases: ['1. Input', '2. Download & Format', '3. Output'],
         studio: [
           {
@@ -655,8 +661,8 @@ const GUIDE_WORKFLOWS = {
           {
             align: 'bottom',
             nodes: [
-              { id: 'u-open', kind: 'pill', label: 'Open Folder', step: 2 },
-              { id: 'u-prev', kind: 'pill', label: 'Preview MP4', step: 2 },
+              { id: 'u-studio', kind: 'pill', label: 'Full Video Studio', step: 2 },
+              { id: 'u-prev', kind: 'pill', label: 'Preview & Folder', step: 2 },
               { id: 'u-vault', kind: 'box', label: 'Workspace', step: 2 },
             ],
           },
@@ -696,16 +702,17 @@ const GUIDE_WORKFLOWS = {
           { from: 'p-out', to: 'p-meta', route: 'left-branch', style: 'green' },
           { from: 'p-out', to: 'u-vault', route: 'v-up', style: 'dashed', badge: { color: '#22c55e', text: 'Ready' } },
           { from: 'u-vault', to: 'u-prev', route: 'right-up', style: 'green' },
-          { from: 'u-vault', to: 'u-open', route: 'right-up', style: 'green' },
+          { from: 'u-vault', to: 'u-studio', route: 'right-up', style: 'green' },
         ],
         steps: [
           {
             tag: 'Studio',
             title: 'Input URL & Format Options',
-            detail: 'Paste a standard YouTube or Shorts URL in Studio and choose your desired resolution, aspect ratio, and frame rate without configuring any AI API keys.',
+            detail: 'Paste a standard YouTube or Shorts URL and choose your desired resolution, aspect ratio, and frame rate without configuring any AI API keys.',
             points: [
               '<strong>Video Quality:</strong> Select 1080p, 720p, or 480p depending on speed vs. file size requirements.',
-              '<strong>Ratio & Frame Rate:</strong> Keep Original / Auto FPS for maximum speed, or enforce 9:16 / 3:4 / 1:1 crop and 60 or 30 FPS output.',
+              '<strong>Ratio & Frame Rate:</strong> Keep Original / Auto FPS to preserve native source frame rate at full speed, or enforce 9:16 / 3:4 / 1:1 crop and 60 or 30 FPS output.',
+              '<strong>Clean Workspace Type:</strong> Create a new workspace or append only into an existing YouTube Full Video workspace (cross-type merges are blocked).',
             ],
           },
           {
@@ -718,12 +725,12 @@ const GUIDE_WORKFLOWS = {
             ],
           },
           {
-            tag: 'Storage + UI',
-            title: 'Save to 02-YouTube-Full & Workspace',
-            detail: 'Completed files are organized inside your storage root and surfaced immediately inside Studio and Workspace.',
+            tag: 'Storage + Studio',
+            title: 'Save to Workspace & Edit in Full Video Studio',
+            detail: 'Completed files are organized inside your storage root and ready for instant playback or non-destructive editing.',
             points: [
               '<strong>Destination & Metadata:</strong> Stores the final MP4 and meta.json inside 02-YouTube-Full\\{Workspace}.',
-              '<strong>Quick Actions:</strong> Play inline in Workspace, trigger browser download, or jump straight to the local folder.',
+              '<strong>Open in Full Video Studio:</strong> Launch the NLE editor directly from Workspace for timeline cuts, Auto Cut Silence, 2D speed curves, crop reframing, Adjust looks, Smart Audio, and multi-layer music.',
             ],
           },
         ],
@@ -807,7 +814,7 @@ const GUIDE_WORKFLOWS = {
             title: 'Save to 05-Audio-MP3 & Workspace',
             detail: 'Once conversion finishes, the audio file is registered in your workspace.',
             points: [
-              '<strong>Destination & Playback:</strong> Saves the .mp3 alongside meta.json inside 05-Audio-MP3\\{Workspace} for instant audio playback or folder access.',
+              '<strong>Destination & Playback:</strong> Saves the .mp3 alongside meta.json inside 05-Audio-MP3\\{Workspace}, tagged as an Audio MP3 workspace and isolated from video workspaces.',
             ],
           },
         ],
@@ -894,7 +901,7 @@ const GUIDE_WORKFLOWS = {
             title: 'Save Trimmed Clips to 02-YouTube-Full & .ZIP',
             detail: 'All generated segments from the batch are stored together and bundled for easy delivery.',
             points: [
-              '<strong>Destination & Batch Export:</strong> Writes numbered clips + meta.json into 02-YouTube-Full\\{Workspace}, with inline preview and a single .ZIP archive for all segments.',
+              '<strong>Destination & Batch Export:</strong> Writes numbered clips + meta.json into 02-YouTube-Full\\{Workspace} under a dedicated Video Trimmer workspace, with inline preview and a single .ZIP archive for all segments.',
             ],
           },
         ],
@@ -921,8 +928,8 @@ const GUIDE_WORKFLOWS = {
           {
             align: 'bottom',
             nodes: [
-              { id: 'u-open', kind: 'pill', label: 'Open Folder', step: 2 },
-              { id: 'u-prev', kind: 'pill', label: 'Preview Reel', step: 2 },
+              { id: 'u-studio', kind: 'pill', label: 'Full Video Studio', step: 2 },
+              { id: 'u-prev', kind: 'pill', label: 'Preview & Folder', step: 2 },
               { id: 'u-vault', kind: 'box', label: 'Workspace', step: 2 },
             ],
           },
@@ -960,7 +967,7 @@ const GUIDE_WORKFLOWS = {
           { from: 'p-out', to: 'p-meta', route: 'left-branch', style: 'green' },
           { from: 'p-out', to: 'u-vault', route: 'v-up', style: 'dashed', badge: { color: '#22c55e', text: 'Ready' } },
           { from: 'u-vault', to: 'u-prev', route: 'right-up', style: 'green' },
-          { from: 'u-vault', to: 'u-open', route: 'right-up', style: 'green' },
+          { from: 'u-vault', to: 'u-studio', route: 'right-up', style: 'green' },
         ],
         steps: [
           {
@@ -981,11 +988,11 @@ const GUIDE_WORKFLOWS = {
             ],
           },
           {
-            tag: 'Storage + UI',
-            title: 'Save to 03-Instagram-Reels & Workspace',
-            detail: 'Completed Reels are organized under a dedicated platform directory so they never mix with YouTube or TikTok downloads.',
+            tag: 'Storage + Studio',
+            title: 'Save to 03-Instagram-Reels & Edit in Studio',
+            detail: 'Completed Reels are isolated under dedicated Instagram Reels workspaces so they never mix with YouTube or TikTok downloads.',
             points: [
-              '<strong>Destination & Access:</strong> Writes the MP4 alongside meta.json into 03-Instagram-Reels\\{Workspace} with immediate Workspace preview, download, and Open Folder buttons.',
+              '<strong>Destination & Editing:</strong> Writes the MP4 alongside meta.json into 03-Instagram-Reels\\{Workspace} with immediate Workspace preview, Open Folder, and direct entry into Full Video Studio.',
             ],
           },
         ],
@@ -1012,8 +1019,8 @@ const GUIDE_WORKFLOWS = {
           {
             align: 'bottom',
             nodes: [
-              { id: 'u-open', kind: 'pill', label: 'Open Folder', step: 2 },
-              { id: 'u-prev', kind: 'pill', label: 'Preview Video', step: 2 },
+              { id: 'u-studio', kind: 'pill', label: 'Full Video Studio', step: 2 },
+              { id: 'u-prev', kind: 'pill', label: 'Preview & Folder', step: 2 },
               { id: 'u-vault', kind: 'box', label: 'Workspace', step: 2 },
             ],
           },
@@ -1051,7 +1058,7 @@ const GUIDE_WORKFLOWS = {
           { from: 'p-out', to: 'p-meta', route: 'left-branch', style: 'green' },
           { from: 'p-out', to: 'u-vault', route: 'v-up', style: 'dashed', badge: { color: '#22c55e', text: 'Ready' } },
           { from: 'u-vault', to: 'u-prev', route: 'right-up', style: 'green' },
-          { from: 'u-vault', to: 'u-open', route: 'right-up', style: 'green' },
+          { from: 'u-vault', to: 'u-studio', route: 'right-up', style: 'green' },
         ],
         steps: [
           {
@@ -1071,11 +1078,11 @@ const GUIDE_WORKFLOWS = {
             ],
           },
           {
-            tag: 'Storage + UI',
-            title: 'Save to 04-TikTok-Clean & Workspace',
-            detail: 'Finished downloads are indexed automatically inside your local TikTok workspace.',
+            tag: 'Storage + Studio',
+            title: 'Save to 04-TikTok-Clean & Edit in Studio',
+            detail: 'Finished downloads are isolated inside dedicated TikTok video workspaces and ready for immediate editing.',
             points: [
-              '<strong>Destination & Quick Actions:</strong> Saves the clean MP4 and meta.json inside 04-TikTok-Clean\\{Workspace} so you can preview, download, or open the folder immediately.',
+              '<strong>Destination & Editing:</strong> Saves the clean MP4 and meta.json inside 04-TikTok-Clean\\{Workspace} so you can preview, open the folder, or edit directly in Full Video Studio.',
             ],
           },
         ],
@@ -1158,7 +1165,7 @@ const GUIDE_WORKFLOWS = {
             title: 'Save to 05-Audio-MP3 & Workspace',
             detail: 'Completed MP3 tracks share the central audio folder across platforms, separated cleanly by Workspace.',
             points: [
-              '<strong>Destination & Playback:</strong> Stores the .mp3 file + meta.json inside 05-Audio-MP3\\{Workspace} for built-in playback and instant folder access.',
+              '<strong>Destination & Playback:</strong> Stores the .mp3 file + meta.json inside 05-Audio-MP3\\{Workspace}, tagged as an Audio MP3 workspace and kept separate from video workspaces.',
             ],
           },
         ],
@@ -1168,7 +1175,7 @@ const GUIDE_WORKFLOWS = {
 };
 
 const activeWorkflowModes = {
-  youtube: 'ai_clip',
+  youtube: 'video',
   instagram: 'reels',
   tiktok: 'video',
 };

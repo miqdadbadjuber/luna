@@ -20,18 +20,25 @@ INDEX_FILE_NAME = "meta.json"
 
 
 def _atomic_write_json(path: str, data: Any) -> None:
-    """Write JSON through a temp file in the same directory, then replace atomically.
+    """Write JSON through a unique temp file in the same directory, then replace atomically.
 
     A crash or a full disk can no longer leave a truncated meta.json behind, which
     used to be read back as "empty" and then overwritten with a single record.
     """
-    tmp_path = f"{path}.tmp"
+    tmp_path = f"{path}.{uuid.uuid4().hex[:8]}.tmp"
     try:
         with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
             f.flush()
             os.fsync(f.fileno())
-        os.replace(tmp_path, path)
+        for attempt in range(5):
+            try:
+                os.replace(tmp_path, path)
+                break
+            except PermissionError:
+                if attempt == 4:
+                    raise
+                time.sleep(0.06)
     finally:
         if os.path.exists(tmp_path):
             try:

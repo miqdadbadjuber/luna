@@ -216,17 +216,16 @@ class TestVaultProjects(unittest.TestCase):
             self.assertIn(job_id, jobs)
             self.assertEqual(jobs[job_id]["workspace_name"], "Workspace Keren")
 
-    def test_merge_into_existing_workspace(self):
-        """_save_project_to_vault merges files into an existing workspace without creating duplicates."""
+    def test_merge_into_existing_workspace_same_type(self):
+        """_save_project_to_vault merges files into an existing workspace when types match."""
         from luna.app import _save_project_to_vault
 
-        # Setup initial workspace with 1 file
         src_file1 = os.path.join(self.test_dir, "test1.mp4")
         with open(src_file1, "wb") as f:
             f.write(b"video data 1")
 
         proj1 = _save_project_to_vault(
-            workspace_name="Music Project",
+            workspace_name="YouTube Collection",
             action="type_yt_video",
             platform="youtube",
             source_title="Video 1",
@@ -240,33 +239,140 @@ class TestVaultProjects(unittest.TestCase):
         self.assertEqual(len(proj1["files"]), 1)
         orig_proj_id = proj1["project_id"]
 
-        # Add a second file using the same workspace name with different casing.
-        src_file2 = os.path.join(self.test_dir, "test2.mp3")
+        # Add a second YouTube Full Video using the same workspace name with different casing.
+        src_file2 = os.path.join(self.test_dir, "test2.mp4")
         with open(src_file2, "wb") as f:
-            f.write(b"audio data 2")
+            f.write(b"video data 2")
 
         proj2 = _save_project_to_vault(
-            workspace_name="MUSIC PROJECT",
-            action="type_yt_mp3",
+            workspace_name="YOUTUBE COLLECTION",
+            action="type_yt_video",
             platform="youtube",
-            source_title="Song 2",
+            source_title="Video 2",
             files_to_save=[{
                 "file_path": src_file2,
-                "title": "Song 2",
-                "type": "audio",
+                "title": "Video 2",
+                "type": "video",
             }]
         )
         self.assertIsNotNone(proj2)
-        # Should retain original project ID and merged files list (length 2)
         self.assertEqual(proj2["project_id"], orig_proj_id)
         self.assertEqual(len(proj2["files"]), 2)
 
-        # API should return only 1 project with 2 files
         api_resp = self.client.get("/api/vault/projects")
         self.assertEqual(api_resp.status_code, 200)
         projects = api_resp.json()["projects"]
         self.assertEqual(len(projects), 1)
         self.assertEqual(len(projects[0]["files"]), 2)
+
+    def test_rejects_cross_type_workspace_merge_and_ai_clipper_existing(self):
+        """Both /api/process and _save_project_to_vault must block cross-type merges and AI Clipper reuse."""
+        from luna.app import _save_project_to_vault
+
+        mp3_file = os.path.join(self.test_dir, "song.mp3")
+        with open(mp3_file, "wb") as f:
+            f.write(b"audio bytes")
+        _save_project_to_vault(
+            workspace_name="Youtube Music",
+            action="type_yt_mp3",
+            platform="youtube",
+            source_title="Song 1",
+            files_to_save=[{"file_path": mp3_file, "title": "Song 1", "type": "audio"}],
+        )
+
+        clip_file = os.path.join(self.test_dir, "short_01.mp4")
+        with open(clip_file, "wb") as f:
+            f.write(b"ai clip bytes")
+        _save_project_to_vault(
+            workspace_name="Podcast AI Clips",
+            action="type_yt_ai_clip",
+            platform="youtube",
+            source_title="Podcast 1",
+            files_to_save=[{"file_path": clip_file, "title": "Clip 1", "type": "video"}],
+        )
+
+        vid_file = os.path.join(self.test_dir, "full.mp4")
+        with open(vid_file, "wb") as f:
+            f.write(b"full video bytes")
+
+        # 1) Direct save: Full Video into Audio MP3 workspace -> blocked
+        with self.assertRaises(ValueError):
+            _save_project_to_vault(
+                workspace_name="Youtube Music",
+                action="type_yt_video",
+                platform="youtube",
+                source_title="Wrong Type",
+                files_to_save=[{"file_path": vid_file, "title": "Full", "type": "video"}],
+            )
+
+        # 2) Direct save: AI Clipper into an existing workspace name -> blocked
+        with self.assertRaises(ValueError):
+            _save_project_to_vault(
+                workspace_name="Podcast AI Clips",
+                action="type_yt_ai_clip",
+                platform="youtube",
+                source_title="Podcast 2",
+                files_to_save=[{"file_path": vid_file, "title": "Clip 2", "type": "video"}],
+            )
+
+        # 3) API /api/process: Full Video into Audio MP3 workspace -> HTTP 400
+        with patch("luna.app._worker_process"):
+            r1 = self.client.post("/api/process", json={
+                "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                "action": "type_yt_video",
+                "workspace_name": "Youtube Music",
+                "workspace_mode": "existing",
+            })
+            self.assertEqual(r1.status_code, 400)
+            self.assertIn("Audio MP3", r1.json()["detail"])
+
+            # 4) API /api/process: Video Trimmer into Audio MP3 workspace -> HTTP 400
+            r2 = self.client.post("/api/process", json={
+                "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                "action": "type_yt_clip",
+                "workspace_name": "Youtube Music",
+                "start_time": "00:00",
+                "end_time": "00:10",
+            })
+            self.assertEqual(r2.status_code, 400)
+
+            # 5) API /api/process: Full Video into AI Clipper workspace -> HTTP 400
+            r3 = self.client.post("/api/process", json={
+                "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                "action": "type_yt_video",
+                "workspace_name": "Podcast AI Clips",
+            })
+            self.assertEqual(r3.status_code, 400)
+            self.assertIn("AI Clipper", r3.json()["detail"])
+
+            # 6) API /api/process: AI Clipper with existing mode or duplicate name -> HTTP 400
+            with patch("luna.app._missing_ai_clip_api_keys", return_value=None):
+                r4 = self.client.post("/api/process", json={
+                    "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                    "action": "type_yt_ai_clip",
+                    "workspace_name": "Podcast AI Clips",
+                    "workspace_mode": "new",
+                })
+                self.assertEqual(r4.status_code, 400)
+                self.assertIn("AI Clipper", r4.json()["detail"])
+
+                r5 = self.client.post("/api/process", json={
+                    "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                    "action": "type_yt_ai_clip",
+                    "workspace_name": "Brand New Clips",
+                    "workspace_mode": "existing",
+                })
+                self.assertEqual(r5.status_code, 400)
+                self.assertIn("AI Clipper", r5.json()["detail"])
+
+            # 7) API /api/process: Audio MP3 into existing Audio MP3 workspace -> HTTP 200
+            r6 = self.client.post("/api/process", json={
+                "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                "action": "type_yt_mp3",
+                "workspace_name": "Youtube Music",
+                "workspace_mode": "existing",
+            })
+            self.assertEqual(r6.status_code, 200)
 
 
 if __name__ == "__main__":

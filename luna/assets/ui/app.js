@@ -28,6 +28,8 @@ var selectedVideoRatio = 'original';
 var selectedVideoFps = 'auto';
 var selectedTrimRatio = 'original';
 var isYoutubeShortLocked = false;
+var youtubeFpsProbe = { url: '', has60fps: null, maxFps: null, fps60Heights: [] };
+var fpsProbeController = null;
 
 // Multi-Segment Trimmer State (Max 24h, 6 digits: HH:MM:SS or MM:SS)
 var trimSegments = [
@@ -742,9 +744,9 @@ function syncRatioControlLock(btnId, chevId, locked, lockTitle = 'YouTube Shorts
     btn.setAttribute('aria-disabled', locked ? 'true' : 'false');
     btn.classList.toggle('is-locked', locked);
     if (locked) {
-      btn.setAttribute('title', lockTitle);
+      btn.setAttribute('aria-description', lockTitle);
     } else {
-      btn.removeAttribute('title');
+      btn.removeAttribute('aria-description');
     }
     const existingLock = btn.querySelector('.pill-lock-icon');
     if (locked && !existingLock) {
@@ -784,9 +786,9 @@ function syncSubFeatureShortLockUI() {
     item.classList.toggle('is-disabled', locked);
     item.setAttribute('aria-disabled', locked ? 'true' : 'false');
     if (locked) {
-      item.setAttribute('title', lockTitle);
+      item.setAttribute('aria-description', lockTitle);
     } else {
-      item.removeAttribute('title');
+      item.removeAttribute('aria-description');
     }
     item.querySelector('.short-lock-tag')?.remove();
     const existingLock = item.querySelector('.short-lock-icon');
@@ -873,15 +875,105 @@ function showUnavailablePreview(message, url, notify = true) {
   }
 }
 
+function resetYoutubeFpsProbe() {
+  if (fpsProbeController) {
+    try { fpsProbeController.abort(); } catch (_) {}
+    fpsProbeController = null;
+  }
+  youtubeFpsProbe = { url: '', has60fps: null, maxFps: null, fps60Heights: [] };
+  syncVideoFpsLockUI();
+}
+
+function is60FpsLockedForCurrentSelection() {
+  if (currentPlatform !== 'youtube') return { locked: false, reason: '' };
+  if (youtubeFpsProbe.has60fps === false) {
+    const maxFps = youtubeFpsProbe.maxFps || 30;
+    return {
+      locked: true,
+      reason: `60 FPS is not available for this video (max ${maxFps} FPS)`,
+    };
+  }
+  if (
+    youtubeFpsProbe.has60fps === true &&
+    Array.isArray(youtubeFpsProbe.fps60Heights) &&
+    youtubeFpsProbe.fps60Heights.length > 0
+  ) {
+    const targetH = parseInt(selectedQuality, 10) || 1080;
+    const hasAtQuality = youtubeFpsProbe.fps60Heights.some((h) => Number(h) <= targetH);
+    if (!hasAtQuality) {
+      return {
+        locked: true,
+        reason: `60 FPS is not available at ${targetH}p (select 720p or higher)`,
+      };
+    }
+  }
+  return { locked: false, reason: '' };
+}
+
+function syncVideoFpsLockUI() {
+  const item = document.querySelector('#videoFpsMenu .quality-menu-item[data-vfps="60"]');
+  if (!item) return;
+  const { locked, reason } = is60FpsLockedForCurrentSelection();
+  item.classList.toggle('is-disabled', locked);
+  item.setAttribute('aria-disabled', locked ? 'true' : 'false');
+  if (locked) {
+    item.setAttribute('aria-description', reason);
+  } else {
+    item.removeAttribute('aria-description');
+  }
+  const existingLock = item.querySelector('.fps-lock-icon');
+  if (locked && !existingLock) {
+    item.appendChild(createLockBadgeElement('fps-lock-icon ml-auto flex items-center text-zinc-500 shrink-0', 'w-3 h-3'));
+  } else if (!locked && existingLock) {
+    existingLock.remove();
+  }
+  if (locked && selectedVideoFps === '60') {
+    selectVideoFpsFromMenu('auto', 'Auto FPS');
+  }
+}
+
+async function fetchYoutubeFpsAvailability(cleanUrl) {
+  if (!cleanUrl || currentPlatform !== 'youtube') return;
+  if (fpsProbeController) {
+    try { fpsProbeController.abort(); } catch (_) {}
+  }
+  const controller = new AbortController();
+  fpsProbeController = controller;
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(`/api/check-fps?url=${encodeURIComponent(cleanUrl)}`, {
+      signal: controller.signal,
+    });
+    if (mainUrlInput.value.trim() !== cleanUrl) return;
+    if (!res.ok) return;
+    const data = await res.json();
+    if (mainUrlInput.value.trim() !== cleanUrl) return;
+    youtubeFpsProbe = {
+      url: cleanUrl,
+      has60fps: typeof data.has_60fps === 'boolean' ? data.has_60fps : null,
+      maxFps: typeof data.max_fps === 'number' ? data.max_fps : null,
+      fps60Heights: Array.isArray(data.fps_60_heights) ? data.fps_60_heights : [],
+    };
+    syncVideoFpsLockUI();
+  } catch (_) {
+    // Fail-open on timeout or network error: never falsely lock 60 FPS.
+  } finally {
+    clearTimeout(timeout);
+    if (fpsProbeController === controller) fpsProbeController = null;
+  }
+}
+
 function fetchVideoInfo(url, delay = 150) {
   clearTimeout(debounceTimer);
   const cleanUrl = String(url || '').trim();
   if (!cleanUrl) {
     lastUnavailableUrl = '';
+    resetYoutubeFpsProbe();
     videoInfoCard.classList.add('hidden');
     return;
   }
   if (!/^https?:\/\//i.test(cleanUrl)) {
+    resetYoutubeFpsProbe();
     videoInfoCard.classList.add('hidden');
     if (!/^https?:?\/?\/?$/i.test(cleanUrl) && cleanUrl.length >= 4) {
       debounceTimer = setTimeout(() => {
@@ -896,6 +988,7 @@ function fetchVideoInfo(url, delay = 150) {
     return;
   }
   if (!isValidMediaUrl(cleanUrl)) {
+    resetYoutubeFpsProbe();
     videoInfoCard.classList.add('hidden');
     let hasHostDot = false;
     try {
@@ -913,7 +1006,14 @@ function fetchVideoInfo(url, delay = 150) {
     }
     return;
   }
+  if (youtubeFpsProbe.url !== cleanUrl) {
+    resetYoutubeFpsProbe();
+  }
   debounceTimer = setTimeout(async () => {
+    const ytHost = getMediaHost(cleanUrl);
+    if (ytHost === 'youtube.com' || ytHost.endsWith('.youtube.com') || ytHost === 'youtu.be' || ytHost.endsWith('.youtu.be')) {
+      fetchYoutubeFpsAvailability(cleanUrl);
+    }
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 14000);
     try {
@@ -998,6 +1098,7 @@ function attachGlidingListener(menu) {
   getItems().forEach(item => {
     item.onmouseenter = (e) => {
       e.stopPropagation();
+      if (item.classList.contains('is-disabled')) return;
       moveToItem(item);
     };
   });
@@ -1125,6 +1226,11 @@ function switchPlatform(plat, manualSwitch = false) {
   const defaultSub = plat === 'youtube' ? currentYtSub : (plat === 'instagram' ? currentIgSub : currentTtSub);
   selectSubFeature(defaultSub, false);
   syncYoutubeShortLockUI();
+  if (plat !== 'youtube' || manualSwitch) {
+    resetYoutubeFpsProbe();
+  } else {
+    syncVideoFpsLockUI();
+  }
 
   // Handle sub-feature chevron and interactivity for single-option platforms (Reels)
   const subChev = document.getElementById('subChevron');
@@ -1476,6 +1582,7 @@ function selectQualityFromMenu(q, label) {
     item.classList.toggle('active', isAct);
   });
 
+  syncVideoFpsLockUI();
   closeDropdownSmoothly('qualityMenu', 'qualityChevron', 'qualityDropdownBtn', 80);
 }
 
@@ -1537,6 +1644,9 @@ function toggleVideoFpsDropdown(e) {
 }
 
 function selectVideoFpsFromMenu(fps, label) {
+  if (fps === '60' && is60FpsLockedForCurrentSelection().locked) {
+    return;
+  }
   selectedVideoFps = fps;
   const labelEl = document.getElementById('currentVideoFpsLabel');
   if (labelEl) labelEl.innerText = label;
@@ -2332,42 +2442,199 @@ async function fetchNextWorkspaceIndex(action) {
   return nextWorkspaceIndex || 1;
 }
 
-window.checkDuplicateWorkspaceName = function (val) {
-  const notice = document.getElementById('wsDuplicateNotice');
-  if (!notice) return;
-  const cleanVal = (val || '').trim().toLowerCase();
-  if (!cleanVal) {
-    notice.classList.add('hidden');
-    return;
-  }
-  const exists = (vaultProjects || []).some(p => (p.workspace_name || '').trim().toLowerCase() === cleanVal);
-  if (exists) {
-    notice.classList.remove('hidden');
-  } else {
-    notice.classList.add('hidden');
-  }
+const WORKSPACE_BUCKET_META = {
+  ai_clip: { label: 'AI Clipper', shortLabel: 'AI Clipper', allowExisting: false },
+  yt_video: { label: 'YouTube Full Video', shortLabel: 'YouTube', allowExisting: true },
+  yt_trim: { label: 'Video Trimmer', shortLabel: 'Video Trimmer', allowExisting: true },
+  audio_mp3: { label: 'Audio MP3', shortLabel: 'Audio MP3', allowExisting: true },
+  ig_reels: { label: 'Instagram Reels', shortLabel: 'Instagram Reels', allowExisting: true },
+  tt_video: { label: 'TikTok Video', shortLabel: 'TikTok', allowExisting: true },
 };
+
+function getActionWorkspaceBucket(action, platform = '') {
+  const act = String(action || '').trim().toLowerCase();
+  const plat = String(platform || '').trim().toLowerCase();
+  if (act.includes('ai_clip')) return 'ai_clip';
+  if (act.includes('mp3') || act === 'audio_mp3' || act === 'youtube_audio' || plat.includes('audio')) return 'audio_mp3';
+  if (act === 'type_yt_clip' || act === 'manual_clip' || act === 'clip' || act.includes('trim')) return 'yt_trim';
+  if (act.includes('ig_reels') || act === 'instagram_video' || plat.includes('instagram')) return 'ig_reels';
+  if (act.includes('tt_video') || act === 'tiktok_video' || plat.includes('tiktok')) return 'tt_video';
+  return 'yt_video';
+}
+
+function getProjectWorkspaceBucket(proj) {
+  if (!proj || typeof proj !== 'object') return 'yt_video';
+  const act = String(proj.action || '').trim().toLowerCase();
+  const cat = String(proj.category || '').trim().toLowerCase();
+  const plat = String(proj.platform || '').trim().toLowerCase();
+  if (act.includes('ai_clip') || cat.includes('01-ai-clips')) return 'ai_clip';
+  const files = Array.isArray(proj.files) ? proj.files.filter(f => f && typeof f === 'object') : [];
+  const allAudio = files.length > 0 && files.every(f =>
+    String(f.type || '').trim().toLowerCase() === 'audio' ||
+    String(f.filename || '').trim().toLowerCase().endsWith('.mp3')
+  );
+  if (act.includes('mp3') || cat.includes('audio') || plat.includes('audio') || allAudio) return 'audio_mp3';
+  if (act === 'type_yt_clip' || act === 'manual_clip' || act === 'clip' || act.includes('trim') || cat.includes('trim')) return 'yt_trim';
+  if (act.includes('ig_reels') || plat.includes('instagram') || cat.includes('instagram') || cat.includes('reels')) return 'ig_reels';
+  if (act.includes('tt_video') || plat.includes('tiktok') || cat.includes('tiktok')) return 'tt_video';
+  return 'yt_video';
+}
+
+function getCompatibleExistingWorkspaces(action) {
+  const bucket = getActionWorkspaceBucket(action);
+  if (bucket === 'ai_clip') return [];
+  return (vaultProjects || []).filter(p => p && !p.virtual && getProjectWorkspaceBucket(p) === bucket);
+}
+
+function findExistingWorkspaceByName(val) {
+  const cleanVal = String(val || '').trim().toLowerCase();
+  if (!cleanVal) return null;
+  return (vaultProjects || []).find(p => p && !p.virtual && (p.workspace_name || '').trim().toLowerCase() === cleanVal) || null;
+}
+
+function suggestUniqueWorkspaceName(baseName, action) {
+  const reqBucket = getActionWorkspaceBucket(action);
+  const raw = String(baseName || '').trim() || `Workspace ${String(nextWorkspaceIndex || 1).padStart(2, '0')}`;
+  const isBlocked = (candidate) => {
+    const existing = findExistingWorkspaceByName(candidate);
+    if (!existing) return false;
+    if (reqBucket === 'ai_clip') return true;
+    return getProjectWorkspaceBucket(existing) !== reqBucket;
+  };
+  if (!isBlocked(raw)) return raw;
+  for (let i = 2; i <= 99; i++) {
+    const cand = `${raw} (${i})`;
+    if (!isBlocked(cand)) return cand;
+  }
+  return `${raw} (${Date.now().toString().slice(-4)})`;
+}
 
 let latestVideoTitle = { url: '', title: '' };
 let currentWorkspaceMode = 'new';
+let currentModalAction = '';
 let currentJobProjectId = null;
 let currentJobWorkspaceName = null;
 
+function setWorkspaceStartButtonDisabled(disabled) {
+  const btn = document.getElementById('btnWsConfirmStart');
+  if (!btn) return;
+  btn.disabled = !!disabled;
+  btn.classList.toggle('opacity-45', !!disabled);
+  btn.classList.toggle('cursor-not-allowed', !!disabled);
+}
+
+function getNewWorkspaceValidation(val, action = currentModalAction) {
+  const cleanVal = String(val || '').trim();
+  const reqBucket = getActionWorkspaceBucket(action);
+  const reqMeta = WORKSPACE_BUCKET_META[reqBucket] || WORKSPACE_BUCKET_META.yt_video;
+  if (!cleanVal) return { state: 'ok', message: '' };
+  const existing = findExistingWorkspaceByName(cleanVal);
+  if (!existing) return { state: 'ok', message: '' };
+
+  if (reqBucket === 'ai_clip') {
+    return {
+      state: 'error',
+      message: `Workspace "${existing.workspace_name}" already exists. AI Clipper always requires a new workspace name.`,
+    };
+  }
+  const exBucket = getProjectWorkspaceBucket(existing);
+  const exMeta = WORKSPACE_BUCKET_META[exBucket] || WORKSPACE_BUCKET_META.yt_video;
+  if (exBucket === 'ai_clip') {
+    return {
+      state: 'error',
+      message: `Workspace "${existing.workspace_name}" is an AI Clipper workspace and cannot mix with ${reqMeta.label}. Choose another name.`,
+    };
+  }
+  if (exBucket !== reqBucket) {
+    const article = /^[aeiou]/i.test(exMeta.label) ? 'an' : 'a';
+    return {
+      state: 'error',
+      message: `Workspace "${existing.workspace_name}" is ${article} ${exMeta.label} workspace and cannot mix with ${reqMeta.label}. Choose another name.`,
+    };
+  }
+  return {
+    state: 'warn',
+    message: `This ${reqMeta.label} workspace already exists. New files will be added to it.`,
+  };
+}
+
+function syncWorkspaceModalValidation() {
+  const notice = document.getElementById('wsDuplicateNotice');
+  const noticeIconWrap = document.getElementById('wsDuplicateNoticeIconWrap');
+  const noticeText = document.getElementById('wsDuplicateNoticeText');
+  const reqBucket = getActionWorkspaceBucket(currentModalAction);
+
+  if (currentWorkspaceMode === 'existing') {
+    if (notice) notice.classList.add('hidden');
+    if (reqBucket === 'ai_clip') {
+      setWorkspaceStartButtonDisabled(true);
+      return false;
+    }
+    const compatible = getCompatibleExistingWorkspaces(currentModalAction);
+    const hiddenInput = document.getElementById('wsExistingSelect');
+    const selected = hiddenInput ? hiddenInput.value.trim() : '';
+    const ok = compatible.length > 0 && compatible.some(p => p.workspace_name === selected);
+    setWorkspaceStartButtonDisabled(!ok);
+    return ok;
+  }
+
+  const wsInput = document.getElementById('wsModalInput');
+  const res = getNewWorkspaceValidation(wsInput ? wsInput.value : '', currentModalAction);
+  if (notice) {
+    if (res.state === 'ok') {
+      notice.classList.add('hidden');
+    } else {
+      notice.classList.remove('hidden');
+      const isErr = res.state === 'error';
+      notice.className = isErr
+        ? 'p-2.5 rounded-lg bg-red-500/10 border border-red-500/25 text-red-300 text-[11px] flex items-center gap-2'
+        : 'p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] flex items-center gap-2';
+      if (noticeIconWrap) {
+        noticeIconWrap.innerHTML = isErr
+          ? '<i data-lucide="alert-circle" class="w-3.5 h-3.5 text-red-400"></i>'
+          : '<i data-lucide="info" class="w-3.5 h-3.5 text-amber-400"></i>';
+      }
+      if (noticeText) noticeText.innerText = res.message;
+      if (window.lucide) lucide.createIcons({ nodes: [notice] });
+    }
+  }
+  setWorkspaceStartButtonDisabled(res.state === 'error');
+  return res.state !== 'error';
+}
+
+window.checkDuplicateWorkspaceName = function (val) {
+  syncWorkspaceModalValidation();
+};
+
 window.setWorkspaceMode = function (mode) {
-  currentWorkspaceMode = mode;
+  const reqBucket = getActionWorkspaceBucket(currentModalAction);
+  const existingAllowed = reqBucket !== 'ai_clip';
+  const effectiveMode = (mode === 'existing' && existingAllowed) ? 'existing' : 'new';
+  currentWorkspaceMode = effectiveMode;
+
   const btnNew = document.getElementById('wsModeNewBtn');
   const btnExisting = document.getElementById('wsModeExistingBtn');
+  const existingFolderIcon = document.getElementById('wsModeExistingFolderIcon');
+  const existingLockIcon = document.getElementById('wsModeExistingLockIcon');
   const containerNew = document.getElementById('wsNewContainer');
   const containerExisting = document.getElementById('wsExistingContainer');
   const inputNew = document.getElementById('wsModalInput');
-  const selectExisting = document.getElementById('wsExistingSelect');
 
-  if (mode === 'new') {
+  if (btnExisting) {
+    btnExisting.disabled = !existingAllowed;
+    btnExisting.removeAttribute('title');
+  }
+  if (existingFolderIcon) existingFolderIcon.classList.toggle('hidden', !existingAllowed);
+  if (existingLockIcon) existingLockIcon.classList.toggle('hidden', existingAllowed);
+
+  if (effectiveMode === 'new') {
     if (btnNew) {
       btnNew.className = 'flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition cursor-pointer bg-white/[0.08] text-white shadow-sm flex items-center justify-center gap-1.5';
     }
     if (btnExisting) {
-      btnExisting.className = 'flex-1 py-1.5 px-3 rounded-lg text-xs font-medium transition cursor-pointer text-zinc-400 hover:text-white flex items-center justify-center gap-1.5';
+      btnExisting.className = existingAllowed
+        ? 'flex-1 py-1.5 px-3 rounded-lg text-xs font-medium transition cursor-pointer text-zinc-400 hover:text-white flex items-center justify-center gap-1.5'
+        : 'flex-1 py-1.5 px-3 rounded-lg text-xs font-medium transition text-zinc-600 opacity-55 cursor-not-allowed flex items-center justify-center gap-1.5';
     }
     if (containerNew) containerNew.classList.remove('hidden');
     if (containerExisting) containerExisting.classList.add('hidden');
@@ -2387,8 +2654,9 @@ window.setWorkspaceMode = function (mode) {
     if (containerNew) containerNew.classList.add('hidden');
     if (containerExisting) containerExisting.classList.remove('hidden');
     const trigger = document.getElementById('wsDropdownTrigger');
-    if (trigger) trigger.focus();
+    if (trigger && !trigger.disabled) trigger.focus();
   }
+  syncWorkspaceModalValidation();
   lucide.createIcons();
 };
 
@@ -2397,6 +2665,8 @@ window.toggleWsDropdown = function (e) {
     e.stopPropagation();
     e.preventDefault();
   }
+  const trigger = document.getElementById('wsDropdownTrigger');
+  if (trigger && trigger.disabled) return;
   const menu = document.getElementById('wsDropdownMenu');
   const chevron = document.getElementById('wsDropdownChevron');
   if (!menu) return;
@@ -2425,64 +2695,89 @@ document.addEventListener('click', (e) => {
 });
 
 window.selectCustomWorkspace = function (wsName) {
+  const compatible = getCompatibleExistingWorkspaces(currentModalAction);
+  const proj = compatible.find(p => p.workspace_name === wsName);
+  if (!proj) return;
+
   const hiddenInput = document.getElementById('wsExistingSelect');
   if (hiddenInput) hiddenInput.value = wsName;
 
-  const proj = vaultProjects.find(p => p.workspace_name === wsName);
-  const count = proj && proj.files ? proj.files.length : 0;
-
+  const count = proj.files ? proj.files.length : 0;
   const selectedText = document.getElementById('wsDropdownSelectedText');
   const selectedBadge = document.getElementById('wsDropdownSelectedBadge');
   if (selectedText) selectedText.innerText = wsName;
   if (selectedBadge) {
-    selectedBadge.innerText = `${count} file`;
+    selectedBadge.innerText = `${count} ${count === 1 ? 'file' : 'files'}`;
     selectedBadge.classList.remove('hidden');
   }
 
   closeWsDropdown();
-  populateExistingWorkspacesSelect(wsName);
+  populateExistingWorkspacesSelect(wsName, currentModalAction);
+  syncWorkspaceModalValidation();
 };
 
-window.populateExistingWorkspacesSelect = function (preselectedName = null) {
+window.populateExistingWorkspacesSelect = function (preselectedName = null, action = currentModalAction) {
   const hiddenInput = document.getElementById('wsExistingSelect');
   const listContainer = document.getElementById('wsDropdownList');
   const selectedText = document.getElementById('wsDropdownSelectedText');
   const selectedBadge = document.getElementById('wsDropdownSelectedBadge');
   const triggerBtn = document.getElementById('wsDropdownTrigger');
+  const helperEl = document.getElementById('wsExistingHelper');
   if (!listContainer) return;
+
+  const reqBucket = getActionWorkspaceBucket(action);
+  const reqMeta = WORKSPACE_BUCKET_META[reqBucket] || WORKSPACE_BUCKET_META.yt_video;
+  const compatible = getCompatibleExistingWorkspaces(action);
 
   listContainer.innerHTML = '';
 
-  if (vaultProjects.length === 0) {
+  if (compatible.length === 0) {
     if (hiddenInput) hiddenInput.value = '';
-    if (selectedText) selectedText.innerText = 'No projects in Workspace yet';
+    const emptyMsg = reqBucket === 'ai_clip'
+      ? 'AI Clipper always creates a new workspace'
+      : `No existing ${reqMeta.label} workspaces yet`;
+    if (selectedText) selectedText.innerText = emptyMsg;
     if (selectedBadge) selectedBadge.classList.add('hidden');
-    if (triggerBtn) triggerBtn.disabled = true;
+    if (triggerBtn) {
+      triggerBtn.disabled = true;
+      triggerBtn.classList.add('opacity-60', 'cursor-not-allowed');
+    }
+    if (helperEl) {
+      helperEl.innerText = reqBucket === 'ai_clip'
+        ? 'AI Clipper cannot merge into existing workspaces.'
+        : `No ${reqMeta.label} workspaces found yet. Switch to Create New to start one.`;
+    }
 
     const emptyItem = document.createElement('div');
     emptyItem.className = 'px-3 py-3 text-center text-xs text-zinc-500 font-sans';
-    emptyItem.innerText = 'No projects in Workspace yet';
+    emptyItem.innerText = emptyMsg;
     listContainer.appendChild(emptyItem);
     return;
   }
 
-  if (triggerBtn) triggerBtn.disabled = false;
+  if (triggerBtn) {
+    triggerBtn.disabled = false;
+    triggerBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+  }
+  if (helperEl) {
+    helperEl.innerText = `Showing ${compatible.length} ${reqMeta.label} ${compatible.length === 1 ? 'workspace' : 'workspaces'}. New files will be added without mixing other formats.`;
+  }
 
   let activeName = preselectedName || (hiddenInput ? hiddenInput.value : '');
-  if (!activeName || !vaultProjects.some(p => p.workspace_name === activeName)) {
-    activeName = vaultProjects[0].workspace_name;
+  if (!activeName || !compatible.some(p => p.workspace_name === activeName)) {
+    activeName = compatible[0].workspace_name;
   }
   if (hiddenInput) hiddenInput.value = activeName;
 
-  const activeProj = vaultProjects.find(p => p.workspace_name === activeName) || vaultProjects[0];
+  const activeProj = compatible.find(p => p.workspace_name === activeName) || compatible[0];
   const activeCount = (activeProj && activeProj.files) ? activeProj.files.length : 0;
   if (selectedText) selectedText.innerText = activeProj.workspace_name;
   if (selectedBadge) {
-    selectedBadge.innerText = `${activeCount} file`;
+    selectedBadge.innerText = `${activeCount} ${activeCount === 1 ? 'file' : 'files'}`;
     selectedBadge.classList.remove('hidden');
   }
 
-  vaultProjects.forEach(p => {
+  compatible.forEach(p => {
     const isSelected = p.workspace_name === activeName;
     const count = (p.files || []).length;
     const itemBtn = document.createElement('button');
@@ -2498,7 +2793,7 @@ window.populateExistingWorkspacesSelect = function (preselectedName = null) {
         <i data-lucide="folder" class="w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-zinc-500 group-hover:text-white'} shrink-0 transition-colors"></i>
         <span class="truncate">${escapeHtml(p.workspace_name)}</span>
       </div>
-      <span class="text-[9.5px] font-mono ${isSelected ? 'text-white bg-white/10' : 'text-zinc-500 bg-white/[0.04]'} px-1.5 py-0.5 rounded shrink-0">${count} file</span>
+      <span class="text-[9.5px] font-mono ${isSelected ? 'text-white bg-white/10' : 'text-zinc-500 bg-white/[0.04]'} px-1.5 py-0.5 rounded shrink-0">${escapeHtml(reqMeta.shortLabel)} · ${count}</span>
     `;
     listContainer.appendChild(itemBtn);
   });
@@ -2506,14 +2801,22 @@ window.populateExistingWorkspacesSelect = function (preselectedName = null) {
 };
 
 async function openWorkspaceModal(action) {
+  currentModalAction = action || '';
   const modal = document.getElementById('workspaceConfirmModal');
   const wsInput = document.getElementById('wsModalInput');
   const pipelineSummary = document.getElementById('wsModalPipelineSummary');
+  const newHelper = document.getElementById('wsNewHelper');
   const notice = document.getElementById('wsDuplicateNotice');
   if (notice) notice.classList.add('hidden');
 
   if (pipelineSummary) {
     pipelineSummary.innerText = getPipelineLabel(action);
+  }
+  const reqBucket = getActionWorkspaceBucket(action);
+  if (newHelper) {
+    newHelper.innerText = reqBucket === 'ai_clip'
+      ? 'AI Clipper always creates a new workspace folder so transcripts and clips stay isolated.'
+      : 'Defaults to the video title, and you can type any name. A new folder will be created for this download in Workspace.';
   }
 
   let nextNum = nextWorkspaceIndex || 1;
@@ -2537,16 +2840,14 @@ async function openWorkspaceModal(action) {
   }
 
   try {
-    populateExistingWorkspacesSelect();
-    setWorkspaceMode('new');
-
+    populateExistingWorkspacesSelect(null, action);
     const nextNumStr = String(nextNum).padStart(2, '0');
     if (wsInput) {
       const currentUrl = mainUrlInput.value.trim();
-      // shortcut: falls back to the numbered name if the preview has not loaded yet
-      wsInput.value = latestVideoTitle.url === currentUrl ? latestVideoTitle.title : `Workspace ${nextNumStr}`;
-      checkDuplicateWorkspaceName(wsInput.value);
+      const rawDefault = latestVideoTitle.url === currentUrl ? latestVideoTitle.title : `Workspace ${nextNumStr}`;
+      wsInput.value = suggestUniqueWorkspaceName(rawDefault, action);
     }
+    setWorkspaceMode('new');
   } catch (err) {
     console.warn('Error setting up workspace inputs:', err);
   }
@@ -2573,23 +2874,26 @@ let isProcessStarting = false;
 
 async function confirmAndStartProcess() {
   if (isProcessStarting) return;
+  if (!syncWorkspaceModalValidation()) return;
 
+  const chosenMode = currentWorkspaceMode === 'existing' ? 'existing' : 'new';
   let chosenWs = '';
-  if (currentWorkspaceMode === 'existing') {
+  if (chosenMode === 'existing') {
     const select = document.getElementById('wsExistingSelect');
     chosenWs = select ? select.value.trim() : '';
+    if (!chosenWs) return;
   } else {
     const wsInput = document.getElementById('wsModalInput');
     chosenWs = wsInput ? wsInput.value.trim() : '';
-  }
-  if (!chosenWs) {
-    chosenWs = `Workspace ${String(nextWorkspaceIndex || 1).padStart(2, '0')}`;
+    if (!chosenWs) {
+      chosenWs = suggestUniqueWorkspaceName(`Workspace ${String(nextWorkspaceIndex || 1).padStart(2, '0')}`, currentModalAction);
+    }
   }
   closeWorkspaceModal();
-  await executeActualProcess(chosenWs);
+  await executeActualProcess(chosenWs, chosenMode);
 }
 
-async function executeActualProcess(workspaceName) {
+async function executeActualProcess(workspaceName, workspaceMode = 'new') {
   if (isProcessStarting) return;
   isProcessStarting = true;
 
@@ -2656,6 +2960,7 @@ async function executeActualProcess(workspaceName) {
       url: url,
       action: action,
       workspace_name: workspaceName,
+      workspace_mode: workspaceMode === 'existing' ? 'existing' : 'new',
       num_clips: selectedClipCount,
       aspect_ratio: action === 'type_yt_clip' ? selectedTrimRatio : (action === 'type_yt_video' ? selectedVideoRatio : selectedRatio),
       fps: action === 'type_yt_video' ? selectedVideoFps : 'auto',
@@ -5792,27 +6097,24 @@ function matchesProjectSearch(proj) {
 }
 
 function getProjectMeter(proj) {
-  const act = (proj.action || '').toLowerCase();
-  const plat = (proj.platform || '').toLowerCase();
-  if (act.includes('ai_clip')) {
+  const bucket = getProjectWorkspaceBucket(proj);
+  if (bucket === 'ai_clip') {
     return { signal: 3, tone: '#ffffff', label: 'AI Clipper' };
   }
-  if (act.includes('clip') || act.includes('trim')) {
+  if (bucket === 'audio_mp3') {
+    return { signal: 3, tone: '#f59e0b', label: 'Audio MP3' };
+  }
+  if (bucket === 'yt_trim') {
     return { signal: 3, tone: '#a1a1aa', label: 'Video Trimmer' };
   }
-  // Match the platform before the action: "type_tt_video" contains "video", which
-  // used to label TikTok workspaces as YouTube.
-  if (plat.includes('tiktok')) {
-    return { signal: 3, tone: '#a1a1aa', label: 'TikTok' };
-  }
-  if (plat.includes('instagram') || act.includes('reels')) {
+  if (bucket === 'ig_reels') {
     return { signal: 3, tone: '#ec4899', label: 'Instagram Reels' };
   }
-  if (plat.includes('youtube')) {
-    return { signal: 3, tone: '#ef4444', label: 'YouTube' };
+  if (bucket === 'tt_video') {
+    return { signal: 3, tone: '#a1a1aa', label: 'TikTok' };
   }
-  if (act.includes('mp3') || plat.includes('audio')) {
-    return { signal: 3, tone: '#f59e0b', label: 'Audio MP3' };
+  if (bucket === 'yt_video') {
+    return { signal: 3, tone: '#ef4444', label: 'YouTube' };
   }
   return { signal: 2, tone: '#a1a1aa', label: 'Workspace' };
 }
@@ -5984,6 +6286,15 @@ function findActiveProjectFile(fileId) {
   return fromProj || vaultItems.find(it => it.id === fileId) || null;
 }
 
+function isVideoVaultFile(f) {
+  if (!f || typeof f !== 'object') return false;
+  const t = String(f.type || '').toLowerCase();
+  if (t === 'audio') return false;
+  if (t === 'video') return true;
+  const name = String(f.filename || f.file_path || '').toLowerCase();
+  return /\.(mp4|mov|mkv|webm|m4v|avi)$/i.test(name);
+}
+
 function isAiShortClipsProject(proj) {
   if (!proj || proj.virtual) return false;
   const isTrim = (
@@ -5992,6 +6303,17 @@ function isAiShortClipsProject(proj) {
     (proj.category || '').toLowerCase().includes('trim')
   );
   return !isTrim && isAiClipperProject(proj) && Array.isArray(proj.files) && proj.files.length > 0;
+}
+
+function isFullVideoStudioProject(proj) {
+  if (!proj || proj.virtual) return false;
+  const isTrim = (
+    proj.action === 'type_yt_clip' ||
+    proj.action === 'manual_clip' ||
+    (proj.category || '').toLowerCase().includes('trim')
+  );
+  if (isTrim || isAiClipperProject(proj)) return false;
+  return Array.isArray(proj.files) && proj.files.some(isVideoVaultFile);
 }
 
 function openAiClipperStudio(projectId, clipId = null) {
@@ -6017,7 +6339,11 @@ function configureVaultCardMenu(context) {
 
   if (context.type === 'file' && studioBtn && currentActiveProjectId) {
     const activeProj = vaultProjects.find(p => p.project_id === currentActiveProjectId);
-    if (isAiShortClipsProject(activeProj)) {
+    const targetFile = findActiveProjectFile(context.id);
+    if (
+      isAiShortClipsProject(activeProj) ||
+      (isFullVideoStudioProject(activeProj) && isVideoVaultFile(targetFile))
+    ) {
       studioBtn.classList.remove('hidden');
     }
   }
@@ -6322,7 +6648,7 @@ function updateProjectDetailHeaderMeta(proj) {
   const emptyState = document.getElementById('projectFilesEmptyState');
   const btnDetailMenu = document.getElementById('btnProjectDetailMenu');
 
-  if (countEl) countEl.innerText = `${files.length} Media Files`;
+  if (countEl) countEl.innerText = `${files.length} Media ${files.length === 1 ? 'File' : 'Files'}`;
   if (sizeEl) sizeEl.innerText = `${formatBytes(totalSize)} Total`;
   if (emptyState) emptyState.classList.toggle('hidden', files.length > 0);
   if (btnDetailMenu) {
@@ -6605,7 +6931,7 @@ async function openProjectPage(projectId) {
     srcEl.innerHTML = '';
     srcEl.classList.add('hidden');
   }
-  if (countEl) countEl.innerText = `${files.length} Media Files`;
+  if (countEl) countEl.innerText = `${files.length} Media ${files.length === 1 ? 'File' : 'Files'}`;
   if (sizeEl) sizeEl.innerText = `${formatBytes(totalSize)} Total`;
   if (dateEl) dateEl.innerText = formatSavedDate(proj.created_at);
   if (breadcrumbEl) breadcrumbEl.innerText = `${proj.project_id}`;
@@ -6643,6 +6969,12 @@ async function openProjectPage(projectId) {
     const canOpenStudio = isAiShortClipsProject(proj);
     btnOpenStudio.classList.toggle('hidden', !canOpenStudio);
     btnOpenStudio.href = canOpenStudio ? `/studio/${encodeURIComponent(proj.project_id)}` : '#';
+  }
+  const btnOpenFullStudio = document.getElementById('btnOpenFullVideoStudio');
+  if (btnOpenFullStudio) {
+    const canOpenFullStudio = isFullVideoStudioProject(proj);
+    btnOpenFullStudio.classList.toggle('hidden', !canOpenFullStudio);
+    btnOpenFullStudio.href = canOpenFullStudio ? `/studio/${encodeURIComponent(proj.project_id)}` : '#';
   }
   if (btnClipperRename) {
     btnClipperRename.onclick = () => promptRenameWorkspace(proj.project_id, proj.workspace_name);
@@ -7522,16 +7854,33 @@ function isAiClipperProject(proj) {
   if (!proj) return false;
   const act = (proj.action || '').toLowerCase();
   const cat = (proj.category || '').toLowerCase();
-  const name = (proj.workspace_name || '').toLowerCase();
-  const isActClip = act.includes('ai_clip') || act.includes('clipper') || act.includes('yt_clip') || act.includes('trim');
+  // Explicit non-clipper project types must never be misclassified by file names like "Best Clips.mp4"
+  if (
+    act === 'type_yt_video' ||
+    act === 'type_yt_short' ||
+    act === 'type_yt_mp3' ||
+    act === 'type_tt_mp3' ||
+    act === 'type_tt_video' ||
+    act === 'type_ig_reels' ||
+    act === 'mp3' ||
+    act === 'audio_mp3'
+  ) {
+    return false;
+  }
+  const isActClip = act.includes('ai_clip') || act.includes('clipper') || act.includes('yt_clip') || act === 'manual_clip' || act.includes('trim');
   const isCatClip = cat.includes('01-ai-clips') || cat.includes('ai-clip') || cat.includes('trim');
-  const hasClipFiles = (proj.files || []).some(f =>
-    (f.category || '').toLowerCase().includes('01-ai-clips') ||
-    (f.action || '').toLowerCase().includes('ai_clip') ||
-    (f.action || '').toLowerCase().includes('yt_clip') ||
-    (f.filename || '').toLowerCase().includes('virality') ||
-    (f.filename || '').toLowerCase().includes('clip')
-  );
+  const hasClipFiles = (proj.files || []).some(f => {
+    const fCat = (f.category || '').toLowerCase();
+    const fAct = (f.action || '').toLowerCase();
+    const fName = (f.filename || '').toLowerCase();
+    return (
+      fCat.includes('01-ai-clips') ||
+      fAct.includes('ai_clip') ||
+      fAct.includes('yt_clip') ||
+      fAct === 'manual_clip' ||
+      fName.includes('virality')
+    );
+  });
   return isActClip || isCatClip || hasClipFiles;
 }
 
@@ -8300,6 +8649,8 @@ window.updateVaultFilterCounters = function () {
   });
 };
 
+let vaultMediaPillRaf = null;
+
 window.setVaultMediaFilter = function (filterType, immediate = false) {
   window.currentVaultMediaFilter = filterType;
   const filterGroup = document.getElementById('vaultMediaFilterGroup');
@@ -8316,6 +8667,10 @@ window.setVaultMediaFilter = function (filterType, immediate = false) {
     });
 
     if (activeTab && pill) {
+      if (vaultMediaPillRaf) {
+        cancelAnimationFrame(vaultMediaPillRaf);
+        vaultMediaPillRaf = null;
+      }
       if (immediate) {
         pill.style.transition = 'none';
         pill.style.transform = `translateX(${activeTab.offsetLeft}px)`;
@@ -8325,6 +8680,19 @@ window.setVaultMediaFilter = function (filterType, immediate = false) {
       } else {
         pill.style.transform = `translateX(${activeTab.offsetLeft}px)`;
         pill.style.width = `${activeTab.offsetWidth}px`;
+        // Track width smoothly while the active .t-tab-count badge animates open
+        const trackStart = performance.now();
+        const trackPill = (now) => {
+          if (!activeTab) return;
+          pill.style.transform = `translateX(${activeTab.offsetLeft}px)`;
+          pill.style.width = `${activeTab.offsetWidth}px`;
+          if (now - trackStart < 300) {
+            vaultMediaPillRaf = requestAnimationFrame(trackPill);
+          } else {
+            vaultMediaPillRaf = null;
+          }
+        };
+        vaultMediaPillRaf = requestAnimationFrame(trackPill);
       }
     }
   }
@@ -8344,7 +8712,7 @@ window.setVaultMediaFilter = function (filterType, immediate = false) {
   });
   const visibleCountEl = document.getElementById('vaultVisibleFileCount');
   if (visibleCountEl) {
-    visibleCountEl.innerText = `${visible} files shown`;
+    visibleCountEl.innerText = `${visible} ${visible === 1 ? 'file' : 'files'} shown`;
   }
 };
 

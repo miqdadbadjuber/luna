@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Luna Studio — AI Clipper</title>
+  <title>{{WORKSPACE_NAME}} | Luna</title>
   <meta name="theme-color" content="#0a0a0a" />
   <link rel="icon" type="image/png" href="/assets/logo-app.png" />
 
@@ -300,10 +300,15 @@
       position: absolute;
       top: 6px;
       bottom: 4px;
-      width: 1.5px;
+      left: 0;
+      width: 2px;
+      margin-left: -1px;
       background: #ffffff;
       pointer-events: none;
       z-index: 30;
+      will-change: transform;
+      backface-visibility: hidden;
+      transition: none;
     }
 
     .playhead-dot {
@@ -317,6 +322,24 @@
       background: #ffffff;
       pointer-events: auto;
       cursor: ew-resize;
+      transition: opacity 100ms ease, transform 100ms ease;
+    }
+
+    .playhead-line.is-editing-clip .playhead-dot {
+      opacity: 0;
+      transform: translateX(-50%) scale(0.4);
+      pointer-events: none;
+    }
+
+    .tl-snap-guide {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: rgba(255, 255, 255, 0.78);
+      pointer-events: none;
+      z-index: 28;
+      display: none;
     }
 
     /* Lightweight pure-CSS subtitle overlay (Off + Selene) */
@@ -513,19 +536,180 @@
       bottom: 20px;
       right: 20px;
       z-index: 120;
-      background: #1a1a1a;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.8);
+      min-width: 196px;
+      max-width: 320px;
+      background: #171717;
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.78);
       border-radius: 12px;
       padding: 10px 14px;
+      overflow: hidden;
       transform: translateY(14px);
       opacity: 0;
       pointer-events: none;
-      transition: opacity 150ms ease, transform 150ms ease;
+      transition: opacity 180ms ease, transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
     }
     .editor-toast.show {
       transform: translateY(0);
       opacity: 1;
+      pointer-events: auto;
+    }
+    .editor-toast-cancel {
+      width: 20px;
+      height: 20px;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #737373;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      transition: background 120ms ease, color 120ms ease;
+    }
+    .editor-toast-cancel:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #ffffff;
+    }
+    .editor-toast-progress-track {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+    }
+    .editor-toast-progress-bar {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      width: 0%;
+      border-radius: 9999px;
+      background: rgba(52, 211, 153, 0.92);
+      transition: width 220ms ease;
+    }
+    .editor-toast-progress-bar.is-indeterminate {
+      width: 38% !important;
+      background: linear-gradient(90deg, transparent, rgba(52, 211, 153, 0.95), transparent);
+      animation: lunaToastIndeterminate 1.25s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      transition: none;
+    }
+    .editor-toast-progress-bar.is-determinate::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+      animation: lunaToastIndeterminate 1.35s linear infinite;
+    }
+    @keyframes lunaToastIndeterminate {
+      0% { left: -42%; }
+      100% { left: 104%; }
+    }
+    .luna-arc-spinner {
+      width: 18px;
+      height: 18px;
+      display: block;
+      color: #ffffff;
+      animation: lunaArcSpin 1.4s linear infinite;
+    }
+    .luna-arc-spinner-track {
+      stroke: currentColor;
+      opacity: 0.18;
+    }
+    .luna-arc-spinner-head {
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-dasharray: 1, 100;
+      stroke-dashoffset: 0;
+      animation: lunaArcDash 1.4s ease-in-out infinite;
+    }
+    @keyframes lunaArcSpin {
+      100% { transform: rotate(360deg); }
+    }
+    @keyframes lunaArcDash {
+      0% { stroke-dasharray: 2, 100; stroke-dashoffset: 0; }
+      50% { stroke-dasharray: 38, 100; stroke-dashoffset: -16; }
+      100% { stroke-dasharray: 2, 100; stroke-dashoffset: -56.5; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .luna-arc-spinner { animation-duration: 3.2s; }
+      .luna-arc-spinner-head { animation: none; stroke-dasharray: 20, 100; }
+    }
+
+    .fv-ae-list {
+      background: #101010;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .fv-ae-row {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 7px 11px;
+      background: transparent;
+      border: none;
+      text-align: left;
+      cursor: pointer;
+      transition: background 140ms ease;
+    }
+    .fv-ae-row + .fv-ae-row {
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .fv-ae-row:hover {
+      background: rgba(255, 255, 255, 0.035);
+    }
+    .fv-ae-row:focus-visible {
+      outline: 1px solid rgba(255, 255, 255, 0.35);
+      outline-offset: -1px;
+    }
+    .fv-ae-title {
+      font-size: 11.5px;
+      font-weight: 500;
+      color: #d4d4d8;
+      line-height: 1.25;
+      transition: color 140ms ease;
+    }
+    .fv-ae-row.is-active .fv-ae-title {
+      color: #ffffff;
+    }
+    .fv-ae-sub {
+      font-size: 10px;
+      color: #71717a;
+      line-height: 1.25;
+      margin-top: 1px;
+    }
+    .luna-switch {
+      position: relative;
+      width: 30px;
+      height: 17px;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.13);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      flex-shrink: 0;
+      transition: background 160ms ease, border-color 160ms ease;
+    }
+    .luna-switch-thumb {
+      position: absolute;
+      top: 1px;
+      left: 1px;
+      width: 13px;
+      height: 13px;
+      border-radius: 9999px;
+      background: #a1a1aa;
+      transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1), background 160ms ease;
+    }
+    .fv-ae-row.is-active .luna-switch {
+      background: #ffffff;
+      border-color: #ffffff;
+    }
+    .fv-ae-row.is-active .luna-switch-thumb {
+      transform: translateX(13px);
+      background: #0d0d0f;
     }
 
     .luna-range {
@@ -545,10 +729,497 @@
       background: #ffffff;
       cursor: pointer;
     }
+
+    /* Adjust Tab: Full-Width High-Contrast Pure-Monochrome Scrub-Bar Sliders */
+    .fv-bar-track {
+      position: relative;
+      height: 24px;
+      border-radius: 8px;
+      background: #101010;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45);
+      overflow: hidden;
+      transition: border-color 140ms ease, background 140ms ease;
+    }
+    .fv-bar-track:hover,
+    .fv-bar-track:focus-within,
+    .fv-bar-track.is-dragging {
+      background: #161616;
+      border-color: rgba(255, 255, 255, 0.22);
+    }
+    .fv-bar-fill {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      width: var(--pct, 0%);
+      background: #e5e5e5;
+      pointer-events: none;
+      transition: background 140ms ease;
+    }
+    .fv-bar-track:hover .fv-bar-fill,
+    .fv-bar-track:focus-within .fv-bar-fill,
+    .fv-bar-track.is-dragging .fv-bar-fill {
+      background: #ffffff;
+    }
+    .fv-bar-ticks {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      height: 8px;
+      transform: translateY(-50%);
+      pointer-events: none;
+      opacity: 0.72;
+      mix-blend-mode: difference;
+      background-image: repeating-linear-gradient(
+        to right,
+        transparent 0,
+        transparent calc(12.5% - 1px),
+        rgba(255, 255, 255, 0.34) calc(12.5% - 1px),
+        rgba(255, 255, 255, 0.34) 12.5%
+      );
+      clip-path: inset(0 2px 0 2px);
+      z-index: 6;
+      transition: opacity 140ms ease;
+    }
+    .fv-bar-track:hover .fv-bar-ticks,
+    .fv-bar-track:focus-within .fv-bar-ticks,
+    .fv-bar-track.is-dragging .fv-bar-ticks {
+      opacity: 1;
+    }
+    .fv-bar-thumb {
+      position: absolute;
+      top: 50%;
+      left: clamp(3px, var(--pct, 0%), calc(100% - 3px));
+      width: 3px;
+      height: 15px;
+      border-radius: 9999px;
+      background: #ffffff;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45), 0 1px 4px rgba(0, 0, 0, 0.7);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      opacity: 0;
+      z-index: 12;
+      transition: opacity 130ms ease;
+    }
+    .fv-bar-track:hover .fv-bar-thumb,
+    .fv-bar-track:focus-within .fv-bar-thumb,
+    .fv-bar-track.is-dragging .fv-bar-thumb {
+      opacity: 1;
+    }
+    .fv-bar-input {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      opacity: 0;
+      cursor: ew-resize;
+      z-index: 20;
+    }
+
+    /* Full Video Studio: magnetic timeline blocks, speed curve editor & compact controls */
+    .stage-speed-pill {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 24;
+      padding: 3px 9px;
+      border-radius: 9999px;
+      background: rgba(16, 16, 16, 0.86);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      pointer-events: none;
+      backdrop-filter: blur(8px);
+    }
+
+    .fv-tl-block {
+      position: absolute;
+      top: 2px;
+      bottom: 2px;
+      border-radius: 9px;
+      overflow: hidden;
+      background: #171717;
+      border: 1.5px solid rgba(255, 255, 255, 0.24);
+      cursor: pointer;
+      user-select: none;
+      touch-action: none;
+      transition: border-color 120ms ease, box-shadow 120ms ease;
+    }
+
+    .fv-tl-block:hover {
+      border-color: rgba(255, 255, 255, 0.52);
+    }
+
+    .fv-tl-block.is-selected {
+      border-color: #ffffff;
+      z-index: 8;
+    }
+
+    .fv-tl-block .seg-grab-bar {
+      width: 9px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 120ms ease;
+    }
+
+    .fv-tl-block.is-selected .seg-grab-bar,
+    .fv-tl-block:hover .seg-grab-bar {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .fv-block-filmstrip {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      height: 100%;
+      pointer-events: none;
+      opacity: 0.86;
+      display: block;
+    }
+
+    .fv-block-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 1.5px 5.5px;
+      border-radius: 9999px;
+      background: rgba(10, 10, 10, 0.82);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #ffffff;
+      font-size: 9.5px;
+      font-weight: 600;
+      line-height: 1.1;
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+    }
+
+    .ed-icon.is-active {
+      color: #ffffff;
+      background: #242424;
+    }
+
+    .fv-seg-pill {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      padding: 5px 9px;
+      border-radius: 10px;
+      background: #101010;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      font-size: 11px;
+    }
+
+    .fv-submode-bar {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding: 2px;
+      border-radius: 9999px;
+      background: #101010;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .curve-preset-card {
+      height: 46px;
+      border-radius: 10px;
+      background: #191919;
+      border: 1.5px solid rgba(255, 255, 255, 0.06);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      padding: 3px 2px;
+      cursor: pointer;
+      color: #8a8a8a;
+      transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+    }
+
+    .curve-preset-card:hover {
+      background: #222222;
+      border-color: rgba(255, 255, 255, 0.16);
+      color: #e5e5e5;
+    }
+
+    .curve-preset-card.is-active {
+      border-color: rgba(255, 255, 255, 0.85);
+      background: #242424;
+      color: #ffffff;
+    }
+
+    .curve-editor-box {
+      position: relative;
+      height: 128px;
+      border-radius: 12px;
+      background: #0e0e0e;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+      user-select: none;
+      touch-action: none;
+    }
+
+    .curve-dot {
+      fill: #ffffff;
+      stroke: #0e0e0e;
+      stroke-width: 2;
+      transition: r 100ms ease;
+    }
+
+    .curve-dot-group {
+      cursor: move;
+    }
+
+    .curve-dot-group:hover .curve-dot,
+    .curve-dot-group.is-dragging .curve-dot {
+      r: 5.5;
+      stroke: #ffffff;
+      stroke-width: 1.5;
+      fill: #0a0a0a;
+    }
+
+    #mediaFrameBox.fv-crop-draggable {
+      cursor: grab;
+    }
+    #mediaFrameBox.fv-crop-draggable:hover {
+      outline: 1px solid rgba(255, 255, 255, 0.24);
+      outline-offset: -1px;
+    }
+    #mediaFrameBox.fv-crop-draggable.is-panning {
+      cursor: grabbing;
+      outline: 1.5px solid rgba(255, 255, 255, 0.65);
+      outline-offset: -1.5px;
+    }
+
+    .fv-crop-ghost-box {
+      position: absolute;
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.72);
+      border: 1.5px solid rgba(255, 255, 255, 0.92);
+      border-radius: 6px;
+      pointer-events: none;
+    }
+    .fv-crop-grid {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      transition: opacity 120ms ease;
+      background-image:
+        linear-gradient(to right, transparent 33.1%, rgba(255,255,255,0.22) 33.3%, transparent 33.6%, transparent 66.4%, rgba(255,255,255,0.22) 66.6%, transparent 66.9%),
+        linear-gradient(to bottom, transparent 33.1%, rgba(255,255,255,0.22) 33.3%, transparent 33.6%, transparent 66.4%, rgba(255,255,255,0.22) 66.6%, transparent 66.9%);
+    }
+    #mediaFrameBox.is-panning .fv-crop-grid {
+      opacity: 1;
+    }
+
+    /* Full Video NLE Timeline Zoom, Reorder & Multi-Layer Audio */
+    .tl-scroll-viewport {
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+    }
+    .tl-scroll-viewport::-webkit-scrollbar { height: 5px; }
+    .tl-scroll-viewport::-webkit-scrollbar-track { background: transparent; }
+    .tl-scroll-viewport::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.16);
+      border-radius: 9999px;
+    }
+    .tl-scroll-viewport::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
+
+    .fv-audio-lanes-scroll {
+      max-height: 112px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+    }
+    .fv-audio-lanes-scroll::-webkit-scrollbar { width: 4px; }
+    .fv-audio-lanes-scroll::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.14);
+      border-radius: 9999px;
+    }
+
+    .fv-audio-lane {
+      position: relative;
+      height: 32px;
+      border-radius: 9px;
+      background: #0e0e0e;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      transition: border-color 120ms ease, background 120ms ease;
+    }
+    .fv-audio-lane.is-drop-target {
+      border-color: rgba(255, 255, 255, 0.4);
+      background: #141414;
+    }
+
+    .fv-tl-block.is-reordering {
+      opacity: 0.92;
+      transform: translateY(-2px);
+      border-color: #ffffff;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.65);
+      cursor: grabbing !important;
+      z-index: 20 !important;
+    }
+    .fv-reorder-indicator {
+      position: absolute;
+      top: -2px;
+      bottom: -2px;
+      width: 2px;
+      border-radius: 9999px;
+      background: #ffffff;
+      pointer-events: none;
+      z-index: 25;
+    }
+
+    .fv-audio-block {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      min-width: 18px;
+      border-radius: 9px;
+      background: #171717;
+      border: 1.5px solid rgba(255, 255, 255, 0.16);
+      overflow: hidden;
+      cursor: grab;
+      user-select: none;
+      touch-action: none;
+      transition: border-color 120ms ease, background 120ms ease;
+    }
+    .fv-audio-block:hover {
+      border-color: rgba(255, 255, 255, 0.36);
+      background: #1c1c1c;
+    }
+    .fv-audio-block.is-selected {
+      border-color: #ffffff;
+      background: #1e1e1e;
+      z-index: 4;
+    }
+    .fv-audio-block.is-dragging {
+      cursor: grabbing;
+      border-color: #ffffff;
+      z-index: 12;
+    }
+    .fv-audio-block .seg-grab-bar {
+      width: 10px;
+    }
+    .fv-audio-block .seg-grab-bar::after {
+      height: 14px;
+      width: 2.5px;
+    }
+
+    .audio-env-box {
+      position: relative;
+      height: 98px;
+      border-radius: 12px;
+      background: #0e0e0e;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+      user-select: none;
+      touch-action: none;
+      cursor: ew-resize;
+    }
+    .audio-kf-dot {
+      fill: #ffffff;
+      stroke: #0e0e0e;
+      stroke-width: 1.8;
+      transition: r 90ms ease;
+    }
+    .audio-kf-group {
+      cursor: move;
+    }
+    .audio-kf-group:hover .audio-kf-dot,
+    .audio-kf-group.is-dragging .audio-kf-dot {
+      r: 5.5;
+      fill: #0a0a0a;
+      stroke: #ffffff;
+      stroke-width: 1.6;
+    }
+
+    /* Diamond Keyframe Controls */
+    .kf-nav-btn {
+      width: 20px;
+      height: 20px;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #8a8a8a;
+      background: transparent;
+      cursor: pointer;
+      transition: background 120ms ease, color 120ms ease;
+    }
+    .kf-nav-btn:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.08);
+      color: #ffffff;
+    }
+    .kf-nav-btn:disabled {
+      opacity: 0.28;
+      cursor: default;
+    }
+    .kf-diamond-btn {
+      width: 24px;
+      height: 24px;
+      border-radius: 7px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #d4d4d4;
+      background: transparent;
+      cursor: pointer;
+      transition: background 120ms ease, color 120ms ease;
+    }
+    .kf-diamond-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #ffffff;
+    }
+    .kf-diamond-btn.is-on-kf {
+      color: #ffffff;
+    }
+    .kf-diamond-btn.is-on-kf .kf-diamond-shape {
+      fill: #ffffff;
+      stroke: #ffffff;
+    }
+    .kf-diamond-btn.is-on-kf .kf-plus-h {
+      stroke: #0a0a0a;
+    }
+    .kf-diamond-btn.is-on-kf .kf-plus-v {
+      display: none;
+    }
+
+    .fv-audio-icon-btn {
+      width: 30px;
+      height: 28px;
+      border-radius: 8px;
+      background: transparent;
+      border: none;
+      outline: none;
+      box-shadow: none;
+      color: #a3a3a3;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 120ms ease, color 120ms ease;
+    }
+    .fv-audio-icon-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #ffffff;
+    }
+    .fv-audio-icon-btn.is-danger:hover {
+      background: rgba(248, 113, 113, 0.12);
+      color: #f87171;
+    }
   </style>
 </head>
 
-<body class="overflow-hidden flex flex-col p-3 gap-2.5 select-none" data-project-id="{{PROJECT_ID}}">
+<body class="overflow-hidden flex flex-col p-3 gap-2.5 select-none" data-project-id="{{PROJECT_ID}}" data-studio-mode="{{STUDIO_MODE}}">
 
   <!-- TOP HEADER BAR -->
   <header class="h-10 shrink-0 px-1 flex items-center justify-between gap-4">
@@ -560,16 +1231,16 @@
         <span>Back</span>
       </a>
       <span class="text-neutral-600 font-mono shrink-0">/</span>
-      <span id="projectTitle" class="text-sm font-medium text-neutral-100 truncate">Loading workspace...</span>
+      <span id="projectTitle" class="text-sm font-medium text-neutral-100 truncate">{{WORKSPACE_NAME}}</span>
     </div>
 
-    <!-- Right: Plain Download Icon + Slim Save -->
+    <!-- Right: Direct MP4 Download + Export to Workspace -->
     <div class="flex items-center gap-2.5 shrink-0">
-      <button type="button" id="btnDownloadClip" onclick="downloadClip()" class="ed-icon hover:text-white" title="Export & Download Clip">
+      <button type="button" id="btnDownloadClip" onclick="downloadClip()" class="ed-icon hover:text-white" data-tooltip="Download MP4" data-tooltip-pos="bottom" aria-label="Download MP4">
         <i id="downloadClipIcon" data-lucide="download" class="w-4 h-4"></i>
       </button>
-      <button type="button" id="btnSaveClip" onclick="saveClip()" class="export-pill-btn">
-        <span>Save</span>
+      <button type="button" id="btnExportWorkspace" onclick="exportToWorkspace()" class="export-pill-btn">
+        <span id="btnExportWorkspaceLabel">Export</span>
       </button>
     </div>
   </header>
@@ -577,56 +1248,71 @@
   <!-- MIDDLE 3-COLUMN LAYOUT -->
   <div class="flex-1 min-h-0 flex gap-3 overflow-hidden">
 
-    <!-- LEFT BOX: AI Clips List + Audio Controls -->
+    <!-- LEFT BOX: Media List + Audio Assets -->
     <aside class="w-[228px] shrink-0 panel-card p-3 flex flex-col justify-between gap-3 overflow-hidden">
-      <div class="space-y-2 flex-1 min-h-0 flex flex-col">
-        <span class="text-xs font-semibold text-neutral-300 px-1">AI Clips</span>
+      <div id="leftListWrap" class="flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
+        <span id="leftListHeading" class="text-xs font-semibold text-neutral-300 px-1">{{LEFT_HEADING}}</span>
         <div id="aiClipsList" class="space-y-1 overflow-y-auto panel-scroll pr-0.5 flex-1"></div>
       </div>
 
-      <div class="space-y-2 pt-3 border-t border-white/[0.06] shrink-0">
+      <div id="audioSection" class="space-y-2 pt-2.5 border-t border-white/[0.06] shrink-0">
         <span class="text-xs font-semibold text-neutral-300 px-1 block">Audio</span>
         <div class="grid grid-cols-2 gap-2">
-          <button type="button" id="btnOrigAudio" onclick="toggleMute()"
-            class="h-14 rounded-xl bg-[#1d1d1d] border border-white/[0.08] p-2 flex flex-col items-center justify-center gap-1 hover:bg-[#252525] transition cursor-pointer"
-            title="Original clip audio (click to mute/unmute)">
-            <span class="w-5 h-5 rounded-full bg-white text-black flex items-center justify-center">
-              <i id="origAudioIcon" data-lucide="check" class="w-3 h-3"></i>
+          <button type="button" id="btnOrigAudio" onclick="toggleOriginalAudioMute()"
+            class="h-12 rounded-xl bg-[#1d1d1d] border border-white/[0.08] p-1.5 flex flex-col items-center justify-center gap-0.5 hover:bg-[#252525] transition cursor-pointer">
+            <span id="origAudioIconWrap" class="w-4 h-4 rounded-full bg-white text-black flex items-center justify-center">
+              <i id="origAudioIcon" data-lucide="check" class="w-2.5 h-2.5"></i>
             </span>
             <span class="text-[11px] text-neutral-200">Original</span>
           </button>
 
-          <label class="h-14 rounded-xl bg-[#191919] border border-white/[0.05] p-2 flex flex-col items-center justify-center gap-1 hover:bg-[#222222] transition cursor-pointer"
-            title="Add background music">
-            <i data-lucide="music" class="w-4 h-4 text-neutral-400"></i>
+          <label class="h-12 rounded-xl bg-[#191919] border border-white/[0.05] p-1.5 flex flex-col items-center justify-center gap-0.5 hover:bg-[#222222] transition cursor-pointer">
+            <i data-lucide="music" class="w-3.5 h-3.5 text-neutral-400"></i>
             <span id="customAudioLabel" class="text-[11px] text-neutral-400 truncate max-w-full">Add Music</span>
             <input type="file" id="customAudioInput" accept="audio/*" class="hidden" onchange="onSelectMusicFile(event)" />
+          </label>
+        </div>
+
+        <!-- Extract Audio from Video File into Timeline Music Track -->
+        <div id="fvAudioExtras" class="pt-0.5">
+          <label id="btnExtractFromVideo"
+            class="w-full h-7 rounded-xl bg-[#1a1a1a] hover:bg-[#242424] border border-white/[0.07] text-[11px] font-medium text-neutral-200 flex items-center justify-center gap-1.5 transition cursor-pointer">
+            <i data-lucide="audio-lines" class="w-3.5 h-3.5 text-neutral-400"></i>
+            <span>Extract from Video</span>
+            <input type="file" id="extractVideoAudioInput" accept="video/*,.mp4,.mov,.mkv,.m4v,.avi" class="hidden" onchange="onSelectMusicFile(event)" />
           </label>
         </div>
       </div>
     </aside>
 
-    <!-- CENTER: VIDEO PREVIEW STAGE + INTERACTIVE LIVE SUBTITLE -->
+    <!-- CENTER: VIDEO PREVIEW STAGE -->
     <section id="stageSection" class="flex-1 min-w-0 stage-card relative flex items-center justify-center p-3.5 overflow-hidden">
-      <button type="button" id="btnStageExpand" onclick="toggleStageExpand()" class="stage-expand-btn" title="Full size preview (F)">
+      <div id="stageSpeedBadge" class="stage-speed-pill hidden">1.0x</div>
+      <button type="button" id="btnStageExpand" onclick="toggleStageExpand()" class="stage-expand-btn" data-tooltip="Full size preview" data-tooltip-pos="bottom" aria-label="Full size preview">
         <i id="stageExpandIcon" data-lucide="maximize" class="w-4 h-4"></i>
       </button>
 
-      <div id="mediaFrameBox" class="relative overflow-hidden rounded-xl bg-black flex items-center justify-center cursor-pointer h-full"
-        style="aspect-ratio: 9 / 16; max-width: 100%; max-height: 100%;"
-        onclick="if (!event.target.closest('#subtitleOverlay')) togglePlay()">
-        <video id="videoEl" class="w-full h-full object-cover block" playsinline preload="auto"></video>
+      <div id="mediaFrameBox" class="relative overflow-hidden rounded-xl bg-black flex items-center justify-center cursor-pointer {{INIT_FIT_CLASS}}"
+        style="aspect-ratio: {{INIT_ASPECT}}; max-width: 100%; max-height: 100%;"
+        onclick="onStageFrameClick(event)">
+        <video id="videoEl" class="w-full h-full object-cover block" playsinline preload="auto" style="transform: translateZ(0); backface-visibility: hidden;"></video>
+        <div id="stageVignetteOverlay" class="pointer-events-none absolute inset-0 z-[4]" style="opacity: 0;"></div>
+        <div id="fvCropGhostOverlay" class="hidden absolute inset-0 z-[6] pointer-events-none overflow-hidden">
+          <div id="fvCropGhostBox" class="fv-crop-ghost-box">
+            <div class="fv-crop-grid"></div>
+          </div>
+        </div>
         <div id="snapGuideV" class="snap-guide snap-guide-v" aria-hidden="true"></div>
         <div id="snapGuideH" class="snap-guide snap-guide-h" aria-hidden="true"></div>
-        <div id="subtitleOverlay" class="subtitle-overlay-box hidden" title="Click to edit text or drag to position"></div>
+        <div id="subtitleOverlay" class="subtitle-overlay-box hidden"></div>
       </div>
 
       <!-- Minimal floating controls visible only in full-size preview mode -->
       <div class="stage-expanded-tools" onclick="event.stopPropagation()">
-        <button type="button" onclick="togglePlay()" class="play-circle-btn !w-8 !h-8" title="Play / Pause (Space)">
+        <button type="button" onclick="togglePlay()" class="play-circle-btn !w-8 !h-8" aria-label="Play or pause">
           <i id="expandedPlayIcon" data-lucide="play" class="w-3.5 h-3.5"></i>
         </button>
-        <button type="button" onclick="toggleMute()" class="ed-icon !w-8 !h-8" title="Mute / Unmute">
+        <button type="button" id="btnExpandedMute" onclick="toggleMute()" class="ed-icon !w-8 !h-8" aria-label="Mute or unmute preview speaker">
           <i id="expandedMuteIcon" data-lucide="volume-2" class="w-4 h-4"></i>
         </button>
       </div>
@@ -644,9 +1330,10 @@
       </div>
     </section>
 
-    <!-- RIGHT BOX: Subtitle | Caption Tabs -->
+    <!-- RIGHT BOX: Mode-Specific Tabs -->
     <aside class="w-[264px] shrink-0 panel-card p-3 flex flex-col gap-3 overflow-hidden">
-      <div class="flat-row shrink-0 pb-1.5 border-b border-white/[0.06]">
+      <!-- AI Clipper Tabs -->
+      <div id="aiRightTabs" class="{{AI_HIDDEN}} flat-row shrink-0 pb-1.5 border-b border-white/[0.06]">
         <button type="button" class="flat-chip right-tab is-active" data-tab="subtitle" onclick="switchRightTab('subtitle')">
           <span class="check-dot"><i data-lucide="check" class="w-2.5 h-2.5"></i></span>
           <span>Subtitle</span>
@@ -657,8 +1344,33 @@
         </button>
       </div>
 
+      <!-- Full Video Inspector Tabs (hidden in AI Clipper mode or when an Audio Clip is selected) -->
+      <div id="fvRightTabs" class="{{FV_HIDDEN}} flat-row shrink-0 pb-1.5 border-b border-white/[0.06]">
+        <button type="button" class="flat-chip fv-right-tab is-active" data-fv-tab="basic" onclick="switchFvRightTab('basic')">
+          <span>Basic</span>
+        </button>
+        <button type="button" class="flat-chip fv-right-tab" data-fv-tab="speed" onclick="switchFvRightTab('speed')">
+          <span>Speed</span>
+        </button>
+        <button type="button" class="flat-chip fv-right-tab" data-fv-tab="adjust" onclick="switchFvRightTab('adjust')">
+          <span>Adjust</span>
+        </button>
+      </div>
+
+      <!-- Full Video Contextual Audio Inspector Header (shown when an Audio Clip is selected) -->
+      <div id="fvAudioHeader" class="hidden shrink-0 pb-1.5 border-b border-white/[0.06] flex items-center justify-between gap-2">
+        <div class="flex items-center gap-1.5 px-1">
+          <i data-lucide="music" class="w-3.5 h-3.5 text-neutral-300"></i>
+          <span class="text-xs font-semibold text-white">Audio Clip</span>
+        </div>
+        <button type="button" onclick="selectFvVideoTrack()" class="text-[11px] text-neutral-400 hover:text-white transition cursor-pointer inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full hover:bg-white/[0.06]">
+          <i data-lucide="chevron-left" class="w-3 h-3"></i>
+          <span>Video</span>
+        </button>
+      </div>
+
       <!-- TAB 1: SUBTITLE -->
-      <div id="panelSubtitle" class="flex-1 min-h-0 flex flex-col gap-3 overflow-y-auto panel-scroll pr-1 pb-1">
+      <div id="panelSubtitle" class="{{AI_HIDDEN}} flex-1 min-h-0 flex flex-col gap-3 overflow-y-auto panel-scroll pr-1 pb-1">
         <div class="space-y-1.5 shrink-0">
           <div class="flex items-center justify-between px-1">
             <span class="text-xs font-medium text-neutral-300">Style</span>
@@ -748,10 +1460,10 @@
               class="w-full bg-transparent text-xs text-neutral-200 placeholder-neutral-500 resize-none focus:outline-none leading-relaxed"
               placeholder="Write or customize clip caption..."></textarea>
             <div class="flex items-center justify-end gap-1 pt-1 border-t border-white/[0.05]">
-              <button type="button" onclick="focusCaptionEdit()" class="ed-icon !w-7 !h-7" title="Edit Caption">
+              <button type="button" onclick="focusCaptionEdit()" class="ed-icon !w-7 !h-7" data-tooltip="Edit caption" aria-label="Edit caption">
                 <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
               </button>
-              <button type="button" onclick="copyCaption()" class="ed-icon !w-7 !h-7" title="Copy Caption">
+              <button type="button" onclick="copyCaption()" class="ed-icon !w-7 !h-7" data-tooltip="Copy caption" aria-label="Copy caption">
                 <i data-lucide="copy" class="w-3.5 h-3.5"></i>
               </button>
             </div>
@@ -778,94 +1490,534 @@
           <span>Copy Caption + Hashtags</span>
         </button>
       </div>
+
+      <!-- FULL VIDEO TAB 1: BASIC (Aspect Ratio Framing & Volume) -->
+      <div id="panelFvBasic" class="{{FV_HIDDEN}} flex-1 min-h-0 flex flex-col gap-3 overflow-y-auto panel-scroll pr-1 pb-1">
+        <!-- Aspect Ratio -->
+        <div class="space-y-1.5 shrink-0">
+          <div class="flex items-center justify-between px-1">
+            <span class="text-xs font-medium text-neutral-300">Aspect Ratio</span>
+            <button type="button" onclick="setFvCropRatio('original')" class="text-[11px] text-neutral-500 hover:text-white transition cursor-pointer">Reset</button>
+          </div>
+          <div class="bg-[#101010] border border-white/[0.06] rounded-[12px] p-1 grid grid-cols-5 gap-0.5">
+            <button type="button" class="flat-chip !h-6 !px-0 fv-crop-chip is-active" data-crop="original" onclick="setFvCropRatio('original')">Ori</button>
+            <button type="button" class="flat-chip !h-6 !px-0 fv-crop-chip" data-crop="16:9" onclick="setFvCropRatio('16:9')">16:9</button>
+            <button type="button" class="flat-chip !h-6 !px-0 fv-crop-chip" data-crop="9:16" onclick="setFvCropRatio('9:16')">9:16</button>
+            <button type="button" class="flat-chip !h-6 !px-0 fv-crop-chip" data-crop="1:1" onclick="setFvCropRatio('1:1')">1:1</button>
+            <button type="button" class="flat-chip !h-6 !px-0 fv-crop-chip" data-crop="3:4" onclick="setFvCropRatio('3:4')">3:4</button>
+          </div>
+
+          <!-- Per-Block Frame Focus Pan & 2-Slot Tab (Center + Unlock/Lock Toggle) -->
+          <div id="fvCropFocusWrap" class="hidden pt-2 px-0.5 space-y-2">
+            <div class="fv-submode-bar">
+              <button type="button" id="tabFvCropCenter" class="flat-chip !h-6 fv-crop-mode-tab is-active" onclick="resetFvSegCropPos()">
+                <i data-lucide="crosshair" class="w-3 h-3"></i>
+                <span>Center</span>
+              </button>
+              <button type="button" id="tabFvCropLockToggle" class="flat-chip !h-6 fv-crop-mode-tab" onclick="toggleFvCropLock()">
+                <i data-lucide="lock-open" class="w-3 h-3"></i>
+                <span>Unlocked</span>
+              </button>
+            </div>
+            <div class="flex items-center justify-between gap-1.5 px-0.5">
+              <span id="fvCropAxisLabel" class="text-[11px] text-neutral-400">Focus X</span>
+              <span id="fvCropPosLabel" class="text-[11px] text-neutral-300 tabular-nums">50%</span>
+            </div>
+            <input id="fvCropPosSlider" type="range" min="0" max="100" step="1" value="50" class="luna-range w-full" oninput="setFvSegCropPos(this.value)" />
+            <p id="fvCropLockHint" class="text-[10px] text-neutral-500 leading-snug">Drag the bright crop box over the preview to reframe.</p>
+          </div>
+        </div>
+
+        <!-- Per-Block Audio Volume -->
+        <div class="space-y-1.5 pt-2.5 border-t border-white/[0.06] shrink-0">
+          <div class="flex items-center justify-between px-1">
+            <span class="text-xs font-medium text-neutral-300">Volume</span>
+            <span id="fvSegVolLabel" class="text-[11px] text-neutral-300 tabular-nums">100%</span>
+          </div>
+          <div class="fv-bar-track" style="--pct:100%">
+            <div class="fv-bar-fill"></div>
+            <div class="fv-bar-ticks"></div>
+            <div class="fv-bar-thumb"></div>
+            <input id="fvSegVolSlider" type="range" min="0" max="100" value="100" class="fv-bar-input" oninput="setFvSegVolume(this.value)" ondblclick="setFvSegVolume(100)" />
+          </div>
+        </div>
+
+        <!-- Smart Audio (Vertical Toggle List - Lossless Video Copy) -->
+        <div class="space-y-1.5 pt-2.5 border-t border-white/[0.06] shrink-0">
+          <div class="flex items-center justify-between px-1">
+            <span class="text-xs font-medium text-neutral-300">Smart Audio</span>
+            <button type="button" onclick="resetFvAudioEnhance()" class="text-[11px] text-neutral-500 hover:text-white transition cursor-pointer">Reset</button>
+          </div>
+          <div class="fv-ae-list">
+            <button type="button" role="switch" aria-checked="false" class="fv-ae-row" data-ae="normalize" onclick="toggleFvAudioEnhance('normalize')">
+              <div class="min-w-0">
+                <div class="fv-ae-title">Normalize</div>
+                <div class="fv-ae-sub">-14 LUFS loudness</div>
+              </div>
+              <span class="luna-switch" aria-hidden="true"><span class="luna-switch-thumb"></span></span>
+            </button>
+            <button type="button" role="switch" aria-checked="false" class="fv-ae-row" data-ae="denoise" onclick="toggleFvAudioEnhance('denoise')">
+              <div class="min-w-0">
+                <div class="fv-ae-title">Denoise</div>
+                <div class="fv-ae-sub">Reduce mic &amp; room noise</div>
+              </div>
+              <span class="luna-switch" aria-hidden="true"><span class="luna-switch-thumb"></span></span>
+            </button>
+            <button type="button" role="switch" aria-checked="false" class="fv-ae-row" data-ae="autoDuck" onclick="toggleFvAudioEnhance('autoDuck')">
+              <div class="min-w-0">
+                <div class="fv-ae-title">Auto-Duck</div>
+                <div class="fv-ae-sub">Lower music while speaking</div>
+              </div>
+              <span class="luna-switch" aria-hidden="true"><span class="luna-switch-thumb"></span></span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- FULL VIDEO TAB 2: SPEED (Normal Slider | Visual 5-Point Curve) -->
+      <div id="panelFvSpeed" class="hidden flex-1 min-h-0 flex flex-col gap-2.5 overflow-y-auto panel-scroll pr-1 pb-1">
+        <!-- Normal | Curve Toggle -->
+        <div class="fv-submode-bar shrink-0">
+          <button type="button" class="flat-chip !h-6 fv-speed-mode-btn is-active" data-speed-mode="normal" onclick="setFvSpeedMode('normal')">
+            <i data-lucide="gauge" class="w-3 h-3"></i>
+            <span>Normal</span>
+          </button>
+          <button type="button" class="flat-chip !h-6 fv-speed-mode-btn" data-speed-mode="curve" onclick="setFvSpeedMode('curve')">
+            <i data-lucide="spline" class="w-3 h-3"></i>
+            <span>Curve</span>
+          </button>
+        </div>
+
+        <!-- Normal Uniform Speed -->
+        <div id="fvSpeedNormalWrap" class="space-y-3 pt-0.5 shrink-0">
+          <div class="space-y-1.5 px-0.5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-medium text-neutral-300">Clip Speed</span>
+              <div class="flex items-center gap-2">
+                <span id="fvNormalSpeedLabel" class="text-xs font-semibold text-white tabular-nums">1.0x</span>
+                <button type="button" onclick="setFvNormalSpeed(1.0)" class="text-[11px] text-neutral-500 hover:text-white transition cursor-pointer">Reset</button>
+              </div>
+            </div>
+            <input id="fvNormalSpeedSlider" type="range" min="0.25" max="4" step="0.05" value="1" class="luna-range w-full" oninput="setFvNormalSpeed(this.value)" />
+            <div class="flex items-center justify-between text-[10px] text-neutral-500 tabular-nums">
+              <span>0.25x</span>
+              <span>1x</span>
+              <span>4x</span>
+            </div>
+          </div>
+
+          <div class="bg-[#101010] border border-white/[0.06] rounded-[12px] p-1 grid grid-cols-5 gap-0.5">
+            <button type="button" class="flat-chip !h-6 !px-0 fv-speed-quick" data-spd="0.5" onclick="setFvNormalSpeed(0.5)">0.5x</button>
+            <button type="button" class="flat-chip !h-6 !px-0 fv-speed-quick" data-spd="1" onclick="setFvNormalSpeed(1)">1x</button>
+            <button type="button" class="flat-chip !h-6 !px-0 fv-speed-quick" data-spd="1.5" onclick="setFvNormalSpeed(1.5)">1.5x</button>
+            <button type="button" class="flat-chip !h-6 !px-0 fv-speed-quick" data-spd="2" onclick="setFvNormalSpeed(2)">2x</button>
+            <button type="button" class="flat-chip !h-6 !px-0 fv-speed-quick" data-spd="3" onclick="setFvNormalSpeed(3)">3x</button>
+          </div>
+
+          <div class="fv-seg-pill">
+            <span class="text-neutral-500">Block Duration</span>
+            <span id="fvSpeedDurLabel" class="text-neutral-200 tabular-nums font-medium">00:00</span>
+          </div>
+        </div>
+
+        <!-- Visual 5-Point Speed Curve -->
+        <div id="fvSpeedCurveWrap" class="hidden space-y-2 shrink-0">
+          <!-- Preset Icon Cards -->
+          <div id="fvCurvePresetGrid" class="grid grid-cols-5 gap-1">
+            <button type="button" class="curve-preset-card is-active" data-curve="none" onclick="setFvCurvePreset('none')">
+              <svg width="26" height="14" viewBox="0 0 26 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+                <path d="M2 7 L24 7" />
+              </svg>
+              <span class="text-[9.5px] leading-none">None</span>
+            </button>
+            <button type="button" class="curve-preset-card" data-curve="dip" onclick="setFvCurvePreset('dip')">
+              <svg width="26" height="14" viewBox="0 0 26 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+                <path d="M2 4 C7 4, 8 11, 13 11 C18 11, 19 4, 24 4" />
+              </svg>
+              <span class="text-[9.5px] leading-none">Dip</span>
+            </button>
+            <button type="button" class="curve-preset-card" data-curve="pulse" onclick="setFvCurvePreset('pulse')">
+              <svg width="26" height="14" viewBox="0 0 26 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+                <path d="M2 9 C5 9, 6 2, 8 2 C10 2, 11 11, 13 11 C15 11, 16 2, 18 2 C20 2, 21 9, 24 9" />
+              </svg>
+              <span class="text-[9.5px] leading-none">Pulse</span>
+            </button>
+            <button type="button" class="curve-preset-card" data-curve="fast_in" onclick="setFvCurvePreset('fast_in')">
+              <svg width="26" height="14" viewBox="0 0 26 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+                <path d="M2 2 C7 2, 9 9, 15 9 C19 9, 21 7, 24 7" />
+              </svg>
+              <span class="text-[9.5px] leading-none">Fast In</span>
+            </button>
+            <button type="button" class="curve-preset-card" data-curve="custom" onclick="setFvCurvePreset('custom')">
+              <svg width="26" height="14" viewBox="0 0 26 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                <path d="M2 9 C6 4, 10 11, 14 5 C18 2, 21 8, 24 6" />
+                <circle cx="8" cy="7.5" r="1.4" fill="currentColor" />
+                <circle cx="18" cy="4.8" r="1.4" fill="currentColor" />
+              </svg>
+              <span class="text-[9.5px] leading-none">Custom</span>
+            </button>
+          </div>
+
+          <!-- Interactive SVG Curve Graph -->
+          <div class="space-y-1">
+            <div class="flex items-center justify-between px-0.5 text-[10.5px]">
+              <span id="fvCurveReadout" class="text-neutral-300 tabular-nums font-medium">Normal · 1.0x</span>
+              <button type="button" onclick="resetFvCurve()" class="text-neutral-500 hover:text-white transition cursor-pointer">Reset</button>
+            </div>
+            <div id="fvCurveBox" class="curve-editor-box !h-[138px]">
+              <svg id="fvCurveSvg" class="w-full h-full block" viewBox="0 0 230 138" preserveAspectRatio="none"></svg>
+            </div>
+            <p class="text-[10px] text-neutral-500 px-0.5 leading-snug">Drag points up/down for speed and left/right for timing.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- FULL VIDEO TAB 3: ADJUST (Color Look + Full Grading Controls) -->
+      <div id="panelFvAdjust" class="hidden flex-1 min-h-0 flex flex-col gap-2 overflow-y-auto panel-scroll pr-1 pb-1">
+        <!-- Color Look Presets -->
+        <div class="space-y-1 shrink-0">
+          <div class="flex items-center justify-between px-1">
+            <span class="text-xs font-medium text-neutral-300">Look</span>
+            <button type="button" onclick="resetFvColor()" class="text-[11px] text-neutral-500 hover:text-white transition cursor-pointer">Reset</button>
+          </div>
+          <div class="bg-[#101010] border border-white/[0.06] rounded-[14px] p-1.5 grid grid-cols-3 gap-1">
+            <button type="button" class="flat-chip !h-6 fv-color-chip is-active" data-color="natural" onclick="setFvColorPreset('natural')">Natural</button>
+            <button type="button" class="flat-chip !h-6 fv-color-chip" data-color="warm" onclick="setFvColorPreset('warm')">Warm</button>
+            <button type="button" class="flat-chip !h-6 fv-color-chip" data-color="crisp" onclick="setFvColorPreset('crisp')">Crisp</button>
+            <button type="button" class="flat-chip !h-6 fv-color-chip" data-color="cinematic" onclick="setFvColorPreset('cinematic')">Cinema</button>
+            <button type="button" class="flat-chip !h-6 fv-color-chip" data-color="vivid" onclick="setFvColorPreset('vivid')">Vivid</button>
+            <button type="button" class="flat-chip !h-6 fv-color-chip" data-color="bw" onclick="setFvColorPreset('bw')">B&amp;W</button>
+          </div>
+        </div>
+
+        <!-- Light & Color Sliders -->
+        <div class="space-y-1.5 pt-1.5 border-t border-white/[0.06] px-1 shrink-0">
+          <div class="space-y-1">
+            <div class="flex items-center justify-between text-[10.5px]">
+              <span class="text-neutral-400">Brightness</span>
+              <span id="fvBrightLabel" class="text-neutral-300 tabular-nums">0</span>
+            </div>
+            <div class="fv-bar-track" style="--pct:50%">
+              <div class="fv-bar-fill"></div>
+              <div class="fv-bar-ticks"></div>
+              <div class="fv-bar-thumb"></div>
+              <input id="fvBrightSlider" type="range" min="-50" max="50" value="0" class="fv-bar-input" oninput="setFvColorSlider('brightness', this.value)" ondblclick="setFvColorSlider('brightness', 0)" />
+            </div>
+          </div>
+          <div class="space-y-1">
+            <div class="flex items-center justify-between text-[10.5px]">
+              <span class="text-neutral-400">Exposure</span>
+              <span id="fvExposureLabel" class="text-neutral-300 tabular-nums">0</span>
+            </div>
+            <div class="fv-bar-track" style="--pct:50%">
+              <div class="fv-bar-fill"></div>
+              <div class="fv-bar-ticks"></div>
+              <div class="fv-bar-thumb"></div>
+              <input id="fvExposureSlider" type="range" min="-50" max="50" value="0" class="fv-bar-input" oninput="setFvColorSlider('exposure', this.value)" ondblclick="setFvColorSlider('exposure', 0)" />
+            </div>
+          </div>
+          <div class="space-y-1">
+            <div class="flex items-center justify-between text-[10.5px]">
+              <span class="text-neutral-400">Contrast</span>
+              <span id="fvContrastLabel" class="text-neutral-300 tabular-nums">0</span>
+            </div>
+            <div class="fv-bar-track" style="--pct:50%">
+              <div class="fv-bar-fill"></div>
+              <div class="fv-bar-ticks"></div>
+              <div class="fv-bar-thumb"></div>
+              <input id="fvContrastSlider" type="range" min="-50" max="50" value="0" class="fv-bar-input" oninput="setFvColorSlider('contrast', this.value)" ondblclick="setFvColorSlider('contrast', 0)" />
+            </div>
+          </div>
+          <div class="space-y-1">
+            <div class="flex items-center justify-between text-[10.5px]">
+              <span class="text-neutral-400">Saturation</span>
+              <span id="fvSatLabel" class="text-neutral-300 tabular-nums">0</span>
+            </div>
+            <div class="fv-bar-track" style="--pct:50%">
+              <div class="fv-bar-fill"></div>
+              <div class="fv-bar-ticks"></div>
+              <div class="fv-bar-thumb"></div>
+              <input id="fvSatSlider" type="range" min="-50" max="50" value="0" class="fv-bar-input" oninput="setFvColorSlider('saturation', this.value)" ondblclick="setFvColorSlider('saturation', 0)" />
+            </div>
+          </div>
+          <div class="space-y-1">
+            <div class="flex items-center justify-between text-[10.5px]">
+              <span class="text-neutral-400">Warmth</span>
+              <span id="fvWarmthLabel" class="text-neutral-300 tabular-nums">0</span>
+            </div>
+            <div class="fv-bar-track" style="--pct:50%">
+              <div class="fv-bar-fill"></div>
+              <div class="fv-bar-ticks"></div>
+              <div class="fv-bar-thumb"></div>
+              <input id="fvWarmthSlider" type="range" min="-50" max="50" value="0" class="fv-bar-input" oninput="setFvColorSlider('warmth', this.value)" ondblclick="setFvColorSlider('warmth', 0)" />
+            </div>
+          </div>
+          <div class="space-y-1">
+            <div class="flex items-center justify-between text-[10.5px]">
+              <span class="text-neutral-400">Sharpness</span>
+              <span id="fvSharpLabel" class="text-neutral-300 tabular-nums">0</span>
+            </div>
+            <div class="fv-bar-track" style="--pct:0%">
+              <div class="fv-bar-fill"></div>
+              <div class="fv-bar-ticks"></div>
+              <div class="fv-bar-thumb"></div>
+              <input id="fvSharpSlider" type="range" min="0" max="50" value="0" class="fv-bar-input" oninput="setFvColorSlider('sharpness', this.value)" ondblclick="setFvColorSlider('sharpness', 0)" />
+            </div>
+          </div>
+          <div class="space-y-1">
+            <div class="flex items-center justify-between text-[10.5px]">
+              <span class="text-neutral-400">Vignette</span>
+              <span id="fvVignetteLabel" class="text-neutral-300 tabular-nums">0</span>
+            </div>
+            <div class="fv-bar-track" style="--pct:0%">
+              <div class="fv-bar-fill"></div>
+              <div class="fv-bar-ticks"></div>
+              <div class="fv-bar-thumb"></div>
+              <input id="fvVignetteSlider" type="range" min="0" max="50" value="0" class="fv-bar-input" oninput="setFvColorSlider('vignette', this.value)" ondblclick="setFvColorSlider('vignette', 0)" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FULL VIDEO CONTEXTUAL AUDIO INSPECTOR (Diamond Keyframes, Fade In/Out, Clean Icon Actions) -->
+      <div id="panelFvAudio" class="hidden flex-1 min-h-0 flex flex-col gap-2 overflow-y-auto panel-scroll pr-1 pb-1">
+        <!-- Selected Audio Clip Context Pill -->
+        <div class="fv-seg-pill shrink-0">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <i data-lucide="music" class="w-3 h-3 text-neutral-400 shrink-0"></i>
+            <span id="fvAudioName" class="text-neutral-200 font-medium truncate">Audio</span>
+          </div>
+          <span id="fvAudioTimeRange" class="text-[10.5px] text-neutral-400 tabular-nums shrink-0">00:00 – 00:00</span>
+        </div>
+
+        <!-- Volume & Diamond Keyframe Controls -->
+        <div class="space-y-1 shrink-0">
+          <div class="flex items-center justify-between gap-1.5 px-0.5">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="text-xs font-medium text-neutral-300">Volume</span>
+              <span id="fvAudioVolLabel" class="text-[11px] text-neutral-300 tabular-nums">35%</span>
+            </div>
+            <div class="flex items-center gap-0.5 shrink-0">
+              <button type="button" id="btnAudioKfPrev" onclick="jumpAudioKeyframe(-1)" class="kf-nav-btn" data-tooltip="Previous keyframe" aria-label="Previous keyframe" disabled>
+                <i data-lucide="chevron-left" class="w-3 h-3"></i>
+              </button>
+              <button type="button" id="btnAudioKfToggle" onclick="toggleAudioKeyframeAtPlayhead()" class="kf-diamond-btn" data-tooltip="Add keyframe" aria-label="Add keyframe">
+                <svg class="w-4 h-4" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                  <path class="kf-diamond-shape" d="M9 2.2L15.8 9L9 15.8L2.2 9Z" stroke="currentColor" stroke-width="1.45" stroke-linejoin="round" />
+                  <path class="kf-plus-h" d="M6.4 9H11.6" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" />
+                  <path class="kf-plus-v" d="M9 6.4V11.6" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" />
+                </svg>
+              </button>
+              <button type="button" id="btnAudioKfNext" onclick="jumpAudioKeyframe(1)" class="kf-nav-btn" data-tooltip="Next keyframe" aria-label="Next keyframe" disabled>
+                <i data-lucide="chevron-right" class="w-3 h-3"></i>
+              </button>
+            </div>
+          </div>
+          <div class="px-0.5">
+            <input id="fvAudioVolSlider" type="range" min="0" max="100" value="35" class="luna-range w-full" oninput="setFvAudioVolume(this.value)" />
+          </div>
+
+          <div class="space-y-1 pt-0.5">
+            <div class="flex items-center justify-between px-0.5 text-[10.5px]">
+              <span id="fvAudioEnvReadout" class="text-neutral-300 tabular-nums font-medium">Flat · 35%</span>
+              <span id="fvAudioKfCount" class="text-neutral-500 tabular-nums">0 pts</span>
+            </div>
+            <div id="fvAudioEnvBox" class="audio-env-box !h-[82px]">
+              <svg id="fvAudioEnvSvg" class="w-full h-full block" viewBox="0 0 230 82" preserveAspectRatio="none"></svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- Fade In / Fade Out -->
+        <div class="space-y-1 pt-1.5 border-t border-white/[0.06] shrink-0">
+          <div class="flex items-center justify-between px-0.5">
+            <span class="text-xs font-medium text-neutral-300">Fade</span>
+            <button type="button" onclick="resetFvAudioFades()" class="text-[11px] text-neutral-500 hover:text-white transition cursor-pointer">Reset</button>
+          </div>
+          <div class="grid grid-cols-2 gap-2.5 px-0.5">
+            <div class="space-y-0.5">
+              <div class="flex items-center justify-between text-[10.5px]">
+                <span class="text-neutral-400">Fade In</span>
+                <span id="fvAudioFadeInLabel" class="text-neutral-200 tabular-nums">0.0s</span>
+              </div>
+              <input id="fvAudioFadeInSlider" type="range" min="0" max="10" step="0.1" value="0" class="luna-range w-full" oninput="setFvAudioFade('in', this.value)" />
+            </div>
+            <div class="space-y-0.5">
+              <div class="flex items-center justify-between text-[10.5px]">
+                <span class="text-neutral-400">Fade Out</span>
+                <span id="fvAudioFadeOutLabel" class="text-neutral-200 tabular-nums">0.0s</span>
+              </div>
+              <input id="fvAudioFadeOutSlider" type="range" min="0" max="10" step="0.1" value="0" class="luna-range w-full" oninput="setFvAudioFade('out', this.value)" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Clean Single-Row Audio Actions Bar -->
+        <div id="fvAudioActionRow" class="pt-1.5 border-t border-white/[0.06] shrink-0 flex items-center justify-between gap-1">
+          <div class="flex items-center gap-1">
+            <button type="button" onclick="duplicateSelectedAudioClip()" class="fv-audio-icon-btn" data-tooltip="Duplicate audio" aria-label="Duplicate audio">
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            </button>
+            <button type="button" onclick="splitAtPlayhead()" class="fv-audio-icon-btn" data-tooltip="Split audio" aria-label="Split audio">
+              <i data-lucide="scissors" class="w-3.5 h-3.5"></i>
+            </button>
+            <button type="button" id="btnFvAudioTrimSource" onclick="openFvAudioTrimModal()" class="hidden fv-audio-icon-btn" data-tooltip="Select song section" aria-label="Select song section">
+              <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i>
+            </button>
+            <button type="button" id="btnAudioKfClear" onclick="clearAudioKeyframes()" class="hidden fv-audio-icon-btn" data-tooltip="Clear keyframes" aria-label="Clear keyframes">
+              <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+          <button type="button" onclick="deleteSelectedAudioClip()" class="fv-audio-icon-btn is-danger" data-tooltip="Delete audio" aria-label="Delete audio">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      </div>
     </aside>
   </div>
 
   <!-- BOTTOM ROUNDED TIMELINE CARD -->
-  <section id="timelinePanel" class="h-[164px] shrink-0 panel-card px-5 py-2.5 flex flex-col justify-between relative">
+  <section id="timelinePanel" class="h-[174px] shrink-0 panel-card px-5 py-2.5 flex flex-col justify-between relative">
     <div class="grid grid-cols-3 items-center">
-      <div class="flex items-center justify-self-start">
+      <div class="flex items-center gap-1.5 justify-self-start">
+        <div id="fvTimelineTools" class="{{FV_HIDDEN}} flex items-center gap-0.5">
+          <button type="button" id="btnFvUndo" onclick="fvUndo()" class="ed-icon !w-7 !h-7" data-tooltip="Undo" aria-label="Undo" disabled>
+            <i data-lucide="undo" class="w-3.5 h-3.5"></i>
+          </button>
+          <button type="button" id="btnFvRedo" onclick="fvRedo()" class="ed-icon !w-7 !h-7" data-tooltip="Redo" aria-label="Redo" disabled>
+            <i data-lucide="redo" class="w-3.5 h-3.5"></i>
+          </button>
+          <div class="h-3.5 w-px bg-white/[0.10] mx-1"></div>
+          <button type="button" id="btnFvSplit" onclick="splitAtPlayhead()" class="ed-icon !w-7 !h-7" data-tooltip="Split" aria-label="Split clip at playhead">
+            <i data-lucide="scissors" class="w-3.5 h-3.5"></i>
+          </button>
+          <button type="button" id="btnFvTrimLeft" onclick="trimClipToPlayhead('left')" class="ed-icon !w-7 !h-7" data-tooltip="Trim left" aria-label="Trim left of playhead">
+            <i data-lucide="arrow-left-to-line" class="w-3.5 h-3.5"></i>
+          </button>
+          <button type="button" id="btnFvTrimRight" onclick="trimClipToPlayhead('right')" class="ed-icon !w-7 !h-7" data-tooltip="Trim right" aria-label="Trim right of playhead">
+            <i data-lucide="arrow-right-to-line" class="w-3.5 h-3.5"></i>
+          </button>
+          <button type="button" id="btnFvDelete" onclick="deleteSelectedSegment()" class="ed-icon !w-7 !h-7 hover:!text-red-400" data-tooltip="Ripple delete" aria-label="Ripple delete selected block" disabled>
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          </button>
+          <button type="button" id="btnFvSpeedShortcut" onclick="openFvSpeedPanel()" class="ed-icon !w-7 !h-7" data-tooltip="Speed & curve" aria-label="Speed and curve">
+            <i data-lucide="gauge" class="w-3.5 h-3.5"></i>
+          </button>
+          <button type="button" id="btnFvCutSilence" onclick="autoCutFvSilence()" class="ed-icon !w-7 !h-7" data-tooltip="Auto cut silence" aria-label="Auto cut silence">
+            <i data-lucide="audio-waveform" class="w-3.5 h-3.5"></i>
+          </button>
+          <div class="h-3.5 w-px bg-white/[0.10] mx-1"></div>
+        </div>
         <span id="trimRangeBadge" class="text-xs text-neutral-400 tabular-nums">00:00 – 00:00</span>
       </div>
 
       <div class="flex items-center gap-3 justify-self-center">
-        <button type="button" onclick="seekTo(activeClip().start)" class="ed-icon" title="Jump to start">
+        <button type="button" onclick="seekToStart()" class="ed-icon" aria-label="Start or previous video">
           <i data-lucide="skip-back" class="w-4 h-4"></i>
         </button>
-        <button type="button" onclick="stepTime(-5)" class="ed-icon" title="Back 5s">
+        <button type="button" onclick="stepTime(-5)" class="ed-icon" aria-label="Back 5 seconds">
           <i data-lucide="undo-2" class="w-4 h-4"></i>
         </button>
-        <button type="button" onclick="togglePlay()" class="play-circle-btn" title="Play / Pause (Space)">
+        <button type="button" id="btnMainPlay" onclick="togglePlay()" class="play-circle-btn !w-9 !h-9" aria-label="Play or pause">
           <i id="playIcon" data-lucide="play" class="w-4 h-4"></i>
         </button>
-        <button type="button" onclick="stepTime(5)" class="ed-icon" title="Forward 5s">
+        <button type="button" onclick="stepTime(5)" class="ed-icon" aria-label="Forward 5 seconds">
           <i data-lucide="redo-2" class="w-4 h-4"></i>
         </button>
-        <button type="button" onclick="seekTo(activeClip().end)" class="ed-icon" title="Jump to end">
+        <button type="button" onclick="seekToEnd()" class="ed-icon" aria-label="Next video">
           <i data-lucide="skip-forward" class="w-4 h-4"></i>
         </button>
       </div>
 
       <div class="flex items-center gap-1 justify-self-end">
-        <button type="button" onclick="toggleMute()" class="ed-icon" title="Mute / Unmute">
+        <div id="fvTimelineZoomWrap" class="{{FV_HIDDEN}} flex items-center gap-1">
+          <button type="button" onclick="stepTimelineZoom(-1)" class="ed-icon !w-6 !h-6" aria-label="Zoom out timeline">
+            <i data-lucide="zoom-out" class="w-3.5 h-3.5"></i>
+          </button>
+          <input id="tlZoomSlider" type="range" min="1" max="20" step="0.25" value="1" class="luna-range w-16" oninput="setTimelineZoom(this.value)" ondblclick="setTimelineZoom(1)" aria-label="Timeline zoom" />
+          <button type="button" onclick="stepTimelineZoom(1)" class="ed-icon !w-6 !h-6" aria-label="Zoom in timeline">
+            <i data-lucide="zoom-in" class="w-3.5 h-3.5"></i>
+          </button>
+          <button type="button" id="btnTlZoomFit" onclick="setTimelineZoom(1)" class="inline-flex items-center justify-center w-9 shrink-0 text-center text-[10.5px] text-neutral-400 hover:text-white transition cursor-pointer tabular-nums py-0.5 rounded-md hover:bg-white/[0.06]" aria-label="Reset timeline zoom">1x</button>
+          <button type="button" id="btnFvFitTimeline" onclick="toggleFvFitTimeline()" class="ed-icon !w-7 !h-7" data-tooltip="Fit to content" aria-label="Fit timeline to content">
+            <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
+          </button>
+          <div class="h-3.5 w-px bg-white/[0.10] mx-1"></div>
+          <button type="button" id="btnFvSnapToggle" onclick="toggleFvSnapping()" class="ed-icon !w-7 !h-7 is-active" data-tooltip="Snapping: ON" aria-label="Toggle magnetic snapping">
+            <i data-lucide="magnet" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+        <button type="button" id="btnBottomMute" onclick="toggleMute()" class="ed-icon !w-7 !h-7" data-tooltip="Mute preview" aria-label="Mute or unmute preview speaker">
           <i id="bottomMuteIcon" data-lucide="volume-2" class="w-4 h-4"></i>
         </button>
       </div>
     </div>
 
-    <div class="relative flex-1 flex flex-col justify-center gap-1.5 pt-1">
-      <div class="flex items-center gap-3">
-        <div class="w-5 shrink-0"></div>
-        <div id="timelineRuler" class="relative flex-1 h-4 flex items-center justify-between text-[11px] text-neutral-400 cursor-ew-resize"></div>
-        <div class="w-11 shrink-0"></div>
-      </div>
-
-      <div class="relative flex flex-col gap-1.5">
-        <div class="flex items-center gap-3 h-11">
-          <div class="w-5 shrink-0 flex items-center justify-center text-neutral-500">
-            <i data-lucide="video" class="w-4 h-4"></i>
-          </div>
-          <div id="videoTrackArea" class="relative flex-1 h-full rounded-xl bg-[#0e0e0e] border border-white/[0.04] cursor-ew-resize"></div>
-          <div class="w-11 shrink-0 flex justify-end">
-            <button type="button" onclick="resetTrim()" class="text-[11px] font-medium text-neutral-400 hover:text-white transition cursor-pointer whitespace-nowrap px-1" title="Reset trim">
-              Reset
-            </button>
-          </div>
+    <div class="relative flex-1 min-h-0 flex items-stretch gap-3 pt-3">
+      <!-- Left fixed icon rail -->
+      <div class="w-5 shrink-0 flex flex-col gap-1.5">
+        <div class="h-5 shrink-0"></div>
+        <div class="h-11 shrink-0 flex items-center justify-center text-neutral-500">
+          <i data-lucide="video" class="w-4 h-4"></i>
         </div>
-
-        <div id="musicTrackRow" class="hidden relative flex items-center gap-3 h-9">
-          <div class="w-5 shrink-0 flex items-center justify-center text-neutral-500">
+        <div id="musicIconRail" class="hidden flex-1 min-h-0 flex flex-col gap-1.5">
+          <div class="h-8 shrink-0 flex items-center justify-center text-neutral-500">
             <i data-lucide="music" class="w-4 h-4"></i>
           </div>
-          <div id="audioTrackArea" class="relative flex-1 h-full rounded-xl bg-[#0e0e0e] border border-white/[0.04] cursor-pointer"></div>
-          <div class="w-11 shrink-0 flex justify-end">
-            <button type="button" onclick="openMusicModal()" class="ed-icon !w-7 !h-7" title="Change music section">
-              <i data-lucide="ellipsis" class="w-4 h-4"></i>
-            </button>
+        </div>
+      </div>
+
+      <!-- Center horizontally-zoomable timeline viewport -->
+      <div id="timelineScrollViewport" class="tl-scroll-viewport relative flex-1 min-w-0">
+        <div id="timelineZoomTrack" class="relative min-w-full flex flex-col gap-1.5 pb-1" style="width: 100%;">
+          <div id="timelineRuler" class="relative h-5 border-b border-white/[0.08] text-[9.5px] text-neutral-400 cursor-ew-resize select-none overflow-hidden"></div>
+
+          <div id="videoTrackArea" class="relative h-11 rounded-xl bg-[#0e0e0e] border border-white/[0.04] cursor-ew-resize"></div>
+
+          <div id="musicTrackRow" class="hidden relative fv-audio-lanes-scroll">
+            <div id="audioTrackArea" class="relative min-h-[34px] rounded-xl bg-[#0e0e0e] border border-white/[0.04] cursor-pointer"></div>
           </div>
 
-          <div id="musicInlinePopover" class="hidden absolute bottom-11 left-1/2 -translate-x-1/2 z-50 panel-card px-3.5 py-2.5 shadow-2xl flex items-center gap-3 border border-white/[0.12]"
-            onclick="event.stopPropagation()">
-            <div class="flex items-center gap-2">
-              <i data-lucide="volume-2" class="w-3.5 h-3.5 text-neutral-400"></i>
-              <input id="inlineMusicVolSlider" type="range" min="0" max="100" value="35" class="luna-range w-24" oninput="setMusicVolume(this.value)" />
-              <span id="inlineMusicVolText" class="text-[11px] text-neutral-200 w-7 tabular-nums">35%</span>
+          <!-- Playhead & magnetic snap guide anchored cleanly inside the zoomable track -->
+          <div class="pointer-events-none absolute top-0 bottom-0 left-0 right-0 z-30">
+            <div id="tlSnapGuideLine" class="tl-snap-guide"></div>
+            <div id="playhead" class="playhead-line" style="transform: translate3d(0px, 0, 0);">
+              <div id="playheadDot" class="playhead-dot"></div>
             </div>
-            <div class="h-4 w-px bg-white/[0.10]"></div>
-            <button type="button" onclick="closeMusicPopover(); openMusicModal();" class="ed-icon !w-6 !h-6" title="Trim song">
-              <i data-lucide="scissors" class="w-3.5 h-3.5"></i>
-            </button>
-            <button type="button" onclick="removeCustomMusic()" class="ed-icon !w-6 !h-6 hover:!text-red-400" title="Remove Music">
-              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-            </button>
           </div>
         </div>
+      </div>
 
-        <div class="pointer-events-none absolute -top-5 bottom-0" style="left: 32px; right: 56px;">
-          <div id="playhead" class="playhead-line" style="left: 0%;">
-            <div id="playheadDot" class="playhead-dot"></div>
-          </div>
+      <!-- Right fixed action rail -->
+      <div class="w-11 shrink-0 flex flex-col gap-1.5">
+        <div class="h-5 shrink-0"></div>
+        <div class="h-11 shrink-0 flex items-center justify-end">
+          <button type="button" onclick="resetTrim()" class="text-[11px] font-medium text-neutral-400 hover:text-white transition cursor-pointer whitespace-nowrap px-1">
+            Reset
+          </button>
         </div>
+        <div id="musicActionRail" class="hidden h-8 shrink-0 flex items-center justify-end">
+          <button type="button" id="btnMusicRowAction" onclick="onMusicRowAction()" class="ed-icon !w-7 !h-7" data-tooltip="Music options" aria-label="Music options">
+            <i data-lucide="ellipsis" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- AI Clipper Inline Music Popover -->
+      <div id="musicInlinePopover" class="hidden absolute bottom-12 left-1/2 -translate-x-1/2 z-50 panel-card px-3.5 py-2.5 shadow-2xl flex items-center gap-3 border border-white/[0.12]"
+        onclick="event.stopPropagation()">
+        <div class="flex items-center gap-2">
+          <i data-lucide="volume-2" class="w-3.5 h-3.5 text-neutral-400"></i>
+          <input id="inlineMusicVolSlider" type="range" min="0" max="100" value="35" class="luna-range w-24" oninput="setMusicVolume(this.value)" />
+          <span id="inlineMusicVolText" class="text-[11px] text-neutral-200 w-7 tabular-nums">35%</span>
+        </div>
+        <div class="h-4 w-px bg-white/[0.10]"></div>
+        <button type="button" id="btnTrimMusicInline" onclick="closeMusicPopover(); openMusicModal();" class="ed-icon !w-6 !h-6" data-tooltip="Select music section" aria-label="Select music section">
+          <i data-lucide="scissors" class="w-3.5 h-3.5"></i>
+        </button>
+        <button type="button" onclick="removeCustomMusic()" class="ed-icon !w-6 !h-6 hover:!text-red-400" data-tooltip="Remove music" aria-label="Remove music">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+        </button>
       </div>
     </div>
   </section>
@@ -878,7 +2030,7 @@
           <h3 class="text-[13px] font-semibold text-white truncate" id="modalMusicName">Select Music Section</h3>
           <p class="text-[11px] text-neutral-300 mt-0.5 tabular-nums font-medium" id="modalMusicMeta">00:00 – 00:30</p>
         </div>
-        <button type="button" onclick="toggleModalMusicPreview()" class="play-circle-btn !w-7 !h-7 shrink-0" title="Preview selected part">
+        <button type="button" onclick="toggleModalMusicPreview()" class="play-circle-btn !w-7 !h-7 shrink-0" aria-label="Preview selected part">
           <i id="modalPlayIcon" data-lucide="play" class="w-3.5 h-3.5"></i>
         </button>
       </div>
@@ -913,14 +2065,14 @@
 
       <div class="flex items-center justify-between pt-2 border-t border-white/[0.06]">
         <div class="flex items-center gap-2.5">
-          <button type="button" id="btnZoomOut" onclick="stepModalZoom(-1)" class="text-neutral-500 hover:text-white transition cursor-pointer p-0.5" title="Zoom out">
+          <button type="button" id="btnZoomOut" onclick="stepModalZoom(-1)" class="text-neutral-500 hover:text-white transition cursor-pointer p-0.5" aria-label="Zoom out">
             <i data-lucide="zoom-out" class="w-3.5 h-3.5"></i>
           </button>
-          <button type="button" id="btnZoomIn" onclick="stepModalZoom(1)" class="text-neutral-500 hover:text-white transition cursor-pointer p-0.5" title="Zoom in">
+          <button type="button" id="btnZoomIn" onclick="stepModalZoom(1)" class="text-neutral-500 hover:text-white transition cursor-pointer p-0.5" aria-label="Zoom in">
             <i data-lucide="zoom-in" class="w-3.5 h-3.5"></i>
           </button>
-          <button type="button" id="btnRemoveMusic" onclick="removeCustomMusic()" class="text-[11.5px] text-neutral-500 hover:text-red-400 transition cursor-pointer ml-1">
-            Remove Music
+          <button type="button" id="btnRemoveMusic" onclick="removeCustomMusic()" class="text-neutral-500 hover:text-red-400 transition cursor-pointer p-0.5" aria-label="Remove music">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
           </button>
         </div>
         <div class="flex items-center gap-2 ml-auto">
@@ -935,13 +2087,57 @@
     </div>
   </div>
 
+  <!-- RE-ENCODE CONFIRMATION MODAL -->
+  <div id="reencodeConfirmModal" class="hidden fixed inset-0 z-[105] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4" onclick="if (event.target === this) resolveReencodeConfirm(false)">
+    <div class="panel-card w-full max-w-[360px] p-4 space-y-3.5 shadow-2xl">
+      <div class="space-y-1">
+        <h3 id="reencodeModalTitle" class="text-[13.5px] font-semibold text-white leading-snug">Full render required</h3>
+        <p id="reencodeModalDesc" class="text-xs text-neutral-400 leading-relaxed">
+          Visual edits require re-encoding every frame, so this will take longer than instant copy. Original quality is preserved.
+        </p>
+      </div>
+
+      <div class="border-t border-white/[0.06] pt-3 space-y-2">
+        <div class="text-[11px] font-medium text-neutral-400">Active edits</div>
+        <ul id="reencodeModalReasons" class="space-y-1.5 text-xs text-neutral-200"></ul>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2.5 border-t border-white/[0.06]">
+        <button type="button" id="btnReencodeCancel" onclick="resolveReencodeConfirm(false)" class="px-3 h-7 rounded-full text-xs text-neutral-400 hover:text-white hover:bg-white/[0.06] transition cursor-pointer">
+          Cancel
+        </button>
+        <button type="button" id="btnReencodeContinue" onclick="resolveReencodeConfirm(true)" class="export-pill-btn !h-7 !px-3.5 !text-xs">
+          Continue
+        </button>
+      </div>
+    </div>
+  </div>
+
   <video id="thumbVideoEl" class="hidden" muted playsinline preload="auto"></video>
   <audio id="customAudioEl" class="hidden"></audio>
 
-  <div id="editorToast" class="editor-toast flex items-center gap-2 text-xs text-neutral-100">
-    <i data-lucide="check-circle-2" class="w-4 h-4 text-white shrink-0"></i>
-    <span id="editorToastText">Saved</span>
+  <div id="editorToast" class="editor-toast flex items-center justify-between gap-2.5 text-xs text-neutral-100">
+    <div class="flex items-center gap-2 min-w-0">
+      <span id="editorToastIconWrap" class="inline-flex items-center justify-center shrink-0">
+        <i id="editorToastIcon" data-lucide="check-circle-2" class="w-4 h-4 text-white"></i>
+      </span>
+      <div class="min-w-0">
+        <div id="editorToastText" class="truncate leading-tight">Saved</div>
+        <div id="editorToastSub" class="hidden text-[10px] text-neutral-400 truncate leading-tight mt-0.5">Preparing...</div>
+      </div>
+    </div>
+    <div class="flex items-center gap-1.5 shrink-0">
+      <span id="editorToastPct" class="hidden text-[11px] font-medium text-neutral-300 tabular-nums">0%</span>
+      <button type="button" id="btnEditorToastCancel" onclick="cancelStudioRenderJob()" class="hidden editor-toast-cancel" aria-label="Cancel">
+        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+      </button>
+    </div>
+    <div id="editorToastProgressTrack" class="hidden editor-toast-progress-track">
+      <div id="editorToastProgressBar" class="editor-toast-progress-bar is-indeterminate"></div>
+    </div>
   </div>
+
+  <div id="lunaStudioTooltip" class="luna-tooltip" role="tooltip" aria-hidden="true"></div>
 
   <script src="/assets/ui/studio.js?v={{ASSET_VERSION}}"></script>
 </body>

@@ -366,7 +366,7 @@
 
                 <!-- Video FPS Popover Menu -->
                 <div id="videoFpsMenu" data-open="false"
-                  class="popover-menu absolute left-0 top-full mt-1.5 w-[85px] z-50">
+                  class="popover-menu absolute left-0 top-full mt-1.5 w-[96px] z-50">
                   <span class="gliding-menu-indicator pointer-events-none absolute left-[3px] right-[3px] rounded-[6px] bg-white/[0.08] z-[1]" style="opacity: 0; transition: top 220ms cubic-bezier(0.23,1,0.32,1), height 220ms cubic-bezier(0.23,1,0.32,1), opacity 150ms ease;"></span>
                   <div onclick="selectVideoFpsFromMenu('auto', 'Auto FPS')" class="quality-menu-item active"
                     data-vfps="auto">
@@ -703,84 +703,87 @@
         <!-- Standard workspace view (Non-AI Clipper): Inline compact -->
         <div id="vaultStandardDetailView" class="space-y-6">
           
-          <!-- Frameless Studio Header (Candidate C-1 Refined) -->
-          <div class="flex items-start sm:items-center justify-between gap-4 flex-wrap sm:flex-nowrap pb-4 border-b border-white/[0.06]">
-            
-            <!-- Left: Breadcrumb Nav + Title + Inline Edit + Info Meta -->
-            <div class="space-y-1.5 min-w-0">
-              <!-- Breadcrumb -->
-              <div class="flex items-center gap-2 text-xs font-sans text-zinc-400">
+          <!-- Frameless Studio Header -->
+          <div class="space-y-2.5 pb-4 border-b border-white/[0.06]">
+            <!-- Top Row: Breadcrumb + Actions -->
+            <div class="flex items-center justify-between gap-4">
+              <div class="flex items-center gap-2 text-xs font-sans text-zinc-400 min-w-0">
                 <button type="button" onclick="closeProjectPage()"
-                  class="luna-back-link">
+                  class="luna-back-link shrink-0">
                   <svg class="luna-back-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M10 4L6 8L10 12"></path>
                   </svg>
                   <span>Back</span>
                 </button>
-                <span class="text-zinc-600 font-mono">/</span>
+                <span class="text-zinc-600 font-mono shrink-0">/</span>
                 <span id="detailViewBreadcrumb" class="text-zinc-500 font-mono text-[11px] truncate">proj_...</span>
               </div>
 
-              <!-- Workspace Title -->
-              <div class="flex items-center gap-3 flex-wrap">
-                <h2 class="text-xl sm:text-2xl font-bold font-sans text-white tracking-tight" id="projectDetailPageTitle">
-                  Workspace
-                </h2>
+              <div class="flex items-center gap-2 shrink-0">
+                <a id="btnOpenFullVideoStudio" href="#"
+                  class="hidden h-7 px-3.5 rounded-full bg-white text-[#0a0a0a] hover:bg-neutral-200 text-xs font-semibold inline-flex items-center justify-center shadow-md transition whitespace-nowrap">
+                  <span>Open Studio</span>
+                </a>
+                <button type="button" id="btnProjectDetailMenu"
+                  class="t-card-btn-more"
+                  aria-label="Workspace actions" aria-haspopup="menu" aria-expanded="false">
+                  <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                    <circle cx="8" cy="3.5" r="1.2"></circle>
+                    <circle cx="8" cy="8" r="1.2"></circle>
+                    <circle cx="8" cy="12.5" r="1.2"></circle>
+                  </svg>
+                </button>
               </div>
+            </div>
 
-              <!-- File and size information (source label removed as requested) -->
+            <!-- Workspace Title + Info Meta -->
+            <div class="space-y-1.5 min-w-0">
+              <h2 class="text-lg sm:text-xl font-bold font-sans text-white tracking-tight leading-snug" id="projectDetailPageTitle">
+                Workspace
+              </h2>
+
               <div class="flex items-center gap-2 text-xs font-sans text-zinc-400 flex-wrap">
-                <span id="projectDetailFileCount" class="font-mono text-zinc-200 font-medium">0 Media Files</span>
+                <span id="projectDetailFileCount" class="text-zinc-200 font-medium tabular-nums">0 Media Files</span>
                 <span class="text-zinc-600">•</span>
-                <span id="projectDetailTotalSize" class="font-mono text-zinc-200 font-medium">0 MB Total</span>
+                <span id="projectDetailTotalSize" class="text-zinc-200 font-medium tabular-nums">0 MB Total</span>
                 <span class="text-zinc-600">•</span>
                 <span id="projectDetailCreatedDate" class="text-zinc-400">-</span>
                 <span id="projectDetailPageId" class="hidden"></span>
                 <p id="projectDetailSourceTitle" class="hidden"></p>
               </div>
             </div>
-
-            <!-- Right: Workspace Actions Menu -->
-            <div class="flex items-center gap-2 shrink-0 self-start sm:self-center">
-              <button type="button" id="btnProjectDetailMenu"
-                class="t-card-btn-more"
-                aria-label="Workspace actions" aria-haspopup="menu" aria-expanded="false">
-                <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                  <circle cx="8" cy="3.5" r="1.2"></circle>
-                  <circle cx="8" cy="8" r="1.2"></circle>
-                  <circle cx="8" cy="12.5" r="1.2"></circle>
-                </svg>
-              </button>
-            </div>
-
           </div>
 
-          <!-- Standard workspace media files section with variant 2 inline filter tabs -->
+          <!-- Standard workspace media files section with inline filter tabs -->
           <div id="standardProjectFilesContainer" class="space-y-4">
             
             <!-- Section Bar: Title + Inline Filter Tabs on the same row -->
             <div class="flex items-center justify-between gap-4 flex-wrap pb-1 pt-1">
-              <div class="flex items-center gap-3">
+              <div class="flex items-center gap-3 flex-wrap">
                 <h3 class="text-xs font-semibold font-sans text-zinc-300 tracking-wide">Media File List</h3>
                 
                 <div class="t-tabs" role="tablist" id="vaultMediaFilterGroup">
                   <span class="t-tabs-pill" id="vaultMediaFilterPill" aria-hidden="true"></span>
                   <button type="button" class="t-tab" role="tab" aria-selected="true" onclick="setVaultMediaFilter('all')" id="btn-vault-filter-all">
-                    All (<span id="filterCountAll">0</span>)
+                    <span>All</span>
+                    <span class="t-tab-count" id="filterCountAll">0</span>
                   </button>
                   <button type="button" class="t-tab" role="tab" aria-selected="false" onclick="setVaultMediaFilter('landscape')" id="btn-vault-filter-landscape">
-                    Landscape (<span id="filterCountLandscape">0</span>)
+                    <span>Landscape</span>
+                    <span class="t-tab-count" id="filterCountLandscape">0</span>
                   </button>
                   <button type="button" class="t-tab" role="tab" aria-selected="false" onclick="setVaultMediaFilter('portrait')" id="btn-vault-filter-portrait">
-                    Portrait (<span id="filterCountPortrait">0</span>)
+                    <span>Portrait</span>
+                    <span class="t-tab-count" id="filterCountPortrait">0</span>
                   </button>
                   <button type="button" class="t-tab" role="tab" aria-selected="false" onclick="setVaultMediaFilter('square')" id="btn-vault-filter-square">
-                    Square (<span id="filterCountSquare">0</span>)
+                    <span>Square</span>
+                    <span class="t-tab-count" id="filterCountSquare">0</span>
                   </button>
                 </div>
               </div>
 
-              <span id="vaultVisibleFileCount" class="text-[11px] font-mono text-zinc-500">0 Files Saved</span>
+              <span id="vaultVisibleFileCount" class="text-xs font-sans text-zinc-500 tabular-nums">0 files shown</span>
             </div>
 
             <!-- Media Files Grid inside Project -->
@@ -825,8 +828,7 @@
               </div>
               <div class="pointer-events-auto flex items-center gap-2 shrink-0">
                 <a id="btnOpenAiClipperStudio" href="#"
-                  class="hidden h-7 px-3 rounded-full bg-white text-[#0a0a0a] hover:bg-neutral-200 text-[11.5px] font-semibold inline-flex items-center gap-1.5 shadow-md transition">
-                  <i data-lucide="clapperboard" class="w-3.5 h-3.5"></i>
+                  class="hidden h-7 px-3.5 rounded-full bg-white text-[#0a0a0a] hover:bg-neutral-200 text-xs font-semibold inline-flex items-center justify-center shadow-md transition whitespace-nowrap">
                   <span>Open Studio</span>
                 </a>
               </div>
@@ -1255,7 +1257,6 @@
             <label class="font-medium text-zinc-200">Workspace Directory</label>
             <div class="flex items-center gap-3">
               <button type="button" onclick="browseStorageFolder()" id="btnBrowseFolder"
-                title="Choose a new directory and move saved Workspace media"
                 class="text-[11px] text-zinc-400 hover:text-white transition flex items-center gap-1.5 font-sans cursor-pointer group">
                 <i data-lucide="folder" class="w-3.5 h-3.5 text-zinc-500 group-hover:text-white transition-colors"></i>
                 <span>Move Folder</span>
@@ -1429,6 +1430,9 @@
               <button type="button" class="docs-nav-item" role="tab" aria-selected="false" data-guide-tab="modes" onclick="switchGuideTab('modes', this)">
                 <span>Features &amp; Modes</span>
               </button>
+              <button type="button" class="docs-nav-item" role="tab" aria-selected="false" data-guide-tab="studio" onclick="switchGuideTab('studio', this)">
+                <span>Luna Studio</span>
+              </button>
               <button type="button" class="docs-nav-item" role="tab" aria-selected="false" data-guide-tab="setup" onclick="switchGuideTab('setup', this)">
                 <span>Setup &amp; Requirements</span>
               </button>
@@ -1468,8 +1472,8 @@
     <section id="tab-wf-youtube" class="guide-tab-pane space-y-5">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div class="guide-submode-bar" role="tablist" aria-label="YouTube modes">
-          <button type="button" class="guide-submode-btn active" onclick="setWorkflowSubmode('youtube', 'ai_clip', this)">AI Short Clips</button>
-          <button type="button" class="guide-submode-btn" onclick="setWorkflowSubmode('youtube', 'video', this)">Full HD Video</button>
+          <button type="button" class="guide-submode-btn active" onclick="setWorkflowSubmode('youtube', 'video', this)">Full HD Video</button>
+          <button type="button" class="guide-submode-btn" onclick="setWorkflowSubmode('youtube', 'ai_clip', this)">AI Short Clips</button>
           <button type="button" class="guide-submode-btn" onclick="setWorkflowSubmode('youtube', 'mp3', this)">Audio MP3</button>
           <button type="button" class="guide-submode-btn" onclick="setWorkflowSubmode('youtube', 'trim', this)">Video Trimmer</button>
         </div>
@@ -1512,65 +1516,67 @@
         <table class="w-full text-left text-xs">
           <thead>
             <tr class="border-b border-white/[0.12] text-white font-semibold">
-              <th class="py-3 px-3">Operating Mode</th>
-              <th class="py-3 px-3">Platform</th>
-              <th class="py-3 px-3">Output Options</th>
-              <th class="py-3 px-3">API Key</th>
-              <th class="py-3 px-3">Use It For</th>
+              <th class="py-3 pl-0 pr-5 w-[175px] whitespace-nowrap">Operating Mode</th>
+              <th class="py-3 px-4 w-[205px] whitespace-nowrap">Output &amp; Key</th>
+              <th class="py-3 pl-4 pr-0">Use It For</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-white/[0.06] text-zinc-300">
             <tr class="hover:bg-white/[0.02]">
-              <td class="py-3.5 px-3">
+              <td class="py-4 pl-0 pr-5 align-top whitespace-nowrap">
+                <div class="font-semibold text-white">Full HD Video</div>
+                <span class="block mt-0.5 text-[11px] text-zinc-400">YouTube · Reels · TikTok</span>
+              </td>
+              <td class="py-4 px-4 align-top whitespace-nowrap">
+                <div class="font-mono text-zinc-200 text-[12.5px]">1080p–480p · Crop · FPS</div>
+                <span class="block mt-0.5 text-[11px] text-zinc-400">No API key</span>
+              </td>
+              <td class="py-4 pl-4 pr-0 align-top text-zinc-400">Download full YouTube videos (with optional crop &amp; Auto/60/30 FPS), Instagram Reels, or clean TikTok MP4s — ready to edit in Full Video Studio.</td>
+            </tr>
+
+            <tr class="hover:bg-white/[0.02]">
+              <td class="py-4 pl-0 pr-5 align-top whitespace-nowrap">
                 <div class="font-semibold text-white">AI Short Clips</div>
-                <span class="text-[11px] text-zinc-400">Auto Virality Ranking</span>
+                <span class="block mt-0.5 text-[11px] text-zinc-400">YouTube · Virality AI</span>
               </td>
-              <td class="py-3.5 px-3 text-zinc-300">YouTube</td>
-              <td class="py-3.5 px-3 font-mono text-zinc-200">9:16, 16:9, 1:1, 3:4</td>
-              <td class="py-3.5 px-3 text-zinc-300">Required (LLM + Speech fallback)</td>
-              <td class="py-3.5 px-3 text-zinc-400">Extract 3–7 ranked vertical or square clips with Center Crop or OpenCV Face Tracking.</td>
+              <td class="py-4 px-4 align-top whitespace-nowrap">
+                <div class="font-mono text-zinc-200 text-[12.5px]">9:16 · 16:9 · 1:1 · 3:4</div>
+                <span class="block mt-0.5 text-[11px] text-zinc-400">API key required</span>
+              </td>
+              <td class="py-4 pl-4 pr-0 align-top text-zinc-400">Extract 3–7 ranked clips with Center Crop or OpenCV Face Tracking into a dedicated workspace, then polish in AI Clipper Studio.</td>
             </tr>
 
             <tr class="hover:bg-white/[0.02]">
-              <td class="py-3.5 px-3">
+              <td class="py-4 pl-0 pr-5 align-top whitespace-nowrap">
                 <div class="font-semibold text-white">Video Trimmer</div>
-                <span class="text-[11px] text-zinc-400">Multi-Segment (1–20 ranges)</span>
+                <span class="block mt-0.5 text-[11px] text-zinc-400">YouTube · 1–20 ranges</span>
               </td>
-              <td class="py-3.5 px-3 text-zinc-300">YouTube</td>
-              <td class="py-3.5 px-3 font-mono text-zinc-200">Original, 9:16, 3:4, 1:1</td>
-              <td class="py-3.5 px-3 text-zinc-300">Not needed</td>
-              <td class="py-3.5 px-3 text-zinc-400">Cut exact start/end timestamp ranges locally without using AI quota, bundled with batch .ZIP.</td>
+              <td class="py-4 px-4 align-top whitespace-nowrap">
+                <div class="font-mono text-zinc-200 text-[12.5px]">Orig · 9:16 · 3:4 · 1:1</div>
+                <span class="block mt-0.5 text-[11px] text-zinc-400">No API key · Batch .ZIP</span>
+              </td>
+              <td class="py-4 pl-4 pr-0 align-top text-zinc-400">Cut exact start/end timestamp ranges locally without using AI quota, bundled with one-click .ZIP export.</td>
             </tr>
 
             <tr class="hover:bg-white/[0.02]">
-              <td class="py-3.5 px-3">
-                <div class="font-semibold text-white">Full Video / Reels / Clean TikTok</div>
-                <span class="text-[11px] text-zinc-400">Direct Download &amp; Format</span>
-              </td>
-              <td class="py-3.5 px-3 text-zinc-300">YouTube, Reels, TikTok</td>
-              <td class="py-3.5 px-3 font-mono text-zinc-200">1080p–480p, Ratio &amp; FPS</td>
-              <td class="py-3.5 px-3 text-zinc-300">Not needed</td>
-              <td class="py-3.5 px-3 text-zinc-400">Save YouTube videos (with optional crop &amp; Auto/60/30 FPS), Instagram Reels, or watermark-free TikTok MP4s.</td>
-            </tr>
-
-            <tr class="hover:bg-white/[0.02]">
-              <td class="py-3.5 px-3">
+              <td class="py-4 pl-0 pr-5 align-top whitespace-nowrap">
                 <div class="font-semibold text-white">Audio MP3</div>
-                <span class="text-[11px] text-zinc-400">320 kbps Stereo MP3</span>
+                <span class="block mt-0.5 text-[11px] text-zinc-400">YouTube · TikTok</span>
               </td>
-              <td class="py-3.5 px-3 text-zinc-300">YouTube, TikTok</td>
-              <td class="py-3.5 px-3 font-mono text-zinc-200">320 kbps .MP3</td>
-              <td class="py-3.5 px-3 text-zinc-300">Not needed</td>
-              <td class="py-3.5 px-3 text-zinc-400">Extract high-bitrate audio tracks directly for podcasts, voiceovers, interviews, or music.</td>
+              <td class="py-4 px-4 align-top whitespace-nowrap">
+                <div class="font-mono text-zinc-200 text-[12.5px]">320 kbps stereo .MP3</div>
+                <span class="block mt-0.5 text-[11px] text-zinc-400">No API key</span>
+              </td>
+              <td class="py-4 pl-4 pr-0 align-top text-zinc-400">Extract high-bitrate audio tracks into dedicated Audio MP3 workspaces for podcasts, voiceovers, or music.</td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <!-- Detail: Studio & Clipper Controls -->
+      <!-- Detail: Downloader & Clipper Canvas Controls -->
       <div class="space-y-4">
         <h3 class="text-sm font-semibold text-white">
-          Studio &amp; Clipper Canvas Controls
+          Downloader &amp; Clipper Canvas Controls
         </h3>
         <div class="divide-y divide-white/[0.07] border-t border-white/[0.07]">
           <div class="py-3.5 grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 sm:gap-6 text-xs">
@@ -1580,9 +1586,9 @@
             </p>
           </div>
           <div class="py-3.5 grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 sm:gap-6 text-xs">
-            <span class="font-semibold text-white">Clip Cards (Right Side)</span>
+            <span class="font-semibold text-white">Clip Cards &amp; Studio Entry</span>
             <p class="text-zinc-400 leading-relaxed">
-              Each rendered clip appears as an interactive card showing its virality score (0–100), timestamps, hook rationale, inline video preview, single download, and full batch <code class="font-mono text-zinc-300">Download .ZIP</code> export.
+              Each rendered clip appears as an interactive card showing its virality score (0–100), timestamps, hook rationale, inline video preview, single download, full batch <code class="font-mono text-zinc-300">Download .ZIP</code> export, and one-click entry into Luna Studio.
             </p>
           </div>
           <div class="py-3.5 grid grid-cols-[1fr] sm:grid-cols-[180px_1fr] gap-2 sm:gap-6 text-xs">
@@ -1591,6 +1597,124 @@
               Running jobs can be cancelled mid-flight from the task tracker, and failed downloads or clips can be retried individually without re-running completed work.
             </p>
           </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Tab 2B: Luna Studio (Full Video Studio & AI Clipper Studio) -->
+    <section id="tab-studio" class="guide-tab-pane hidden space-y-8">
+
+      <!-- Studio Modes Comparison -->
+      <div class="overflow-x-auto border-b border-white/[0.08] pb-6">
+        <table class="w-full text-left text-xs">
+          <thead>
+            <tr class="border-b border-white/[0.12] text-white font-semibold">
+              <th class="py-3 pl-0 pr-5 w-[175px] whitespace-nowrap">Studio Mode</th>
+              <th class="py-3 px-4 w-[205px] whitespace-nowrap">Supported Workspaces</th>
+              <th class="py-3 pl-4 pr-0">Key Editing Tools</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-white/[0.06] text-zinc-300">
+            <tr class="hover:bg-white/[0.02]">
+              <td class="py-4 pl-0 pr-5 align-top whitespace-nowrap">
+                <div class="font-semibold text-white">Full Video Studio</div>
+                <span class="block mt-0.5 text-[11px] text-zinc-400">Non-Destructive NLE</span>
+              </td>
+              <td class="py-4 px-4 align-top text-zinc-300">YouTube Full Video, Instagram Reels, TikTok MP4</td>
+              <td class="py-4 pl-4 pr-0 align-top text-zinc-400">Multi-block timeline cuts, Auto Cut Silence, 2D Speed Curve, Aspect Ratio reframing, 6 Looks + 7 Adjust sliders, Smart Audio, multi-layer music &amp; volume keyframes, and MP3 extraction.</td>
+            </tr>
+            <tr class="hover:bg-white/[0.02]">
+              <td class="py-4 pl-0 pr-5 align-top whitespace-nowrap">
+                <div class="font-semibold text-white">AI Clipper Studio</div>
+                <span class="block mt-0.5 text-[11px] text-zinc-400">Short-Form Polish</span>
+              </td>
+              <td class="py-4 px-4 align-top text-zinc-300">AI Short Clips</td>
+              <td class="py-4 pl-4 pr-0 align-top text-zinc-400">Burn-in Selene subtitles with inline transcript editing, size/position controls, background music slice picker, clip boundary trimming, and non-destructive MP4 export.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Full Video Studio Core Capabilities -->
+      <div class="space-y-4">
+        <h3 class="text-sm font-semibold text-white">
+          Full Video Studio Tools
+        </h3>
+        <div class="divide-y divide-white/[0.07] border-t border-white/[0.07]">
+          <div class="py-3.5 grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 sm:gap-6 text-xs">
+            <span class="font-semibold text-white">Timeline &amp; Cuts</span>
+            <p class="text-zinc-400 leading-relaxed">
+              Split clips at the playhead (<code class="font-mono text-zinc-300">S</code>), trim left (<code class="font-mono text-zinc-300">Q</code>) or right (<code class="font-mono text-zinc-300">W</code>), ripple-delete blocks (<code class="font-mono text-zinc-300">Del</code>), long-press any video block to reorder it, or run <strong>Auto Cut Silence</strong> to strip dead pauses automatically. Zoom smoothly from <code class="font-mono text-zinc-300">1x</code> to <code class="font-mono text-zinc-300">20x</code> (<code class="font-mono text-zinc-300">Ctrl+Scroll</code>), toggle <strong>Fit-to-Content</strong> (<code class="font-mono text-zinc-300">Shift+Z</code>), and snap edges with Magnetic Snap (<code class="font-mono text-zinc-300">N</code>).
+            </p>
+          </div>
+          <div class="py-3.5 grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 sm:gap-6 text-xs">
+            <span class="font-semibold text-white">Basic, Crop &amp; Smart Audio</span>
+            <p class="text-zinc-400 leading-relaxed">
+              Switch between <code class="font-mono text-zinc-300">Orig</code>, <code class="font-mono text-zinc-300">16:9</code>, <code class="font-mono text-zinc-300">9:16</code>, <code class="font-mono text-zinc-300">1:1</code>, and <code class="font-mono text-zinc-300">3:4</code> with a live dimmed full-frame crop guide — drag the bright box per segment to reframe, lock the cropped preview, or center back to 50%. Adjust per-block clip volume and enable <strong>Smart Audio</strong> (Normalize <code class="font-mono text-zinc-300">-14 LUFS</code>, Voice Denoise, Auto-Duck Music) while keeping instant lossless video copy.
+            </p>
+          </div>
+          <div class="py-3.5 grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 sm:gap-6 text-xs">
+            <span class="font-semibold text-white">Speed &amp; 2D Speed Curve</span>
+            <p class="text-zinc-400 leading-relaxed">
+              Set constant clip speed (<code class="font-mono text-zinc-300">0.25x–4x</code>) or switch to <strong>Curve</strong> mode for smooth speed ramps (<code class="font-mono text-zinc-300">Dip</code>, <code class="font-mono text-zinc-300">Pulse</code>, <code class="font-mono text-zinc-300">Fast In</code>, or custom). Drag any of the 5 curve points horizontally and vertically, or double-click a point to reset it to <code class="font-mono text-zinc-300">1.0x</code>.
+            </p>
+          </div>
+          <div class="py-3.5 grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 sm:gap-6 text-xs">
+            <span class="font-semibold text-white">Adjust &amp; Looks</span>
+            <p class="text-zinc-400 leading-relaxed">
+              Apply 6 curated Looks (<code class="font-mono text-zinc-300">Natural</code>, <code class="font-mono text-zinc-300">Vivid</code>, <code class="font-mono text-zinc-300">Warm</code>, <code class="font-mono text-zinc-300">Cool</code>, <code class="font-mono text-zinc-300">Cinema</code>, <code class="font-mono text-zinc-300">B&amp;W</code>) and fine-tune 7 scrub-bars: Brightness, Exposure, Contrast, Saturation, Warmth, Sharpness, and Vignette. Double-click any scrub-bar to reset it to <code class="font-mono text-zinc-300">0</code>; returning all sliders to <code class="font-mono text-zinc-300">0</code> restores <code class="font-mono text-zinc-300">Natural</code> automatically.
+            </p>
+          </div>
+          <div class="py-3.5 grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 sm:gap-6 text-xs">
+            <span class="font-semibold text-white">Multi-Layer Audio &amp; Mute</span>
+            <p class="text-zinc-400 leading-relaxed">
+              Add audio files (up to 60 MB) or extract MP3 audio directly from uploaded video files (up to 250 MB), stack overlapping BGM/SFX clips on separate lanes, trim/fade blocks, and automate volume with up to 32 draggable diamond keyframes per clip (right-click a point to delete). The left-panel <strong>Original</strong> button mutes the clip's source audio in both preview and export, while the bottom toolbar speaker icon only mutes your local preview speaker.
+            </p>
+          </div>
+          <div class="py-3.5 grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 sm:gap-6 text-xs">
+            <span class="font-semibold text-white">Smart Export &amp; Full Render Notice</span>
+            <p class="text-zinc-400 leading-relaxed">
+              All edits are non-destructive (<code class="font-mono text-zinc-300">studio_state.json</code>) and never overwrite your source file. Trims, multi-block cuts, background music, and Smart Audio use instant lossless stream copy (<code class="font-mono text-zinc-300">&lt;5s</code>). When pixel-level edits are active (<strong>Adjust</strong>, <strong>Aspect Ratio Crop</strong>, <strong>Speed / Curve</strong>, or <strong>Subtitles</strong> in AI Clipper), Luna shows a feature-specific confirmation notice listing exactly which edits require full frame re-encoding, then accelerates rendering with GPU hardware encoding (NVENC / AMF / QSV / VideoToolbox) and parallel chunk processing while preserving original quality.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Keyboard Shortcuts -->
+      <div class="space-y-4">
+        <h3 class="text-sm font-semibold text-white">
+          Studio Keyboard Shortcuts
+        </h3>
+        <div class="overflow-x-auto border-t border-white/[0.08]">
+          <table class="w-full text-left text-xs">
+            <tbody class="divide-y divide-white/[0.06] text-zinc-300">
+              <tr>
+                <td class="py-2.5 pr-4 font-mono text-white whitespace-nowrap"><code class="font-mono">Space</code> / <code class="font-mono">←</code> <code class="font-mono">→</code></td>
+                <td class="py-2.5 text-zinc-400">Play / pause playback, or step playhead ±0.5 seconds</td>
+              </tr>
+              <tr>
+                <td class="py-2.5 pr-4 font-mono text-white whitespace-nowrap"><code class="font-mono">S</code> / <code class="font-mono">Q</code> / <code class="font-mono">W</code></td>
+                <td class="py-2.5 text-zinc-400">Split clip at playhead, Trim Left to playhead, or Trim Right to playhead</td>
+              </tr>
+              <tr>
+                <td class="py-2.5 pr-4 font-mono text-white whitespace-nowrap"><code class="font-mono">Del</code> / <code class="font-mono">Backspace</code></td>
+                <td class="py-2.5 text-zinc-400">Delete the selected video block or audio clip</td>
+              </tr>
+              <tr>
+                <td class="py-2.5 pr-4 font-mono text-white whitespace-nowrap"><code class="font-mono">Ctrl+Z</code> / <code class="font-mono">Ctrl+Y</code></td>
+                <td class="py-2.5 text-zinc-400">Undo and Redo edits (supports cuts, speed, crop, color, audio &amp; sliders)</td>
+              </tr>
+              <tr>
+                <td class="py-2.5 pr-4 font-mono text-white whitespace-nowrap"><code class="font-mono">Ctrl+S</code> / <code class="font-mono">F</code></td>
+                <td class="py-2.5 text-zinc-400">Save Studio draft immediately / Toggle full-size stage preview (<code class="font-mono">Esc</code> exits)</td>
+              </tr>
+              <tr>
+                <td class="py-2.5 pr-4 font-mono text-white whitespace-nowrap"><code class="font-mono">N</code> / <code class="font-mono">Shift+Z</code> / <code class="font-mono">Ctrl+Scroll</code></td>
+                <td class="py-2.5 text-zinc-400">Toggle Magnetic Snap, toggle Fit-to-Content timeline, or zoom timeline at cursor</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -1661,10 +1785,21 @@
           </p>
         </div>
 
-        <!-- Item 4: Optional Add-ons -->
+        <!-- Item 4: Hardware Acceleration & Updates -->
+        <div class="py-6 space-y-2">
+          <div class="flex items-center justify-between gap-2 text-xs">
+            <span class="text-sm font-semibold text-white">4. GPU Acceleration &amp; In-App Updates</span>
+            <span class="text-zinc-400 font-mono text-[11px]">automatic</span>
+          </div>
+          <p class="text-xs text-zinc-400 leading-relaxed">
+            When Luna Studio re-encodes video frames, it automatically probes available hardware encoders (<code class="font-mono text-zinc-300">h264_nvenc</code>, <code class="font-mono text-zinc-300">h264_amf</code>, <code class="font-mono text-zinc-300">h264_qsv</code>, or <code class="font-mono text-zinc-300">h264_videotoolbox</code>) and falls back smoothly to multi-threaded <code class="font-mono text-zinc-300">libx264</code>. Keep Luna up to date anytime via <strong>Settings &rarr; Check for Updates</strong> without touching your <code class="font-mono text-zinc-300">.env</code>, cookies, or media.
+          </p>
+        </div>
+
+        <!-- Item 5: Optional Add-ons -->
         <div class="pt-6 space-y-2.5">
           <div class="flex items-center justify-between gap-2 text-xs">
-            <span class="text-sm font-semibold text-white">4. Optional Extras (Local Faster-Whisper &amp; MCP Server)</span>
+            <span class="text-sm font-semibold text-white">5. Optional Extras (Local Faster-Whisper &amp; MCP Server)</span>
             <span class="text-zinc-400 font-mono text-[11px]">optional packages</span>
           </div>
           <div class="subpage-cmd-box" onclick="copySnippet('pip install -r requirements-whisper.txt', this)">
@@ -1701,19 +1836,34 @@
       <!-- Visual Tree Hierarchy -->
       <div class="vault-box p-4 font-mono text-xs text-zinc-300 space-y-1.5 leading-relaxed">
         <div class="text-zinc-300">D:\Luna-Media\ <span class="text-zinc-500">(or local output\ fallback)</span></div>
-        <div class="pl-4 text-zinc-300">├── 01-AI-Clips\ <span class="text-zinc-500">// Rendered AI Short Clips workspaces</span></div>
+        <div class="pl-4 text-zinc-300">├── 01-AI-Clips\ <span class="text-zinc-500">// Dedicated AI Short Clips workspaces</span></div>
         <div class="pl-8 text-zinc-300">│   └── {Workspace_Name}\</div>
         <div class="pl-12 text-zinc-300">│       ├── meta.json <span class="text-zinc-500">// Scores, timestamps &amp; workspace index</span></div>
+        <div class="pl-12 text-zinc-300">│       ├── studio_state.json <span class="text-zinc-500">// Non-destructive Studio drafts</span></div>
         <div class="pl-12 text-zinc-300">│       ├── short_00.mp4 <span class="text-zinc-500">// Generated clip #1</span></div>
         <div class="pl-12 text-zinc-300">│       └── short_01.mp4 <span class="text-zinc-500">// Generated clip #2</span></div>
-        <div class="pl-4 text-zinc-300">├── 02-YouTube-Full\ <span class="text-zinc-500">// Full &amp; trimmed YouTube videos</span></div>
+        <div class="pl-4 text-zinc-300">├── 02-YouTube-Full\ <span class="text-zinc-500">// Full YouTube videos, Trimmer batches &amp; Studio *_edited.mp4</span></div>
         <div class="pl-4 text-zinc-300">├── 03-Instagram-Reels\ <span class="text-zinc-500">// Instagram Reels videos</span></div>
         <div class="pl-4 text-zinc-300">├── 04-TikTok-Clean\ <span class="text-zinc-500">// TikTok videos without a watermark</span></div>
-        <div class="pl-4 text-zinc-300">└── 05-Audio-MP3\ <span class="text-zinc-500">// 320 kbps MP3 audio</span></div>
+        <div class="pl-4 text-zinc-300">└── 05-Audio-MP3\ <span class="text-zinc-500">// 320 kbps Audio MP3 workspaces</span></div>
       </div>
 
       <!-- Vault Management Features (Cardless Docs Layout) -->
       <div class="divide-y divide-white/[0.08] border-t border-white/[0.08]">
+        <div class="py-3.5 grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 sm:gap-6 text-xs">
+          <span class="font-semibold text-white">Strict Workspace Isolation</span>
+          <p class="text-zinc-400 leading-relaxed">
+            Every workspace carries a clear type label (<code class="font-mono text-zinc-300">YouTube</code>, <code class="font-mono text-zinc-300">Instagram Reels</code>, <code class="font-mono text-zinc-300">TikTok</code>, <code class="font-mono text-zinc-300">Video Trimmer</code>, <code class="font-mono text-zinc-300">Audio MP3</code>, or <code class="font-mono text-zinc-300">AI Clipper</code>). When downloading into an existing workspace, <strong>Use Existing</strong> shows only matching types and blocks cross-type merges so video, trimmer, and MP3 libraries stay clean. <strong>AI Short Clips</strong> always creates a new workspace.
+          </p>
+        </div>
+
+        <div class="py-3.5 grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 sm:gap-6 text-xs">
+          <span class="font-semibold text-white">Open in Luna Studio</span>
+          <p class="text-zinc-400 leading-relaxed">
+            Launch <strong>Full Video Studio</strong> directly from YouTube Full Video, Instagram Reels, or TikTok MP4 workspaces — or <strong>AI Clipper Studio</strong> from AI Short Clips. Clicking <strong>Export</strong> saves a new <code class="font-mono text-zinc-300">*_edited.mp4</code> right inside the same workspace while leaving your original source file untouched.
+          </p>
+        </div>
+
         <div class="py-3.5 grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 sm:gap-6 text-xs">
           <span class="font-semibold text-white">Rename Workspace</span>
           <p class="text-zinc-400 leading-relaxed">
@@ -1811,6 +1961,42 @@
           </p>
         </div>
 
+        <div class="py-3.5 cursor-pointer select-none" onclick="toggleFaq(this)">
+          <div class="flex items-center justify-between">
+            <span class="text-xs sm:text-sm font-medium text-white">Why does Studio show a "Full render required" confirmation popup?</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="faq-chevron transition-transform duration-200 text-zinc-400 shrink-0 ml-2">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </div>
+          <p class="text-xs text-zinc-400 mt-2 hidden leading-relaxed">
+            Simple cuts, background music, volume adjustments, and Smart Audio finish in seconds using lossless stream copy. When you enable pixel-level edits — <strong>Adjust / Looks</strong>, <strong>Aspect Ratio Crop</strong>, <strong>Clip Speed / Speed Curve</strong>, or <strong>Subtitles</strong> in AI Clipper — every frame must be re-encoded. The popup lists the exact active edits causing full rendering; original video quality is always preserved and GPU acceleration is used automatically.
+          </p>
+        </div>
+
+        <div class="py-3.5 cursor-pointer select-none" onclick="toggleFaq(this)">
+          <div class="flex items-center justify-between">
+            <span class="text-xs sm:text-sm font-medium text-white">Why can't I mix different formats into one workspace (or reuse an AI Clipper workspace)?</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="faq-chevron transition-transform duration-200 text-zinc-400 shrink-0 ml-2">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </div>
+          <p class="text-xs text-zinc-400 mt-2 hidden leading-relaxed">
+            Luna enforces strict workspace type isolation so Full Video, Video Trimmer, Audio MP3, Instagram Reels, TikTok, and AI Clipper libraries stay cleanly separated and open in the right Studio mode. AI Short Clips always requires a new workspace name so each clipping run keeps its own Clipper Canvas, source metadata, and transcripts.
+          </p>
+        </div>
+
+        <div class="py-3.5 cursor-pointer select-none" onclick="toggleFaq(this)">
+          <div class="flex items-center justify-between">
+            <span class="text-xs sm:text-sm font-medium text-white">Does muting the speaker icon in Studio remove audio from my exported video?</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="faq-chevron transition-transform duration-200 text-zinc-400 shrink-0 ml-2">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </div>
+          <p class="text-xs text-zinc-400 mt-2 hidden leading-relaxed">
+            No. The speaker icon on the bottom timeline toolbar only mutes your local preview speaker and never affects exports. To mute the video's original audio track in the exported file (while keeping added background music audible), toggle the <strong>Original</strong> button in the left Audio panel.
+          </p>
+        </div>
+
       </div>
 
     </section>
@@ -1852,7 +2038,7 @@
       </div>
 
       <!-- Segmented mode switcher: Create New vs Use Existing -->
-      <div class="flex items-center p-1 rounded-xl bg-[#202020] border border-white/[0.06] mb-4">
+      <div id="wsModeSwitcher" class="flex items-center p-1 rounded-xl bg-[#202020] border border-white/[0.06] mb-4">
         <button type="button" id="wsModeNewBtn" onclick="setWorkspaceMode('new')"
           class="flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition cursor-pointer bg-white/[0.08] text-white shadow-sm flex items-center justify-center gap-1.5">
           <i data-lucide="plus-circle" class="w-3.5 h-3.5 text-white"></i>
@@ -1860,7 +2046,8 @@
         </button>
         <button type="button" id="wsModeExistingBtn" onclick="setWorkspaceMode('existing')"
           class="flex-1 py-1.5 px-3 rounded-lg text-xs font-medium transition cursor-pointer text-zinc-400 hover:text-white flex items-center justify-center gap-1.5">
-          <i data-lucide="folder" class="w-3.5 h-3.5"></i>
+          <i data-lucide="folder" id="wsModeExistingFolderIcon" class="w-3.5 h-3.5"></i>
+          <i data-lucide="lock" id="wsModeExistingLockIcon" class="w-3 h-3 hidden text-zinc-500"></i>
           <span>Use Existing</span>
         </button>
       </div>
@@ -1878,19 +2065,19 @@
               oninput="checkDuplicateWorkspaceName(this.value)"
               onkeydown="if(event.key === 'Enter') confirmAndStartProcess(); if(event.key === 'Escape') closeWorkspaceModal();" />
           </div>
-          <!-- Live Duplicate Notice -->
+          <!-- Live Duplicate / Type Conflict Notice -->
           <div id="wsDuplicateNotice"
             class="hidden p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] flex items-center gap-2">
-            <i data-lucide="info" class="w-3.5 h-3.5 shrink-0 text-amber-400"></i>
-            <span>This name already exists in Workspace. New files will be added to that workspace.</span>
+            <span id="wsDuplicateNoticeIconWrap" class="inline-flex shrink-0"><i data-lucide="info" class="w-3.5 h-3.5 text-amber-400"></i></span>
+            <span id="wsDuplicateNoticeText">This name already exists in Workspace. New files will be added to that workspace.</span>
           </div>
-          <p class="font-sans text-[11px] text-zinc-500">Defaults to the video title, and you can type any name. A new folder will be created for this download
+          <p id="wsNewHelper" class="font-sans text-[11px] text-zinc-500">Defaults to the video title, and you can type any name. A new folder will be created for this download
             in Workspace.</p>
         </div>
 
         <!-- 2. Use Existing mode container -->
         <div id="wsExistingContainer" class="hidden space-y-2">
-          <label class="block font-sans text-xs font-semibold text-zinc-300">Select an Available Workspace</label>
+          <label class="block font-sans text-xs font-semibold text-zinc-300">Select a Matching Workspace</label>
           <input type="hidden" id="wsExistingSelect" value="" />
           <div class="relative" id="wsDropdownWrapper">
             <button type="button" id="wsDropdownTrigger" onclick="toggleWsDropdown(event)"
@@ -1909,14 +2096,13 @@
 
             <!-- Custom Themed Dropdown Menu -->
             <div id="wsDropdownMenu"
-              class="hidden absolute left-0 right-0 top-full mt-1.5 z-50 rounded-xl bg-[#1c1c1f] border border-white/15 shadow-[0_16px_40px_rgba(0,0,0,0.95)] backdrop-blur-xl">
-              <div id="wsDropdownList" class="max-h-28 overflow-y-auto p-1 space-y-0.5">
+              class="hidden absolute left-0 right-0 top-full mt-1.5 z-50 rounded-xl bg-[#171717] border border-white/15 shadow-[0_16px_40px_rgba(0,0,0,0.95)] backdrop-blur-xl">
+              <div id="wsDropdownList" class="max-h-36 overflow-y-auto p-1 space-y-0.5">
                 <!-- Populated by populateExistingWorkspacesSelect() -->
               </div>
             </div>
           </div>
-          <p class="font-sans text-[11px] text-zinc-500">New files will be added to the selected workspace folder
-            without creating a new folder.</p>
+          <p id="wsExistingHelper" class="font-sans text-[11px] text-zinc-500">Only workspaces matching this format are shown. New files will be added to the selected workspace.</p>
         </div>
 
         <!-- Target Action Info Summary -->
@@ -1938,7 +2124,7 @@
           class="t-btn t-btn-secondary pill-btn pill-btn-charcoal px-4 py-1.5 text-xs font-medium cursor-pointer">
           Cancel
         </button>
-        <button type="button" onclick="confirmAndStartProcess()"
+        <button type="button" id="btnWsConfirmStart" onclick="confirmAndStartProcess()"
           class="t-btn t-btn-primary pill-btn bg-white hover:bg-zinc-200 text-black px-4 py-1.5 text-xs font-semibold cursor-pointer">
           <span>Start</span>
         </button>

@@ -29,7 +29,7 @@ import time
 import urllib.parse
 import uuid
 import zipfile
-from typing import Any, Callable, Dict, List, Literal, Optional
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
 
 import requests
 import yt_dlp
@@ -737,14 +737,37 @@ def create_progress_hook(job_id: str, finished_pct: Optional[float] = None):
 
 
 # Download engines
-def download_youtube_video(url: str, output_dir: str, quality: str = "1080", progress_hook: Optional[Callable] = None) -> str:
+def _youtube_video_format_selector(quality: str = "1080", fps: str = "auto") -> str:
     h = {"1080": 1080, "720": 720, "480": 480, "360": 360}.get(quality, 1080)
+    fallback = (
+        f"bestvideo[height<={h}]+bestaudio[format_note*=original]/"
+        f"bestvideo[height<={h}]+bestaudio/"
+        f"best[height<={h}]/best"
+    )
+    if fps == "60":
+        return (
+            f"bestvideo[height<={h}][fps>=50]+bestaudio[format_note*=original]/"
+            f"bestvideo[height<={h}][fps>=50]+bestaudio/"
+            f"{fallback}"
+        )
+    if fps == "30":
+        return (
+            f"bestvideo[height<={h}][fps<=32]+bestaudio[format_note*=original]/"
+            f"bestvideo[height<={h}][fps<=32]+bestaudio/"
+            f"{fallback}"
+        )
+    return fallback
+
+
+def download_youtube_video(
+    url: str,
+    output_dir: str,
+    quality: str = "1080",
+    progress_hook: Optional[Callable] = None,
+    fps: str = "auto",
+) -> str:
     base_opts = {
-        "format": (
-            f"bestvideo[height<={h}]+bestaudio[format_note*=original]/"
-            f"bestvideo[height<={h}]+bestaudio/"
-            f"best[height<={h}]/best"
-        ),
+        "format": _youtube_video_format_selector(quality=quality, fps=fps),
         "outtmpl": os.path.join(output_dir, "video.%(ext)s"),
         "merge_output_format": "mp4",
         "noplaylist": True,
@@ -1058,19 +1081,90 @@ def _probe_source_height(input_path: str) -> Optional[int]:
     return None
 
 
+def _parse_ffprobe_rate(raw: Any) -> Optional[float]:
+    text = str(raw or "").strip()
+    if not text or text in ("0/0", "N/A"):
+        return None
+    try:
+        if "/" in text:
+            num_s, den_s = text.split("/", 1)
+            num, den = float(num_s), float(den_s)
+            if den <= 0 or num <= 0:
+                return None
+            val = num / den
+        else:
+            val = float(text)
+        return round(val, 3) if 1.0 <= val <= 240.0 else None
+    except (TypeError, ValueError, ZeroDivisionError):
+        return None
+
+
+def _probe_source_fps(input_path: str) -> Optional[float]:
+    """Return video frame rate via ffprobe, or None when unavailable."""
+    if not input_path or not os.path.exists(input_path):
+        return None
+    try:
+        proc = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-select_streams", "v:0",
+                "-show_entries", "stream=avg_frame_rate,r_frame_rate",
+                "-of", "json",
+                input_path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if proc.returncode == 0 and proc.stdout:
+            data = json.loads(proc.stdout)
+            streams = data.get("streams") or []
+            if streams:
+                avg_r = _parse_ffprobe_rate(streams[0].get("avg_frame_rate"))
+                if avg_r is not None:
+                    return avg_r
+                return _parse_ffprobe_rate(streams[0].get("r_frame_rate"))
+    except Exception:
+        pass
+    return None
+
+
+def _evaluate_video_reencode(
+    input_path: str, ratio: str = "original", fps: str = "auto"
+) -> Tuple[bool, Optional[float], Optional[str]]:
+    """Decide whether FFmpeg re-encoding is genuinely needed.
+
+    Returns ``(needs_reencode, probed_fps, effective_fps_flag)``.
+    - Native 60 FPS streams already satisfy target ``60`` without re-encoding.
+    - Lower-FPS sources (<50 fps) are never fake-upsampled to 60 FPS via frame duplication.
+    - Target ``30`` only re-encodes when the downloaded stream actually exceeds 33 FPS.
+    """
+    ratio_changed = ratio not in ("original", "source", "", None)
+    target_fps = fps if fps in ("60", "30") else "auto"
+    src_fps = _probe_source_fps(input_path) if target_fps != "auto" else None
+
+    effective_fps_flag: Optional[str] = None
+    if target_fps == "30" and src_fps is not None and src_fps > 33.0:
+        effective_fps_flag = "30"
+
+    needs_reencode = ratio_changed or (effective_fps_flag is not None)
+    return needs_reencode, src_fps, effective_fps_flag
+
+
 def format_video_target(input_path: str, ratio: str = "original", fps: str = "auto", cancel_event: Optional[threading.Event] = None) -> str:
     """
     Format full video to target aspect ratio (original, 9:16, 3:4, 1:1) and FPS (auto, 60, 30).
-    Avoids upscaling sub-1080p sources when cropping to another aspect ratio.
-    Returns path to the formatted video file (or original if unchanged).
+    Skips redundant re-encoding when aspect ratio is unchanged and FPS already matches
+    (or cannot be natively upsampled).
     """
-    if ratio == "original" and (not fps or fps == "auto"):
+    needs_reencode, _, effective_fps = _evaluate_video_reencode(input_path, ratio=ratio, fps=fps)
+    if not needs_reencode:
         return input_path
 
     base_dir = os.path.dirname(input_path)
     base_name, _ = os.path.splitext(os.path.basename(input_path))
     ratio_tag = ratio.replace(":", "x") if ratio != "original" else ""
-    fps_tag = f"{fps}fps" if fps and fps != "auto" else ""
+    fps_tag = f"{effective_fps}fps" if effective_fps else ""
     suffix = f"_{ratio_tag}" if ratio_tag else ""
     if fps_tag:
         suffix += f"_{fps_tag}"
@@ -1100,8 +1194,8 @@ def format_video_target(input_path: str, ratio: str = "original", fps: str = "au
     if vf_filters:
         cmd.extend(["-vf", ",".join(vf_filters)])
 
-    if fps in ("60", "30"):
-        cmd.extend(["-r", fps])
+    if effective_fps in ("60", "30"):
+        cmd.extend(["-r", effective_fps])
 
     cmd.extend([
         *_get_encoder_flags(),
@@ -1136,7 +1230,8 @@ class ProcessRequest(BaseModel):
     start_time: str = "00:00"
     end_time: str = "00:30"
     segments: Optional[List[Dict[str, str]]] = Field(default=None, max_length=20)
-    workspace_name: Optional[str] = "Workspace 01"
+    workspace_name: Optional[str] = None
+    workspace_mode: Optional[Literal["new", "existing"]] = None
 
     @field_validator("aspect_ratio")
     @classmethod
@@ -1170,9 +1265,11 @@ class ProcessRequest(BaseModel):
 
     @field_validator("workspace_name")
     @classmethod
-    def _check_workspace(cls, value: Optional[str]) -> str:
-        cleaned = " ".join(str(value or "").split()).strip()
-        return cleaned[:80] or "Workspace 01"
+    def _check_workspace(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = " ".join(str(value).split()).strip()
+        return cleaned[:80] or None
 
     @model_validator(mode="after")
     def _normalize_face_detect(self) -> "ProcessRequest":
@@ -1556,6 +1653,128 @@ def _ytdlp_has_subtitles(url: str) -> Optional[bool]:
         return None
 
 
+_FPS_CHECK_CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+_FPS_CHECK_TTL_SEC = 300.0
+
+
+def _analyze_youtube_formats_fps(formats: Any) -> Dict[str, Any]:
+    """Derive reliable tri-state 60 FPS availability from yt-dlp format list.
+
+    Returns ``has_60fps`` as:
+    - ``True`` when at least one video stream explicitly offers >= 50 FPS
+    - ``False`` only when HD/multi-stream DASH formats are present and all are < 50 FPS
+    - ``None`` when format data is missing or throttled (fail-open; never false-lock)
+    """
+    if not isinstance(formats, list) or not formats:
+        return {"has_60fps": None, "max_fps": None, "fps_60_heights": []}
+
+    video_streams: List[Tuple[int, float]] = []
+    for f in formats:
+        if not isinstance(f, dict):
+            continue
+        vcodec = str(f.get("vcodec") or "").strip().lower()
+        if not vcodec or vcodec == "none":
+            continue
+        h_raw = f.get("height")
+        w_raw = f.get("width")
+        fps_raw = f.get("fps")
+        try:
+            h = int(h_raw or 0)
+            w = int(w_raw or 0)
+            fps_val = float(fps_raw or 0.0)
+        except (TypeError, ValueError):
+            continue
+        if h <= 0 or fps_val <= 0:
+            continue
+        # Effective quality tier handles 16:9 (1920x1080->1080), 2:1 ultrawide (1920x960->960),
+        # and 9:16 vertical (1080x1920->1080) consistently.
+        eff_h = min(w, h) if w > 0 else h
+        video_streams.append((eff_h, fps_val))
+
+    if not video_streams:
+        return {"has_60fps": None, "max_fps": None, "fps_60_heights": []}
+
+    max_fps = max(fps_val for _, fps_val in video_streams)
+    max_eff_h = max(eff_h for eff_h, _ in video_streams)
+    fps_60_heights = sorted({eff_h for eff_h, fps_val in video_streams if fps_val >= 50.0})
+
+    if fps_60_heights:
+        return {
+            "has_60fps": True,
+            "max_fps": int(round(max_fps)),
+            "fps_60_heights": fps_60_heights,
+        }
+
+    # Anti-false-negative guard: only assert "no 60 FPS" when YouTube returned
+    # a real multi-format/HD manifest (not a throttled single 360p fallback stream).
+    if len(video_streams) >= 3 or max_eff_h >= 600:
+        return {
+            "has_60fps": False,
+            "max_fps": int(round(max_fps)),
+            "fps_60_heights": [],
+        }
+
+    return {"has_60fps": None, "max_fps": int(round(max_fps)), "fps_60_heights": []}
+
+
+def _probe_youtube_fps_sync(url: str) -> Dict[str, Any]:
+    try:
+        opts = get_ytdl_base_opts({
+            "skip_download": True,
+            "noplaylist": True,
+            "quiet": True,
+            "no_warnings": True,
+            "ignore_no_formats_error": True,
+            "socket_timeout": 6,
+            "extractor_args": {"youtube": {"player_skip": ["js"]}},
+        })
+        with create_youtube_dl(opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+        if not isinstance(info, dict):
+            return {"has_60fps": None, "max_fps": None, "fps_60_heights": []}
+        return _analyze_youtube_formats_fps(info.get("formats"))
+    except Exception:
+        return {"has_60fps": None, "max_fps": None, "fps_60_heights": []}
+
+
+@app.get("/api/check-fps")
+async def api_check_fps(url: str = Query(...)):
+    """Check whether a YouTube video genuinely offers native 60 FPS streams (tri-state, fail-open)."""
+    clean_url = (url or "").strip()
+    if not clean_url:
+        raise HTTPException(status_code=400, detail="URL is required")
+    problem = external_url_problem(clean_url)
+    if problem:
+        raise HTTPException(status_code=400, detail=problem)
+    if detect_platform(clean_url) != "youtube":
+        return {"has_60fps": None, "max_fps": None, "fps_60_heights": []}
+
+    yt_m = re.search(
+        r"(?:youtu\.be\/|youtube\.com\/(?:shorts\/|watch\?v=|embed\/|v\/|live\/))([a-zA-Z0-9_-]{11})",
+        clean_url,
+    )
+    cache_key = yt_m.group(1) if yt_m else clean_url
+    now = time.time()
+    cached = _FPS_CHECK_CACHE.get(cache_key)
+    if cached and (now - cached[0]) < _FPS_CHECK_TTL_SEC:
+        return cached[1]
+
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(_probe_youtube_fps_sync, clean_url),
+            timeout=9.0,
+        )
+    except Exception:
+        result = {"has_60fps": None, "max_fps": None, "fps_60_heights": []}
+
+    if result.get("has_60fps") is not None:
+        if len(_FPS_CHECK_CACHE) >= 64:
+            oldest_key = min(_FPS_CHECK_CACHE, key=lambda k: _FPS_CHECK_CACHE[k][0])
+            _FPS_CHECK_CACHE.pop(oldest_key, None)
+        _FPS_CHECK_CACHE[cache_key] = (now, result)
+    return result
+
+
 @app.get("/api/check-transcript")
 async def api_check_transcript(url: str = Query(...)):
     """Check if YouTube video has native transcript/subtitles cleanly."""
@@ -1672,6 +1891,114 @@ def _save_single_media_to_vault(
         raise
 
 
+WORKSPACE_BUCKET_LABELS = {
+    "ai_clip": "AI Clipper",
+    "yt_video": "YouTube Full Video",
+    "yt_trim": "Video Trimmer",
+    "audio_mp3": "Audio MP3",
+    "ig_reels": "Instagram Reels",
+    "tt_video": "TikTok Video",
+}
+
+
+def get_action_workspace_bucket(action: Optional[str], platform: Optional[str] = None) -> str:
+    """Map a job action string to its strict workspace type bucket."""
+    act = str(action or "").strip().lower()
+    plat = str(platform or "").strip().lower()
+    if "ai_clip" in act:
+        return "ai_clip"
+    if "mp3" in act or act in ("audio_mp3", "youtube_audio") or "audio" in plat:
+        return "audio_mp3"
+    if act in ("type_yt_clip", "manual_clip", "clip") or "trim" in act:
+        return "yt_trim"
+    if "ig_reels" in act or act == "instagram_video" or "instagram" in plat:
+        return "ig_reels"
+    if "tt_video" in act or act == "tiktok_video" or "tiktok" in plat:
+        return "tt_video"
+    return "yt_video"
+
+
+def get_project_workspace_bucket(proj: Optional[Dict[str, Any]]) -> str:
+    """Infer the strict workspace type bucket for an existing vault project."""
+    if not isinstance(proj, dict):
+        return "yt_video"
+    act = str(proj.get("action") or "").strip().lower()
+    cat = str(proj.get("category") or "").strip().lower()
+    plat = str(proj.get("platform") or "").strip().lower()
+    if "ai_clip" in act or "01-ai-clips" in cat:
+        return "ai_clip"
+    files = [f for f in (proj.get("files") or []) if isinstance(f, dict)]
+    all_audio = bool(files) and all(
+        str(f.get("type") or "").strip().lower() == "audio"
+        or str(f.get("filename") or "").strip().lower().endswith(".mp3")
+        for f in files
+    )
+    if "mp3" in act or "audio" in cat or "audio" in plat or all_audio:
+        return "audio_mp3"
+    if act in ("type_yt_clip", "manual_clip", "clip") or "trim" in act or "trim" in cat:
+        return "yt_trim"
+    if "ig_reels" in act or "instagram" in plat or "instagram" in cat or "reels" in cat:
+        return "ig_reels"
+    if "tt_video" in act or "tiktok" in plat or "tiktok" in cat:
+        return "tt_video"
+    return "yt_video"
+
+
+def validate_workspace_assignment(
+    action: str,
+    workspace_name: Optional[str],
+    workspace_mode: Optional[str] = None,
+    existing_projects: Optional[List[Dict[str, Any]]] = None,
+) -> Optional[Dict[str, Any]]:
+    """Enforce strict workspace type isolation and AI Clipper new-workspace-only rules.
+
+    Returns the compatible existing project when merging into a same-type workspace,
+    or None when creating a new workspace. Raises ValueError on policy violation.
+    """
+    ws_name = (workspace_name or "Workspace 01").strip()
+    mode = str(workspace_mode or "").strip().lower()
+    req_bucket = get_action_workspace_bucket(action)
+    req_label = WORKSPACE_BUCKET_LABELS.get(req_bucket, req_bucket)
+
+    projects = existing_projects if existing_projects is not None else list_vault_projects()
+    matched = next(
+        (
+            p for p in projects
+            if isinstance(p, dict)
+            and not p.get("virtual")
+            and (p.get("workspace_name") or "").strip().lower() == ws_name.lower()
+        ),
+        None,
+    )
+
+    if req_bucket == "ai_clip":
+        if mode == "existing":
+            raise ValueError("AI Clipper cannot merge into an existing workspace. Create a new workspace instead.")
+        if matched is not None:
+            raise ValueError(
+                f'Workspace "{ws_name}" already exists. AI Clipper always requires a new workspace name.'
+            )
+        return None
+
+    if matched is None:
+        if mode == "existing":
+            raise ValueError(f'Selected workspace "{ws_name}" was not found.')
+        return None
+
+    existing_bucket = get_project_workspace_bucket(matched)
+    existing_label = WORKSPACE_BUCKET_LABELS.get(existing_bucket, existing_bucket)
+    article = "an" if existing_label[:1].lower() in "aeiou" else "a"
+    if existing_bucket == "ai_clip":
+        raise ValueError(
+            f'Workspace "{ws_name}" is an AI Clipper workspace and cannot be merged with {req_label}.'
+        )
+    if existing_bucket != req_bucket:
+        raise ValueError(
+            f'Workspace "{ws_name}" is {article} {existing_label} workspace and cannot accept {req_label} files.'
+        )
+    return matched
+
+
 def _save_project_to_vault(
     workspace_name: str,
     action: str,
@@ -1686,24 +2013,29 @@ def _save_project_to_vault(
     """
     Save all generated media files for a workspace into its dedicated folder,
     and persist project metadata with file list in meta.json.
-    If workspace already exists, append new files to it without creating duplicates.
+    Only merges into an existing workspace when both share the exact same type bucket
+    (and never merges AI Clipper runs into existing workspaces).
     """
     if not files_to_save:
         return None
     try:
         ws_name = (workspace_name or "Workspace 01").strip()
-        
-        # Check if an existing project with this name already exists in vault
+
+        # Check existing projects and enforce strict type isolation & AI Clipper new-only rule
         all_existing_projects = list_vault_projects()
-        matched_proj = next(
-            (p for p in all_existing_projects if (p.get("workspace_name") or "").strip().lower() == ws_name.lower()),
-            None
+        matched_proj = validate_workspace_assignment(
+            action=action,
+            workspace_name=ws_name,
+            existing_projects=all_existing_projects,
         )
-        
+
         if matched_proj and matched_proj.get("folder_path") and os.path.exists(matched_proj.get("folder_path")):
             target_vault_dir = matched_proj["folder_path"]
         else:
             target_vault_dir = get_workspace_folder(action, ws_name)
+            # Avoid silently colliding on disk when two distinct workspace names sanitize to the same folder
+            if matched_proj is None and os.path.exists(os.path.join(target_vault_dir, "meta.json")):
+                target_vault_dir = get_workspace_folder(action, f"{ws_name}_{uuid.uuid4().hex[:6]}")
 
         storage_root_path = get_storage_root()
         # folder_path comes from meta.json, which may be stale or edited by hand.
@@ -1875,12 +2207,9 @@ def _worker_process(job_id: str, req: ProcessRequest):
     if ws_name == ".." or "/" in ws_name or "\\" in ws_name:
         ws_name = "Workspace 01"
 
-    # A full video that also has to be re-encoded is not 100% done when the bytes
-    # stop arriving; park the counter at 70 so the bar does not sit at 100 while
-    # ffmpeg still works.
-    needs_conversion = action == "type_yt_video" and (
-        req.aspect_ratio != "original" or (req.fps and req.fps != "auto")
-    )
+    # A full video that changes aspect ratio definitely needs FFmpeg re-encoding;
+    # park the download counter at 70 so the bar does not sit at 100 while ffmpeg works.
+    needs_conversion = action == "type_yt_video" and req.aspect_ratio != "original"
     is_audio_mp3 = action in ("type_yt_mp3", "type_tt_mp3", "mp3")
     is_video_dl = action in (
         "type_yt_video", "type_yt_short",
@@ -2061,25 +2390,53 @@ def _worker_process(job_id: str, req: ProcessRequest):
         elif action in ("type_yt_video", "type_yt_short"):
             if jobs.get(job_id, {}).get("cancelled"):
                 return
+            req_fps = req.fps or "auto"
             jobs[job_id]["stage"] = "downloading"
-            jobs[job_id]["logs"].append(f"Downloading YouTube video ({req.quality}p)...")
+            fps_log = f" ({req_fps} FPS)" if req_fps in ("60", "30") else ""
+            jobs[job_id]["logs"].append(f"Downloading YouTube video ({req.quality}p{fps_log})...")
 
-            file_path = download_youtube_video(url, job_output_dir, req.quality, progress_hook=progress_hook)
+            file_path = download_youtube_video(
+                url,
+                job_output_dir,
+                req.quality,
+                progress_hook=progress_hook,
+                fps=req_fps,
+            )
             if jobs.get(job_id, {}).get("cancelled"):
                 return
 
-            if needs_conversion:
+            actual_reencode, probed_fps, eff_fps = _evaluate_video_reencode(
+                file_path,
+                ratio=req.aspect_ratio,
+                fps=req_fps,
+            )
+            if actual_reencode:
                 jobs[job_id]["stage"] = "rendering"
-                jobs[job_id]["stage_detail"] = f"Re-encoding to {req.aspect_ratio} ({req.fps or 'auto'} FPS)"
+                fps_label = eff_fps or (f"{int(round(probed_fps))}" if probed_fps else "auto")
+                jobs[job_id]["stage_detail"] = f"Re-encoding to {req.aspect_ratio} ({fps_label} FPS)"
                 jobs[job_id]["progress"] = 70.0
                 jobs[job_id]["download_speed"] = ""
                 jobs[job_id]["download_eta"] = ""
-                jobs[job_id]["logs"].append(f"Converting video to {req.aspect_ratio} aspect ratio ({req.fps or 'auto'} FPS)...")
+                jobs[job_id]["logs"].append(f"Converting video to {req.aspect_ratio} aspect ratio ({fps_label} FPS)...")
                 try:
-                    file_path = format_video_target(file_path, ratio=req.aspect_ratio, fps=req.fps or "auto", cancel_event=cancel_event)
+                    file_path = format_video_target(
+                        file_path,
+                        ratio=req.aspect_ratio,
+                        fps=req_fps,
+                        cancel_event=cancel_event,
+                    )
                 except Exception as fmt_err:
                     print(f"[Format Video Error] {fmt_err}", flush=True)
                     jobs[job_id]["logs"].append(f"Format conversion warning: {fmt_err}")
+            elif req_fps == "60":
+                if probed_fps is not None and probed_fps >= 55.0:
+                    jobs[job_id]["logs"].append(
+                        f"Downloaded native {int(round(probed_fps))} FPS stream directly (lossless, no re-encoding needed)."
+                    )
+                elif probed_fps is not None:
+                    jobs[job_id]["logs"].append(
+                        f"Source video is {int(round(probed_fps))} FPS (no native 60 FPS stream); keeping lossless original."
+                    )
 
             filename = os.path.basename(file_path)
 
@@ -2521,6 +2878,22 @@ async def api_process(req: ProcessRequest, background_tasks: BackgroundTasks):
                 raise HTTPException(status_code=400, detail=str(e))
             if end_s <= start_s:
                 raise HTTPException(status_code=400, detail="End time must be after start time")
+
+    resolved_ws_name = req.workspace_name
+    if not resolved_ws_name:
+        if req.workspace_mode == "existing":
+            raise HTTPException(status_code=400, detail="Select an existing workspace to continue.")
+        resolved_ws_name = f"Workspace {get_next_workspace_index():02d}"
+        req = req.model_copy(update={"workspace_name": resolved_ws_name})
+
+    try:
+        validate_workspace_assignment(
+            action=req.action,
+            workspace_name=resolved_ws_name,
+            workspace_mode=req.workspace_mode,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     _prune_old_jobs(50)
     job_id = str(uuid.uuid4())[:8]
@@ -3451,11 +3824,16 @@ async def api_apply_update(req: ApplyUpdateRequest = ApplyUpdateRequest()):
 from . import studio_service
 
 
-# --- AI Clipper Studio (Isolated Page & Non-Destructive APIs) ---
+# --- Luna Studio (AI Clipper & Full Video — Isolated Page & Non-Destructive APIs) ---
 @app.get("/studio/{project_id}", response_class=HTMLResponse)
 async def studio_page(project_id: str):
-    if not studio_service.find_studio_project(project_id):
+    found = studio_service.find_studio_project(project_id)
+    if not found:
         return RedirectResponse("/#vault")
+    proj, _ = found
+    mode = studio_service.get_studio_mode(proj) or "ai_clip"
+    is_fv = mode == "full_video"
+    ws_name = str(proj.get("workspace_name") or ("Full Video Studio" if is_fv else "AI Clipper Studio"))
     html_path = os.path.join(TEMPLATES_DIR, "studio.html")
     if not os.path.exists(html_path):
         return HTMLResponse("<h1>Studio template not found.</h1>", status_code=404)
@@ -3464,6 +3842,13 @@ async def studio_page(project_id: str):
             f.read()
             .replace("{{ASSET_VERSION}}", _asset_version())
             .replace("{{PROJECT_ID}}", html.escape(project_id, quote=True))
+            .replace("{{STUDIO_MODE}}", mode)
+            .replace("{{WORKSPACE_NAME}}", html.escape(ws_name))
+            .replace("{{LEFT_HEADING}}", "Videos" if is_fv else "AI Clips")
+            .replace("{{AI_HIDDEN}}", "hidden" if is_fv else "")
+            .replace("{{FV_HIDDEN}}", "" if is_fv else "hidden")
+            .replace("{{INIT_ASPECT}}", "16 / 9" if is_fv else "9 / 16")
+            .replace("{{INIT_FIT_CLASS}}", "w-full" if is_fv else "h-full")
         )
     return HTMLResponse(content=content, headers=_html_headers())
 
@@ -3472,7 +3857,7 @@ async def studio_page(project_id: str):
 async def api_studio_load(project_id: str):
     data = await asyncio.to_thread(studio_service.load_studio_project, project_id)
     if not data:
-        raise HTTPException(status_code=404, detail="AI Clipper project not found")
+        raise HTTPException(status_code=404, detail="Studio project not found")
     return data
 
 
@@ -3486,7 +3871,7 @@ async def api_studio_save(project_id: str, request: Request):
         raise HTTPException(status_code=400, detail="Payload must be an object")
     saved = await asyncio.to_thread(studio_service.save_studio_state, project_id, payload)
     if saved is None:
-        raise HTTPException(status_code=404, detail="AI Clipper project not found")
+        raise HTTPException(status_code=404, detail="Studio project not found")
     return {"status": "saved", "state": saved}
 
 
@@ -3497,14 +3882,51 @@ async def api_studio_upload_music(
     clip_id: str = Query("clip"),
     filename: str = Query("music.mp3"),
 ):
-    body = await request.body()
-    result, err = await asyncio.to_thread(
-        studio_service.save_studio_music, project_id, clip_id, filename, body
-    )
-    if err:
-        code = 404 if err == "Project not found" else 400
-        raise HTTPException(status_code=code, detail=err)
-    return result
+    display_name = os.path.basename(filename or "music.mp3").strip() or "music.mp3"
+    ext = os.path.splitext(display_name)[1].lower()
+    if ext in studio_service.VIDEO_FILE_EXTS:
+        max_bytes = studio_service.MAX_VIDEO_EXTRACT_BYTES
+        limit_msg = "Video file exceeds 250 MB limit for audio extraction"
+    elif ext in studio_service.ALLOWED_AUDIO_EXTS:
+        max_bytes = studio_service.MAX_AUDIO_BYTES
+        limit_msg = "Audio file exceeds 60 MB limit"
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported audio or video format ({ext or 'unknown'})")
+
+    fd, tmp_upload = tempfile.mkstemp(prefix="luna_upload_", suffix=ext)
+    total_bytes = 0
+    try:
+        with os.fdopen(fd, "wb") as tf:
+            async for chunk in request.stream():
+                if not chunk:
+                    continue
+                total_bytes += len(chunk)
+                if total_bytes > max_bytes:
+                    raise HTTPException(status_code=413, detail=limit_msg)
+                tf.write(chunk)
+        result, err = await asyncio.to_thread(
+            studio_service.save_studio_music_from_file,
+            project_id,
+            clip_id,
+            display_name,
+            tmp_upload,
+            total_bytes,
+        )
+        if err:
+            if err == "Project not found":
+                code = 404
+            elif "exceeds" in err.lower():
+                code = 413
+            else:
+                code = 400
+            raise HTTPException(status_code=code, detail=err)
+        return result
+    finally:
+        if tmp_upload and os.path.exists(tmp_upload):
+            try:
+                os.remove(tmp_upload)
+            except OSError:
+                pass
 
 
 @app.get("/api/studio/{project_id}/music/{asset_name}")
@@ -3516,7 +3938,12 @@ async def api_studio_get_music(project_id: str, asset_name: str):
 
 
 @app.post("/api/studio/{project_id}/export/{clip_id}")
-async def api_studio_export(project_id: str, clip_id: str, request: Request):
+async def api_studio_export(
+    project_id: str,
+    clip_id: str,
+    request: Request,
+    prepare: int = Query(0),
+):
     try:
         payload = await request.json()
     except Exception:
@@ -3529,7 +3956,150 @@ async def api_studio_export(project_id: str, clip_id: str, request: Request):
     if err or not out_path or not download_name:
         code = 404 if err in ("Project not found", "Clip not found") else 500
         raise HTTPException(status_code=code, detail=err or "Export failed")
+    if prepare:
+        from urllib.parse import quote
+        return {
+            "ok": True,
+            "filename": download_name,
+            "downloadUrl": f"/api/studio/{quote(project_id, safe='')}/download-export/{quote(download_name, safe='')}",
+        }
     return FileResponse(out_path, media_type="video/mp4", filename=download_name)
+
+
+@app.get("/api/studio/{project_id}/download-export/{filename}")
+async def api_studio_download_export(project_id: str, filename: str):
+    path = studio_service.get_studio_export_path(project_id, filename)
+    if not path:
+        raise HTTPException(status_code=404, detail="Exported video file not found")
+    safe_name = os.path.basename(path)
+    return FileResponse(
+        path,
+        media_type="video/mp4",
+        filename=safe_name,
+        content_disposition_type="attachment",
+    )
+
+
+@app.post("/api/studio/{project_id}/jobs/{clip_id}")
+async def api_studio_start_job(project_id: str, clip_id: str, request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    mode = str(body.get("mode") or "download").strip().lower()
+    payload = body.get("payload") if isinstance(body.get("payload"), dict) else body
+    return studio_service.start_studio_render_job(project_id, clip_id, mode, payload)
+
+
+@app.get("/api/studio/jobs/{job_id}")
+async def api_studio_get_job(job_id: str):
+    rec = studio_service.get_studio_render_job(job_id)
+    if not rec:
+        raise HTTPException(status_code=404, detail="Render job not found")
+    return rec
+
+
+@app.post("/api/studio/jobs/{job_id}/cancel")
+async def api_studio_cancel_job(job_id: str):
+    ok = studio_service.cancel_studio_render_job(job_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Render job not found")
+    return {"ok": True, "status": "cancelled"}
+
+
+@app.post("/api/studio/{project_id}/prerender/{clip_id}")
+async def api_studio_start_prerender(project_id: str, clip_id: str, request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    payload = body.get("payload") if isinstance(body.get("payload"), dict) else body
+    return await asyncio.to_thread(studio_service.start_studio_prerender, project_id, clip_id, payload)
+
+
+@app.post("/api/studio/{project_id}/prerender/{clip_id}/cancel")
+async def api_studio_cancel_prerender(project_id: str, clip_id: str):
+    stopped = studio_service.cancel_studio_prerender(project_id, clip_id)
+    return {"ok": True, "stopped": stopped}
+
+
+@app.post("/api/studio/{project_id}/detect-silence/{clip_id}")
+async def api_studio_detect_silence(project_id: str, clip_id: str, request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    payload = body.get("payload") if isinstance(body.get("payload"), dict) else body
+    result, err = await asyncio.to_thread(
+        studio_service.detect_studio_silence, project_id, clip_id, payload
+    )
+    if err or not result:
+        code = 404 if err in ("Project not found", "Clip not found") else 400
+        raise HTTPException(status_code=code, detail=err or "Silence detection failed")
+    return result
+
+
+@app.get("/api/studio/{project_id}/filmstrip/{clip_id}")
+async def api_studio_filmstrip(project_id: str, clip_id: str):
+    result, err = await asyncio.to_thread(
+        studio_service.get_or_build_studio_filmstrip, project_id, clip_id
+    )
+    if err or not result:
+        code = 404 if err in ("Project not found", "Clip not found") else 500
+        raise HTTPException(status_code=code, detail=err or "Filmstrip unavailable")
+    return result
+
+
+@app.get("/api/studio/{project_id}/cache/{filename}")
+async def api_studio_cache_file(project_id: str, filename: str):
+    path = studio_service.get_studio_cache_path(project_id, filename)
+    if not path:
+        raise HTTPException(status_code=404, detail="Cached artifact not found")
+    return FileResponse(
+        path,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@app.post("/api/studio/{project_id}/export-workspace/{clip_id}")
+async def api_studio_export_workspace(project_id: str, clip_id: str, request: Request):
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+    result, err = await asyncio.to_thread(
+        studio_service.export_studio_clip_to_workspace, project_id, clip_id, payload
+    )
+    if err or not result:
+        code = 404 if err in ("Project not found", "Clip not found") else 500
+        raise HTTPException(status_code=code, detail=err or "Export to workspace failed")
+    return result
+
+
+@app.post("/api/studio/{project_id}/extract-audio/{clip_id}")
+async def api_studio_extract_audio(project_id: str, clip_id: str, request: Request):
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+    out_path, download_name, err = await asyncio.to_thread(
+        studio_service.extract_studio_audio, project_id, clip_id, payload
+    )
+    if err or not out_path or not download_name:
+        code = 404 if err in ("Project not found", "Clip not found") else (400 if "No active audio" in str(err) else 500)
+        raise HTTPException(status_code=code, detail=err or "Audio extraction failed")
+    return FileResponse(out_path, media_type="audio/mpeg", filename=download_name)
 
 
 # Old job folders are temporary: the vault keeps its own copy of every saved file.

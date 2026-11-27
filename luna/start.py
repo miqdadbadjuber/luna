@@ -137,7 +137,7 @@ def main() -> int:
         return 0
     if port != requested:
         print(f"Port {requested} is busy, using {port} instead.")
-    print(f"Opening {url}. Add your API keys in Settings. Press Ctrl+C to stop.")
+    print(f"Opening {url}. Press Ctrl+C to stop.")
     os.environ["LUNA_PORT"] = str(port)  # the startup banner reads it
     return run_supervised_server(port, url, no_browser=no_browser)
 
