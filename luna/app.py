@@ -2094,7 +2094,7 @@ def _save_project_to_vault(
         if not saved_files:
             return None
 
-        # Preserve full-video transcript .srt alongside AI Short Clips so Studio always has synced subtitles
+        # Preserve full-video transcript .srt (and word-level sidecar when available) so Studio always has synced subtitles
         if action == "type_yt_ai_clip" and source_url:
             try:
                 vid_match = studio_service._extract_youtube_id(source_url)
@@ -2106,7 +2106,20 @@ def _save_project_to_vault(
                     ]
                     if srt_matches:
                         srt_matches.sort(key=os.path.getmtime, reverse=True)
-                        shutil.copy2(srt_matches[0], os.path.join(target_vault_dir, "transcript.srt"))
+                        chosen_srt = srt_matches[0]
+                        shutil.copy2(chosen_srt, os.path.join(target_vault_dir, "transcript.srt"))
+                        paired_words = os.path.splitext(chosen_srt)[0] + ".words.json"
+                        if os.path.isfile(paired_words):
+                            shutil.copy2(paired_words, os.path.join(target_vault_dir, "transcript.words.json"))
+                    if not os.path.isfile(os.path.join(target_vault_dir, "transcript.words.json")):
+                        word_matches = [
+                            os.path.join(OUTPUT_DIR, fn)
+                            for fn in os.listdir(OUTPUT_DIR)
+                            if vid_match in fn and fn.lower().endswith(".words.json") and os.path.isfile(os.path.join(OUTPUT_DIR, fn))
+                        ]
+                        if word_matches:
+                            word_matches.sort(key=os.path.getmtime, reverse=True)
+                            shutil.copy2(word_matches[0], os.path.join(target_vault_dir, "transcript.words.json"))
             except Exception:
                 pass
 
@@ -3721,6 +3734,7 @@ _update_state: Dict[str, Any] = {
     "error": None,
     "updated_sha": "",
     "updated_short_sha": "",
+    "updated_at": 0.0,
 }
 
 
@@ -3761,22 +3775,27 @@ async def api_apply_update(req: ApplyUpdateRequest = ApplyUpdateRequest()):
             detail="A download or clip job is currently running. Wait for it to finish or cancel it before updating.",
         )
 
+    clean_target_tag = str(req.target_tag or "").strip()
+    initial_msg = f"Downloading Luna {clean_target_tag}..." if clean_target_tag else "Downloading latest update..."
+
     with _update_lock:
         if _update_state.get("status") in ("updating", "restarting"):
             return dict(_update_state)
         _update_state.update({
             "status": "updating",
             "stage": "downloading",
-            "message": "Downloading latest update...",
+            "message": initial_msg,
             "error": None,
             "updated_sha": "",
             "updated_short_sha": "",
+            "updated_at": time.time(),
         })
 
     def _set_stage(stage: str, message: str) -> None:
         with _update_lock:
             _update_state["stage"] = stage
             _update_state["message"] = message
+            _update_state["updated_at"] = time.time()
 
     def _run_update_worker() -> None:
         try:
@@ -3795,6 +3814,7 @@ async def api_apply_update(req: ApplyUpdateRequest = ApplyUpdateRequest()):
                         "error": None,
                         "updated_sha": res.get("updated_sha", ""),
                         "updated_short_sha": res.get("updated_short_sha", ""),
+                        "updated_at": time.time(),
                     })
                 schedule_server_restart(BASE_DIR, delay_sec=1.5)
             else:
@@ -3806,6 +3826,7 @@ async def api_apply_update(req: ApplyUpdateRequest = ApplyUpdateRequest()):
                         "error": None,
                         "updated_sha": res.get("updated_sha", ""),
                         "updated_short_sha": res.get("updated_short_sha", ""),
+                        "updated_at": time.time(),
                     })
         except Exception as exc:
             with _update_lock:
@@ -3814,6 +3835,7 @@ async def api_apply_update(req: ApplyUpdateRequest = ApplyUpdateRequest()):
                     "stage": "error",
                     "message": str(exc),
                     "error": str(exc),
+                    "updated_at": time.time(),
                 })
 
     threading.Thread(target=_run_update_worker, daemon=True).start()

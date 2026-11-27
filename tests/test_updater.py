@@ -286,6 +286,75 @@ class TestUpdater(unittest.TestCase):
         self.assertIn("media-vault", updater.PRESERVED_TOP_LEVEL)
         self.assertIn("skills", updater.PRESERVED_TOP_LEVEL)
 
+    def test_archive_update_reports_stages_retries_and_enforces_deadline(self):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr("luna-v2.0.2/luna/hello.py", "VERSION = 3\n")
+        archive_bytes = buf.getvalue()
+
+        class _HeadersResp(io.BytesIO):
+            headers = {"Content-Length": str(len(archive_bytes))}
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                return False
+
+        stages = []
+        attempts = {"n": 0}
+
+        def flaky_urlopen(req, timeout=20.0):
+            attempts["n"] += 1
+            if attempts["n"] == 1:
+                raise TimeoutError("transient read timeout")
+            return _HeadersResp(archive_bytes)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "luna").mkdir()
+            (root / "luna" / "hello.py").write_text("VERSION = 1\n", encoding="utf-8")
+            with patch.object(updater.urllib.request, "urlopen", side_effect=flaky_urlopen), \
+                    patch("time.sleep"):
+                updater._apply_archive_update(
+                    tmp,
+                    "https://github.com/miqdadbadjuber/luna",
+                    "v2.0.2",
+                    "v2.0.2",
+                    is_tag=True,
+                    on_stage=lambda s, m: stages.append((s, m)),
+                )
+            self.assertEqual((root / "luna" / "hello.py").read_text(encoding="utf-8"), "VERSION = 3\n")
+
+        self.assertEqual(attempts["n"], 2)
+        stage_names = [s for s, _ in stages]
+        self.assertIn("downloading", stage_names)
+        self.assertIn("extracting", stage_names)
+        self.assertIn("applying", stage_names)
+        self.assertTrue(any("Retrying download" in m for _, m in stages))
+
+    def test_run_git_sets_noninteractive_env_and_timeout_is_clean(self):
+        import subprocess as _sp
+        seen_env = {}
+
+        def fake_run(cmd, **kwargs):
+            seen_env.update(kwargs.get("env") or {})
+            return _sp.CompletedProcess(cmd, 0, "", "")
+
+        with patch.object(updater.subprocess, "run", side_effect=fake_run):
+            updater._run_git(".", "status")
+        self.assertEqual(seen_env.get("GIT_TERMINAL_PROMPT"), "0")
+        self.assertEqual(seen_env.get("GCM_INTERACTIVE"), "never")
+
+        def timeout_git(base_dir, *args, timeout=30.0):
+            if args and args[0] == "fetch":
+                raise _sp.TimeoutExpired(cmd="git fetch", timeout=timeout)
+            return _sp.CompletedProcess(["git", *args], 0, "", "")
+
+        with patch.object(updater, "get_local_version", return_value=("abc1234", "git")), \
+                patch.object(updater, "_run_git", side_effect=timeout_git), \
+                patch.object(updater, "_file_sha256", return_value="same"):
+            with self.assertRaisesRegex(RuntimeError, "timed out"):
+                updater.apply_update("/fake/repo", target_tag="v2.0.2")
+
 
 if __name__ == "__main__":
     unittest.main()

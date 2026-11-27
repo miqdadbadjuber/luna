@@ -9712,6 +9712,10 @@ async function startLunaUpdate() {
       throw new Error(data.detail || 'Could not start update');
     }
 
+    let lastProgressAt = Date.now();
+    let lastSignature = '';
+    const MAX_STALL_MS = 180000;
+
     while (true) {
       await new Promise((resolve) => setTimeout(resolve, 800));
       let st;
@@ -9733,6 +9737,13 @@ async function startLunaUpdate() {
       }
 
       if (st.status === 'updating') {
+        const sig = `${st.stage || ''}|${st.message || ''}|${st.updated_at || ''}`;
+        if (sig !== lastSignature) {
+          lastSignature = sig;
+          lastProgressAt = Date.now();
+        } else if (Date.now() - lastProgressAt > MAX_STALL_MS) {
+          throw new Error('Update timed out without progress. Please retry or check your network connection.');
+        }
         if (__lunaUpdateToastId && st.message) {
           lunaToast.update(__lunaUpdateToastId, {
             title: 'Updating Luna',

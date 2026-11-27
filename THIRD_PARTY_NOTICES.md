@@ -24,6 +24,8 @@ The license does not grant trademark rights. The Luna name and logo remain with 
 
 Dependencies are installed from `requirements.txt` under their own licenses, and Luna does not relicense them. Published Docker images also include FFmpeg and FFprobe from Debian, under FFmpeg's own license terms. The optional local Whisper provider installs `faster-whisper` from `requirements-whisper.txt`, also under its own license.
 
+`luna/clipper/models/face_detection_yunet_2023mar.onnx` is the YuNet face detection model from [OpenCV Zoo](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet), distributed under the MIT License. Luna uses it locally with OpenCV `FaceDetectorYN` for vertical reframe face tracking.
+
 ## UI, agent skills, and frontend libraries
 
 `AGENTS.md` integrates external coding agent skills for UI, copy, accessibility, layout, and comment review, and the browser interface in `luna/templates/` and `luna/assets/ui/` loads third-party frontend packages from public CDNs or adapts external UI interaction patterns. Each component stays under its respective upstream terms.

@@ -433,6 +433,161 @@ def _find_project_source_srt(proj: Dict[str, Any], folder: str) -> Optional[str]
     return None
 
 
+def _find_project_source_words(proj: Dict[str, Any], folder: str) -> List[Dict[str, Any]]:
+    """Locate word-level transcript JSON (in project folder or Luna's output cache)."""
+    candidates: List[str] = []
+    direct = os.path.join(folder, "transcript.words.json")
+    if os.path.isfile(direct):
+        candidates.append(direct)
+    try:
+        for fn in os.listdir(folder):
+            if fn.lower().endswith(".words.json"):
+                cand = os.path.join(folder, fn)
+                if os.path.isfile(cand) and cand not in candidates:
+                    candidates.append(cand)
+    except OSError:
+        pass
+
+    if not candidates:
+        vid = _extract_youtube_id(str(proj.get("source_url") or ""))
+        if vid:
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            output_dir = os.path.join(base_dir, "output")
+            if os.path.isdir(output_dir):
+                try:
+                    matches = [
+                        os.path.join(output_dir, fn)
+                        for fn in os.listdir(output_dir)
+                        if vid in fn and fn.lower().endswith(".words.json") and os.path.isfile(os.path.join(output_dir, fn))
+                    ]
+                    if matches:
+                        matches.sort(key=os.path.getmtime, reverse=True)
+                        candidates.append(matches[0])
+                except OSError:
+                    pass
+
+    for path in candidates:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                payload = json.load(f)
+            raw_words = payload.get("words") if isinstance(payload, dict) else payload
+            if not isinstance(raw_words, list):
+                continue
+            cleaned: List[Dict[str, Any]] = []
+            for item in raw_words:
+                if not isinstance(item, dict):
+                    continue
+                text = str(item.get("text") or item.get("word") or "").strip()
+                if not text:
+                    continue
+                ws = _safe_float(item.get("start"), -1.0)
+                we = _safe_float(item.get("end"), ws)
+                if ws < 0.0:
+                    continue
+                cleaned.append({"start": round(ws, 3), "end": round(max(ws, we), 3), "text": text})
+            if cleaned:
+                cleaned.sort(key=lambda w: (w["start"], w["end"]))
+                return cleaned
+        except Exception:
+            continue
+    return []
+
+
+_WORD_CUE_SENTENCE_END = (".", "?", "!", "…", "。", "？", "！")
+_WORD_CUE_CLAUSE_END = (",", ";", ":")
+
+
+def _build_word_synced_cues(
+    words: List[Dict[str, Any]],
+    clip_start: float,
+    clip_end: float,
+    *,
+    max_words: int = 7,
+    max_chars: int = 42,
+    max_dur: float = 2.6,
+    pause_split: float = 0.40,
+) -> List[Dict[str, Any]]:
+    """Group word timestamps into tightly synced Studio cues with exact 2-line splitTime."""
+    if not words or clip_end <= clip_start:
+        return []
+    span = clip_end - clip_start
+    rel_words: List[Dict[str, Any]] = []
+    for w in words:
+        ws = float(w.get("start", 0.0))
+        we = float(w.get("end", ws))
+        text = str(w.get("text") or "").strip()
+        if not text:
+            continue
+        mid = 0.5 * (ws + we)
+        if we <= clip_start + 0.04 or ws >= clip_end - 0.02:
+            continue
+        if mid < clip_start - 0.06 or mid > clip_end + 0.06:
+            continue
+        rs = max(0.0, ws - clip_start)
+        re_t = min(span, max(rs + 0.04, we - clip_start))
+        rel_words.append({"start": round(rs, 3), "end": round(re_t, 3), "text": text})
+
+    if not rel_words:
+        return []
+
+    cues: List[Dict[str, Any]] = []
+    group: List[Dict[str, Any]] = []
+
+    def flush() -> None:
+        nonlocal group
+        if not group:
+            return
+        text = " ".join(item["text"] for item in group).strip()
+        if not text:
+            group = []
+            return
+        cue_start = group[0]["start"]
+        cue_end = max(cue_start + 0.12, group[-1]["end"])
+        cue_obj: Dict[str, Any] = {
+            "start": round(cue_start, 3),
+            "end": round(min(span, cue_end), 3),
+            "text": text,
+        }
+        lines = _split_two_balanced_lines(text)
+        if len(lines) == 2:
+            line1_words = len(lines[0].split())
+            if 0 < line1_words < len(group):
+                raw_split = group[line1_words]["start"]
+                if cue_start + 0.04 < raw_split < cue_obj["end"] - 0.04:
+                    cue_obj["splitTime"] = round(raw_split, 3)
+        cues.append(cue_obj)
+        group = []
+
+    for w in rel_words:
+        if group:
+            prev = group[-1]
+            gap = w["start"] - prev["end"]
+            cand_text = " ".join(item["text"] for item in group) + " " + w["text"]
+            cand_dur = w["end"] - group[0]["start"]
+            if (
+                gap >= pause_split
+                or len(group) >= max_words
+                or len(cand_text) > max_chars
+                or cand_dur > max_dur
+            ):
+                flush()
+        group.append(w)
+        cur_text = " ".join(item["text"] for item in group)
+        if w["text"].rstrip().endswith(_WORD_CUE_SENTENCE_END):
+            flush()
+        elif w["text"].rstrip().endswith(_WORD_CUE_CLAUSE_END) and (len(group) >= 4 or len(cur_text) >= 22):
+            flush()
+    flush()
+
+    # Keep cues strictly non-overlapping
+    for i in range(len(cues) - 1):
+        if cues[i]["end"] > cues[i + 1]["start"]:
+            cues[i]["end"] = round(max(cues[i]["start"] + 0.08, cues[i + 1]["start"]), 3)
+            if "splitTime" in cues[i] and cues[i]["splitTime"] >= cues[i]["end"] - 0.03:
+                cues[i].pop("splitTime", None)
+    return cues
+
+
 def _slice_cues_for_clip(
     full_cues: List[Dict[str, Any]], clip_start: float, clip_end: float
 ) -> List[Dict[str, Any]]:
@@ -929,6 +1084,7 @@ def load_studio_project(project_id: str) -> Optional[Dict[str, Any]]:
 
     source_srt_path = _find_project_source_srt(proj, folder) if mode == "ai_clip" else None
     source_cues = _parse_srt_file(source_srt_path) if source_srt_path else []
+    source_words = _find_project_source_words(proj, folder) if mode == "ai_clip" else []
 
     assets_dir = os.path.join(folder, STUDIO_ASSETS_DIR)
     clips: List[Dict[str, Any]] = []
@@ -958,6 +1114,8 @@ def load_studio_project(project_id: str) -> Optional[Dict[str, Any]]:
         if mode == "ai_clip":
             stem = os.path.splitext(clip_path)[0]
             default_cues = _parse_srt_file(f"{stem}.srt")
+            if not default_cues and source_words and src_en > src_st:
+                default_cues = _build_word_synced_cues(source_words, src_st, src_en)
             if not default_cues and source_cues and src_en > src_st:
                 default_cues = _slice_cues_for_clip(source_cues, src_st, src_en)
             saved_clip_cues = sc.get("cues") if isinstance(sc.get("cues"), list) else None
@@ -1081,13 +1239,18 @@ def save_studio_state(project_id: str, payload: Dict[str, Any]) -> Optional[Dict
         clean_cues = []
         for q in c.get("cues") or []:
             if isinstance(q, dict) and isinstance(q.get("text"), str):
-                clean_cues.append(
-                    {
-                        "start": round(max(0.0, _safe_float(q.get("start"), 0.0)), 3),
-                        "end": round(max(0.0, _safe_float(q.get("end"), 0.0)), 3),
-                        "text": q["text"],
-                    }
-                )
+                qs = round(max(0.0, _safe_float(q.get("start"), 0.0)), 3)
+                qe = round(max(qs, _safe_float(q.get("end"), qs)), 3)
+                cue_item: Dict[str, Any] = {
+                    "start": qs,
+                    "end": qe,
+                    "text": q["text"],
+                }
+                if q.get("splitTime") is not None:
+                    st_val = _safe_float(q.get("splitTime"), -1.0)
+                    if qs < st_val < qe:
+                        cue_item["splitTime"] = round(st_val, 3)
+                clean_cues.append(cue_item)
         dur = round(max(0.0, _safe_float(c.get("dur"), 0.0)), 3)
         start = round(max(0.0, _safe_float(c.get("start"), 0.0)), 3)
         end = round(max(start, _safe_float(c.get("end"), dur)), 3)
@@ -1359,10 +1522,13 @@ def _build_selene_ass(
     valid_cues = [
         q for q in cues if isinstance(q, dict) and str(q.get("text") or "").strip()
     ]
-    # Skip leading <0.25s SRT boundary stub just like the browser preview
-    if len(valid_cues) > 1 and (float(valid_cues[0].get("end", 0)) - float(valid_cues[0].get("start", 0))) < 0.25:
+    # Skip a tiny stray boundary stub right at t=0 without pulling the next cue earlier
+    if (
+        len(valid_cues) > 1
+        and float(valid_cues[0].get("start", 0.0)) < 0.05
+        and (float(valid_cues[0].get("end", 0.0)) - float(valid_cues[0].get("start", 0.0))) < 0.20
+    ):
         valid_cues = valid_cues[1:]
-        valid_cues[0] = {**valid_cues[0], "start": 0.0}
 
     for q in valid_cues:
         q_start = max(trim_start, float(q.get("start", 0.0)))
@@ -1379,7 +1545,13 @@ def _build_selene_ass(
             txt = rf"{pos_tag}{{\b1}}{_escape_ass_text(lines[0])}"
             events.append(f"Dialogue: 0,{_ass_timestamp(rel_start)},{_ass_timestamp(rel_end)},Selene,,0,0,0,,{txt}")
         else:
-            mid = rel_start + (rel_end - rel_start) * 0.5
+            raw_split = q.get("splitTime")
+            split_abs = _safe_float(raw_split, -1.0) if raw_split is not None else -1.0
+            if q_start + 0.02 < split_abs < q_end - 0.02:
+                mid = split_abs - trim_start
+            else:
+                char_ratio = max(0.25, min(0.75, len(lines[0]) / max(1, len(lines[0]) + len(lines[1]))))
+                mid = rel_start + (rel_end - rel_start) * char_ratio
             l1 = _escape_ass_text(lines[0])
             l2 = _escape_ass_text(lines[1])
             # First half: line 1 bold, line 2 regular

@@ -94,6 +94,106 @@ def _dedupe_rolling_captions(segments: List[Dict]) -> List[Dict]:
     return deduped
 
 
+def _words_cache_path(srt_path: Path) -> Path:
+    """Return the companion .words.json cache path for a transcript .srt file."""
+    return srt_path.with_suffix(".words.json")
+
+
+def _normalize_word_items(raw_words: List) -> List[Dict]:
+    """Normalize provider word-timestamp records into [{start, end, text}]."""
+    words: List[Dict] = []
+    for item in raw_words or []:
+        if isinstance(item, dict):
+            kind = item.get("type")
+            if kind is not None and kind != "word":
+                continue
+            text = str(item.get("word") if item.get("word") is not None else (item.get("text") or "")).strip()
+            raw_s = item.get("start")
+            raw_e = item.get("end")
+        else:
+            text = str(getattr(item, "word", None) or getattr(item, "text", None) or "").strip()
+            raw_s = getattr(item, "start", None)
+            raw_e = getattr(item, "end", None)
+        if not text or raw_s is None:
+            continue
+        try:
+            start = max(0.0, float(raw_s))
+            end = max(start, float(raw_e if raw_e is not None else start))
+        except (TypeError, ValueError):
+            continue
+        words.append({"start": round(start, 3), "end": round(end, 3), "text": text})
+    words.sort(key=lambda w: (w["start"], w["end"]))
+    return words
+
+
+def _tighten_segments_with_words(segments: List[Dict], words: List[Dict]) -> List[Dict]:
+    """Trim Whisper segment leading/trailing silence using word-level timestamps."""
+    if not segments or not words:
+        return segments
+    tightened: List[Dict] = []
+    w_idx = 0
+    total_w = len(words)
+    for seg in segments:
+        seg_s = float(seg.get("start", 0.0))
+        seg_e = float(seg.get("end", seg_s))
+        text = str(seg.get("text", "")).strip()
+        if not text:
+            continue
+        # Advance cursor past words clearly before this segment
+        while w_idx < total_w and words[w_idx]["end"] < seg_s - 0.12:
+            w_idx += 1
+        matched: List[Dict] = []
+        scan = w_idx
+        while scan < total_w:
+            w = words[scan]
+            mid = 0.5 * (w["start"] + w["end"])
+            if mid > seg_e + 0.12 and w["start"] > seg_e + 0.05:
+                break
+            if mid >= seg_s - 0.12 or w["end"] >= seg_s:
+                matched.append(w)
+            scan += 1
+        if matched:
+            w_idx = scan
+            new_s = matched[0]["start"]
+            new_e = max(new_s + 0.05, matched[-1]["end"])
+            if tightened and new_s < tightened[-1]["end"]:
+                tightened[-1]["end"] = round(max(tightened[-1]["start"] + 0.05, min(tightened[-1]["end"], new_s)), 3)
+            tightened.append({"start": round(new_s, 3), "end": round(new_e, 3), "text": text})
+        else:
+            tightened.append({"start": round(seg_s, 3), "end": round(max(seg_s + 0.05, seg_e), 3), "text": text})
+    return tightened
+
+
+def _words_to_segments(words: List[Dict]) -> List[Dict]:
+    """Fallback grouping when a provider returns word timestamps without segments."""
+    if not words:
+        return []
+    segments: List[Dict] = []
+    buf: List[str] = []
+    seg_s: Optional[float] = None
+    seg_e: Optional[float] = None
+
+    def flush() -> None:
+        nonlocal buf, seg_s, seg_e
+        text = " ".join(buf).strip()
+        if text and seg_s is not None and seg_e is not None:
+            segments.append({"start": round(seg_s, 3), "end": round(max(seg_s + 0.05, seg_e), 3), "text": text})
+        buf, seg_s, seg_e = [], None, None
+
+    for w in words:
+        ws, we, wt = w["start"], w["end"], w["text"]
+        if seg_s is not None and seg_e is not None and (ws - seg_e >= 0.8 or we - seg_s > 10.0):
+            flush()
+        if seg_s is None:
+            seg_s = ws
+        seg_e = we if seg_e is None else max(seg_e, we)
+        buf.append(wt)
+        if wt.rstrip().endswith(_SENTENCE_ENDINGS) or len(" ".join(buf)) >= 180:
+            flush()
+    flush()
+    return segments
+
+
 def _write_srt_cache(
     media_path: str, transcript: Dict, provider: str = "", language: Optional[str] = None
 ) -> Path:
@@ -118,6 +218,19 @@ def _write_srt_cache(
     finally:
         if tmp_path.exists():
             tmp_path.unlink()
+
+    raw_words = transcript.get("words")
+    if isinstance(raw_words, list) and raw_words:
+        words_path = _words_cache_path(cache_path)
+        wfd, wtmp_name = tempfile.mkstemp(prefix=f"{words_path.name}.", suffix=".tmp", dir=str(words_path.parent))
+        wtmp_path = Path(wtmp_name)
+        try:
+            with os.fdopen(wfd, "w", encoding="utf-8") as wf:
+                json.dump({"words": raw_words}, wf, ensure_ascii=False)
+            os.replace(wtmp_path, words_path)
+        finally:
+            if wtmp_path.exists():
+                wtmp_path.unlink()
     return cache_path
 
 
@@ -150,7 +263,17 @@ def _load_srt_cache(cache_path: Path) -> Dict:
 
     segments = _dedupe_rolling_captions(segments)
     duration = segments[-1]["end"] if segments else 0.0
-    return {"duration": duration, "segments": segments}
+    result: Dict = {"duration": duration, "segments": segments}
+    words_path = _words_cache_path(cache_path)
+    if words_path.is_file():
+        try:
+            payload = json.loads(words_path.read_text(encoding="utf-8"))
+            raw_words = payload.get("words") if isinstance(payload, dict) else payload
+            if isinstance(raw_words, list) and raw_words:
+                result["words"] = _normalize_word_items(raw_words)
+        except Exception:
+            pass
+    return result
 
 
 def _resolve_device() -> str:
@@ -483,16 +606,30 @@ def _transcribe_local_groq(
         print(f"[transcribe/local] groq model={groq_model_name}", flush=True)
         client = OpenAI(api_key=require_groq_key(), base_url=groq_base_url())
 
-        with open(audio_path, "rb") as f:
-            response = client.audio.transcriptions.create(
-                file=f,
-                model=groq_model_name,
-                language=language,
-                response_format="verbose_json",
-                timestamp_granularities=["segment"],
-            )
+        try:
+            with open(audio_path, "rb") as f:
+                response = client.audio.transcriptions.create(
+                    file=f,
+                    model=groq_model_name,
+                    language=language,
+                    response_format="verbose_json",
+                    timestamp_granularities=["word", "segment"],
+                )
+        except Exception as err:
+            if "timestamp_granularities" not in str(err).lower():
+                raise
+            with open(audio_path, "rb") as f:
+                response = client.audio.transcriptions.create(
+                    file=f,
+                    model=groq_model_name,
+                    language=language,
+                    response_format="verbose_json",
+                    timestamp_granularities=["segment"],
+                )
 
     raw_segments = getattr(response, "segments", None) or []
+    raw_words = getattr(response, "words", None) or []
+    words = _normalize_word_items(raw_words)
     segments = [
         {
             "start": float(s["start"] if isinstance(s, dict) else s.start),
@@ -500,12 +637,23 @@ def _transcribe_local_groq(
             "text": str(s["text"] if isinstance(s, dict) else s.text).strip(),
         }
         for s in raw_segments
+        if str(s["text"] if isinstance(s, dict) else s.text).strip()
     ]
+    if segments and words:
+        segments = _tighten_segments_with_words(segments, words)
+    elif not segments and words:
+        segments = _words_to_segments(words)
     duration = float(getattr(response, "duration", 0.0) or 0.0) or (
-        segments[-1]["end"] if segments else 0.0
+        segments[-1]["end"] if segments else (words[-1]["end"] if words else 0.0)
     )
-    print(f"[transcribe/local] {len(segments)} segments, {duration:.0f}s of audio (groq)", flush=True)
-    return {"duration": duration, "segments": segments}
+    print(
+        f"[transcribe/local] {len(segments)} segments, {len(words)} words, {duration:.0f}s of audio (groq)",
+        flush=True,
+    )
+    result: Dict = {"duration": duration, "segments": segments}
+    if words:
+        result["words"] = words
+    return result
 
 
 # Scribe returns words, not segments. These caps keep a segment close to what the
@@ -618,14 +766,19 @@ def _transcribe_local_elevenlabs(
             f"ElevenLabs transcription failed ({response.status_code}): {_elevenlabs_error_detail(response)}"
         )
 
-    segments = _elevenlabs_words_to_segments(response.json().get("words") or [])
+    raw_words = response.json().get("words") or []
+    segments = _elevenlabs_words_to_segments(raw_words)
+    clean_words = _normalize_word_items(raw_words)
     try:
         duration = _probe_media_duration(media_path)
     except (OSError, RuntimeError, ValueError):
         duration = 0.0
     duration = duration or (segments[-1]["end"] if segments else 0.0)
-    print(f"[transcribe/local] {len(segments)} segments, {duration:.0f}s of audio (elevenlabs)", flush=True)
-    return {"duration": duration, "segments": segments}
+    print(f"[transcribe/local] {len(segments)} segments, {len(clean_words)} words, {duration:.0f}s of audio (elevenlabs)", flush=True)
+    result: Dict = {"duration": duration, "segments": segments}
+    if clean_words:
+        result["words"] = clean_words
+    return result
 
 
 
@@ -652,6 +805,7 @@ def _transcribe_local_whisper(media_path: str, language: Optional[str] = None) -
         "language": language,
         "beam_size": 5,
         "condition_on_previous_text": False,
+        "word_timestamps": True,
     }
     if local_whisper_vad_filter():
         transcribe_kwargs["vad_filter"] = True
@@ -662,21 +816,29 @@ def _transcribe_local_whisper(media_path: str, language: Optional[str] = None) -
     segments_iter, info = model.transcribe(**transcribe_kwargs)
 
     segments = []
+    words: List[Dict] = []
     total_dur = getattr(info, "duration", 0.0)
     for s in segments_iter:
         if total_dur > 0:
             pct = (float(s.end) / float(total_dur)) * 100
             print(f"[transcribe/local] {s.end:.1f}s / {total_dur:.1f}s ({pct:.1f}%)", flush=True)
 
+        seg_words = _normalize_word_items(getattr(s, "words", None) or [])
+        words.extend(seg_words)
+        seg_start = seg_words[0]["start"] if seg_words else float(s.start)
+        seg_end = seg_words[-1]["end"] if seg_words else float(s.end)
         segments.append({
-            "start": float(s.start),
-            "end": float(s.end),
+            "start": round(seg_start, 3),
+            "end": round(max(seg_start + 0.05, seg_end), 3),
             "text": (s.text or "").strip(),
         })
 
     duration = float(getattr(info, "duration", 0.0)) or (segments[-1]["end"] if segments else 0.0)
-    print(f"[transcribe/local] {len(segments)} segments, {duration:.0f}s of audio", flush=True)
-    return {"duration": duration, "segments": segments}
+    print(f"[transcribe/local] {len(segments)} segments, {len(words)} words, {duration:.0f}s of audio", flush=True)
+    result: Dict = {"duration": duration, "segments": segments}
+    if words:
+        result["words"] = words
+    return result
 
 
 GEMINI_CHUNK_SECONDS = 600  # 10 minutes: one request per chunk keeps the JSON response complete

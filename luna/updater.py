@@ -117,11 +117,15 @@ def _parse_github_owner_repo(repo_url: str) -> Tuple[str, str]:
 
 
 def _run_git(base_dir: str, *args: str, timeout: float = 30.0) -> subprocess.CompletedProcess:
+    env = dict(os.environ)
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GCM_INTERACTIVE"] = "never"
     return subprocess.run(
         ["git", "-C", base_dir, *args],
         capture_output=True,
         text=True,
         timeout=timeout,
+        env=env,
     )
 
 
@@ -378,16 +382,38 @@ def _file_sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def _find_uv_binary() -> Optional[str]:
+    found = shutil.which("uv")
+    if found:
+        return found
+    exe_name = "uv.exe" if sys.platform == "win32" else "uv"
+    candidates = [
+        Path.home() / ".local" / "bin" / exe_name,
+        Path.home() / ".cargo" / "bin" / exe_name,
+        Path(sys.executable).resolve().parent / exe_name,
+    ]
+    for cand in candidates:
+        if cand.is_file():
+            return str(cand)
+    return None
+
+
 def _install_requirements(base_dir: str) -> None:
     req_file = Path(base_dir) / "requirements.txt"
     if not req_file.is_file():
         return
-    uv_bin = shutil.which("uv")
+    uv_bin = _find_uv_binary()
     if uv_bin:
         cmd = [uv_bin, "pip", "install", "--python", sys.executable, "-r", str(req_file)]
     else:
-        cmd = [sys.executable, "-m", "pip", "install", "-r", str(req_file)]
-    res = subprocess.run(cmd, cwd=base_dir, capture_output=True, text=True, timeout=300)
+        cmd = [sys.executable, "-m", "pip", "install", "--no-input", "-r", str(req_file)]
+    try:
+        res = subprocess.run(cmd, cwd=base_dir, capture_output=True, text=True, timeout=120)
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            "Installing updated dependencies timed out after 2 minutes. "
+            "Check your network connection and retry."
+        ) from exc
     if res.returncode != 0:
         tail = (res.stderr or res.stdout or "").strip()[-600:]
         raise RuntimeError(f"Failed to install updated dependencies: {tail or 'unknown error'}")
@@ -425,19 +451,67 @@ def _apply_archive_update(
     target_marker: str,
     *,
     is_tag: bool = False,
+    on_stage: Optional[Callable[[str, str], None]] = None,
+    read_timeout: float = 20.0,
+    total_timeout: float = 90.0,
+    max_attempts: int = 2,
 ) -> None:
     ref_kind = "tags" if is_tag else "heads"
     archive_url = f"{repo_url.rstrip('/')}/archive/refs/{ref_kind}/{ref}.zip"
+    label = f"Luna {ref}" if is_tag else "latest update"
     root = Path(base_dir)
     with tempfile.TemporaryDirectory(prefix="luna_update_") as tmp:
         zip_path = Path(tmp) / "luna-update.zip"
-        req = urllib.request.Request(archive_url, headers={"User-Agent": "Luna-Updater"})
-        try:
-            with urllib.request.urlopen(req, timeout=60) as resp, zip_path.open("wb") as out:
-                shutil.copyfileobj(resp, out)
-        except Exception as e:
-            raise RuntimeError(f"Could not download update archive: {e}") from e
+        last_err: Optional[Exception] = None
+        attempts = max(1, int(max_attempts))
+        for attempt in range(1, attempts + 1):
+            if attempt > 1 and on_stage:
+                on_stage("downloading", f"Retrying download for {label}...")
+            req = urllib.request.Request(archive_url, headers={"User-Agent": "Luna-Updater"})
+            deadline = time.monotonic() + max(5.0, float(total_timeout))
+            try:
+                with urllib.request.urlopen(req, timeout=read_timeout) as resp, zip_path.open("wb") as out:
+                    headers = getattr(resp, "headers", None)
+                    raw_len = headers.get("Content-Length") if headers and hasattr(headers, "get") else None
+                    try:
+                        total_bytes = int(raw_len) if raw_len else 0
+                    except (TypeError, ValueError):
+                        total_bytes = 0
 
+                    downloaded = 0
+                    last_report_ts = 0.0
+                    last_report_bytes = 0
+                    while True:
+                        if time.monotonic() > deadline:
+                            raise TimeoutError(f"Download exceeded {int(total_timeout)}s limit")
+                        chunk = resp.read(65536)
+                        if not chunk:
+                            break
+                        out.write(chunk)
+                        downloaded += len(chunk)
+                        now = time.monotonic()
+                        if on_stage and (now - last_report_ts >= 0.35 or downloaded - last_report_bytes >= 262144):
+                            last_report_ts = now
+                            last_report_bytes = downloaded
+                            mb_done = downloaded / (1024 * 1024)
+                            if total_bytes > 0:
+                                pct = min(99, int((downloaded * 100) / total_bytes))
+                                mb_total = total_bytes / (1024 * 1024)
+                                on_stage("downloading", f"Downloading {label} ({pct}% - {mb_done:.1f} / {mb_total:.1f} MB)...")
+                            else:
+                                on_stage("downloading", f"Downloading {label} ({mb_done:.1f} MB)...")
+                last_err = None
+                break
+            except Exception as e:
+                last_err = e
+                if attempt < attempts:
+                    time.sleep(0.6)
+                    continue
+        if last_err is not None:
+            raise RuntimeError(f"Could not download update archive: {last_err}") from last_err
+
+        if on_stage:
+            on_stage("extracting", "Extracting update files...")
         extract_dir = Path(tmp) / "extracted"
         with zipfile.ZipFile(zip_path, "r") as zf:
             _safe_extract_zip(zf, extract_dir)
@@ -447,6 +521,8 @@ def _apply_archive_update(
             raise RuntimeError("Update archive was empty.")
         src_root = entries[0]
 
+        if on_stage:
+            on_stage("applying", f"Applying {label}...")
         for item in src_root.iterdir():
             if item.name in PRESERVED_TOP_LEVEL:
                 continue
@@ -490,30 +566,41 @@ def apply_update(
                 "Local code changes were detected in this Git checkout. "
                 "Commit or stash them before running an in-app update."
             )
-        if clean_tag:
-            fetch = _run_git(base_dir, "fetch", "--tags", "origin", timeout=90.0)
-            if fetch.returncode != 0:
-                err = (fetch.stderr or fetch.stdout or "").strip()[-400:]
-                raise RuntimeError(f"Git tag fetch failed: {err or 'fetch --tags returned non-zero'}")
-            merge = _run_git(base_dir, "merge", "--ff-only", clean_tag, timeout=90.0)
-            if merge.returncode != 0:
-                err = (merge.stderr or merge.stdout or "").strip()[-400:]
-                raise RuntimeError(f"Git update to {clean_tag} failed: {err or 'merge --ff-only returned non-zero'}")
-        else:
-            pull = _run_git(base_dir, "pull", "--ff-only", "origin", resolved_ref, timeout=90.0)
-            if pull.returncode != 0:
-                err = (pull.stderr or pull.stdout or "").strip()[-400:]
-                raise RuntimeError(f"Git update failed: {err or 'pull --ff-only returned non-zero'}")
+        try:
+            if clean_tag:
+                fetch = _run_git(base_dir, "fetch", "--tags", "origin", timeout=45.0)
+                if fetch.returncode != 0:
+                    err = (fetch.stderr or fetch.stdout or "").strip()[-400:]
+                    raise RuntimeError(f"Git tag fetch failed: {err or 'fetch --tags returned non-zero'}")
+                if on_stage:
+                    on_stage("applying", f"Applying Luna {clean_tag}...")
+                merge = _run_git(base_dir, "merge", "--ff-only", clean_tag, timeout=30.0)
+                if merge.returncode != 0:
+                    err = (merge.stderr or merge.stdout or "").strip()[-400:]
+                    raise RuntimeError(f"Git update to {clean_tag} failed: {err or 'merge --ff-only returned non-zero'}")
+            else:
+                pull = _run_git(base_dir, "pull", "--ff-only", "origin", resolved_ref, timeout=45.0)
+                if pull.returncode != 0:
+                    err = (pull.stderr or pull.stdout or "").strip()[-400:]
+                    raise RuntimeError(f"Git update failed: {err or 'pull --ff-only returned non-zero'}")
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(
+                "Git update timed out while contacting GitHub. Check your internet connection and try again."
+            ) from exc
         new_sha, _ = get_local_version(base_dir)
     else:
         if clean_tag:
-            _apply_archive_update(base_dir, resolved_url, clean_tag, clean_tag, is_tag=True)
+            _apply_archive_update(
+                base_dir, resolved_url, clean_tag, clean_tag, is_tag=True, on_stage=on_stage
+            )
             new_sha = clean_tag
         else:
             sha_to_record = target_sha
             if not sha_to_record:
                 sha_to_record = fetch_remote_latest(repo_url=resolved_url, ref=resolved_ref)["sha"]
-            _apply_archive_update(base_dir, resolved_url, resolved_ref, sha_to_record, is_tag=False)
+            _apply_archive_update(
+                base_dir, resolved_url, resolved_ref, sha_to_record, is_tag=False, on_stage=on_stage
+            )
             new_sha = sha_to_record
 
     req_after = _file_sha256(req_path)

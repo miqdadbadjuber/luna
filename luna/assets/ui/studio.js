@@ -267,12 +267,22 @@ function escHtml(s) {
 }
 
 function encodeMediaUrl(url) {
-  if (!url || url === '#') return '#';
-  try {
-    return encodeURI(decodeURI(url));
-  } catch (_) {
-    return url;
-  }
+  const raw = String(url || '').trim();
+  if (!raw || raw === '#') return '#';
+  if (/^https?:\/\//i.test(raw)) return encodeURI(raw);
+  if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) return '#';
+  const qIdx = raw.indexOf('?');
+  const pathPart = qIdx === -1 ? raw : raw.slice(0, qIdx);
+  const queryPart = qIdx === -1 ? '' : raw.slice(qIdx);
+  const encodedPath = pathPart.split('/').map((seg, idx) => {
+    if (idx === 0 && seg === '') return '';
+    try {
+      return encodeURIComponent(decodeURIComponent(seg));
+    } catch (_) {
+      return encodeURIComponent(seg);
+    }
+  }).join('/');
+  return encodedPath + queryPart;
 }
 
 function renderStyleCards() {
@@ -741,6 +751,8 @@ function selectWorkspaceClip(idx) {
   const initSeg = clip.segments[0];
   syncAudioMuteState();
   const srcUrl = encodeMediaUrl(clip.src);
+  fvBackendStripPromise = null;
+  const initThumbToken = ++thumbGenToken;
   videoEl.src = srcUrl;
   videoEl.load();
   thumbVideoEl.src = srcUrl;
@@ -752,6 +764,12 @@ function selectWorkspaceClip(idx) {
     applyStageAspectAndFilters();
     applyLivePlaybackSpeed();
     updateFvToolbarState();
+    fvBackendStripPromise = preloadFvBackendFilmstrip(clip, initThumbToken).then((ok) => {
+      if (ok && initThumbToken === thumbGenToken) {
+        paintFvBlockFilmstrips(true);
+      }
+      return ok;
+    });
   }
   renderRuler();
   renderTracks();
@@ -759,6 +777,18 @@ function selectWorkspaceClip(idx) {
   updatePlayhead();
   updatePlayIcon();
 }
+
+videoEl.addEventListener('error', () => {
+  const rawSrc = videoEl.getAttribute('src') || '';
+  if (!rawSrc || rawSrc === '#') return;
+  const code = videoEl.error ? videoEl.error.code : 0;
+  const msg = code === 4
+    ? 'Video could not be loaded in browser. Try refreshing Studio.'
+    : code === 3
+      ? 'Video stream could not be decoded in browser.'
+      : 'Video failed to load. Try refreshing Studio.';
+  showToast(msg, 4500);
+});
 
 videoEl.addEventListener('loadedmetadata', () => {
   const clip = activeClip();
@@ -804,6 +834,7 @@ videoEl.addEventListener('loadedmetadata', () => {
 });
 
 let thumbGenToken = 0;
+let fvBackendStripPromise = null;
 const fvFrameCache = new Map();
 const FV_FRAME_CACHE_MAX = 180;
 let fvThumbDecodeScheduled = null;
@@ -971,30 +1002,35 @@ async function preloadFvBackendFilmstrip(clip, token) {
 }
 
 thumbVideoEl.addEventListener('loadedmetadata', async () => {
-  const token = ++thumbGenToken;
   const dur = thumbVideoEl.duration;
   if (!dur || Number.isNaN(dur)) return;
 
   if (isFullVideoMode()) {
-    // Fast server-cached JPEG filmstrip sprite first (zero browser seeking on long 30-60m videos)
-    const loadedFromCache = await preloadFvBackendFilmstrip(activeClip(), token);
-    if (token !== thumbGenToken) return;
+    // Wait for server-cached JPEG filmstrip sprite (started immediately on clip load) before falling back
+    const tokenAtStart = thumbGenToken;
+    const loadedFromCache = fvBackendStripPromise
+      ? await fvBackendStripPromise
+      : await preloadFvBackendFilmstrip(activeClip(), tokenAtStart);
+    if (tokenAtStart !== thumbGenToken) return;
     if (loadedFromCache) {
       paintFvBlockFilmstrips(true);
       return;
     }
+    const fallbackToken = ++thumbGenToken;
     // Fallback: client-side overview decode
     const overviewCount = 16;
     const seedTimes = [];
     for (let i = 0; i < overviewCount; i++) {
       seedTimes.push(quantizeThumbTime(((i + 0.5) / overviewCount) * dur, dur));
     }
-    await decodeFvThumbTimes(seedTimes, token);
-    if (token === thumbGenToken) {
+    await decodeFvThumbTimes(seedTimes, fallbackToken);
+    if (fallbackToken === thumbGenToken) {
       paintFvBlockFilmstrips(true);
     }
     return;
   }
+
+  const token = ++thumbGenToken;
 
   const vArea = document.getElementById('videoTrackArea');
   const trackW = Math.max(560, Math.round((vArea?.clientWidth || 1000) - 3));
@@ -1170,16 +1206,21 @@ function splitIntoTwoBalancedLines(text) {
   return [words.slice(0, bestIdx).join(' '), words.slice(bestIdx).join(' ')];
 }
 
-function currentDisplayCue(atTime = state.currentTime) {
+function currentDisplayCue(atTime = state.currentTime, allowFallback = !state.playing) {
   const clip = activeClip();
   const cues = clip?.cues || [];
   if (!cues.length) return null;
-  const firstValidIdx = (cues.length > 1 && (cues[0].end - cues[0].start) < 0.25) ? 1 : 0;
-  if (atTime < cues[firstValidIdx].start) {
-    return { ...cues[firstValidIdx], start: 0, baseIdx: firstValidIdx };
-  }
+  const firstValidIdx = (cues.length > 1 && cues[0].start < 0.05 && (cues[0].end - cues[0].start) < 0.2) ? 1 : 0;
   const idx = cues.findIndex((q, i) => i >= firstValidIdx && atTime >= q.start && atTime < q.end);
-  const pick = idx !== -1 ? idx : (atTime >= cues[cues.length - 1].end ? cues.length - 1 : firstValidIdx);
+  if (idx !== -1) {
+    return { ...cues[idx], baseIdx: idx };
+  }
+  if (!allowFallback) return null;
+  if (atTime < cues[firstValidIdx].start) {
+    return { ...cues[firstValidIdx], baseIdx: firstValidIdx };
+  }
+  const upcomingIdx = cues.findIndex((q, i) => i >= firstValidIdx && q.start >= atTime);
+  const pick = upcomingIdx !== -1 ? upcomingIdx : cues.length - 1;
   return { ...cues[pick], baseIdx: pick };
 }
 
@@ -1187,9 +1228,10 @@ function updateActiveCueText(val) {
   const clip = activeClip();
   if (!clip) return;
   if (!Array.isArray(clip.cues)) clip.cues = [];
-  const disp = currentDisplayCue();
+  const disp = currentDisplayCue(state.currentTime, true);
   if (disp && clip.cues[disp.baseIdx]) {
     clip.cues[disp.baseIdx].text = val;
+    delete clip.cues[disp.baseIdx].splitTime;
   } else if (val.trim()) {
     clip.cues.push({ start: clip.start || 0, end: clip.end || clip.dur || 10, text: val });
   }
@@ -1241,9 +1283,18 @@ function updateSubtitleOverlay(skipInputSync = false) {
   box.style.fontSize = `calc(${preset.baseCqh}cqh * ${sizeScale.toFixed(3)})`;
 
   const lines = splitIntoTwoBalancedLines(disp.text);
-  const span = Math.max(0.2, disp.end - disp.start);
-  const progress = state.playing ? Math.max(0, Math.min(1, (state.currentTime - disp.start) / span)) : 0.7;
-  const activeLineIdx = lines.length > 1 && progress >= 0.5 ? 1 : 0;
+  let activeLineIdx = 0;
+  if (lines.length > 1) {
+    if (state.playing) {
+      const rawSplit = Number(disp.splitTime);
+      const hasSplit = Number.isFinite(rawSplit) && rawSplit > disp.start && rawSplit < disp.end;
+      const charRatio = Math.max(0.25, Math.min(0.75, lines[0].length / Math.max(1, lines[0].length + lines[1].length)));
+      const splitAt = hasSplit ? rawSplit : (disp.start + Math.max(0.2, disp.end - disp.start) * charRatio);
+      activeLineIdx = state.currentTime >= splitAt ? 1 : 0;
+    } else {
+      activeLineIdx = 1;
+    }
+  }
   box.innerHTML = lines
     .map((ln, idx) => `<span class="sub-line ${idx === activeLineIdx ? '' : 'is-muted'}">${escHtml(ln)}</span>`)
     .join('');
@@ -1283,7 +1334,7 @@ function openStageInlineEdit() {
   const box = document.getElementById('stageInlineEdit');
   const inp = document.getElementById('stageCueInput');
   if (!box || !inp) return;
-  const disp = currentDisplayCue();
+  const disp = currentDisplayCue(state.currentTime, true);
   inp.value = disp ? disp.text : '';
   box.classList.add('is-open');
   inp.focus();
