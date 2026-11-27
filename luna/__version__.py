@@ -3,4 +3,4 @@
 #
 # This file is part of Luna. See LICENSE and NOTICE at the repository root.
 
-__version__ = "1.2.0"
+__version__ = "2.0.0"
