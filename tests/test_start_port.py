@@ -4,11 +4,13 @@
 # This file is part of Luna. See LICENSE and NOTICE at the repository root.
 
 import http.server
+import os
 import socket
 import threading
 import unittest
+from unittest.mock import MagicMock, patch
 
-from luna.start import HOST, choose_port
+from luna.start import HOST, choose_port, main
 
 
 def _serve(body: bytes):
@@ -24,6 +26,26 @@ def _serve(body: bytes):
     server = http.server.HTTPServer((HOST, 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server
+
+
+class LauncherPortTest(unittest.TestCase):
+    def test_out_of_range_ports_are_rejected_before_probing(self):
+        for value in ("-1", "0", "65536"):
+            with self.subTest(port=value), patch.dict(os.environ, {"LUNA_PORT": value}):
+                with patch("luna.start.choose_port") as choose, self.assertRaisesRegex(
+                    SystemExit, "LUNA_PORT must be between 1 and 65535"
+                ):
+                    main()
+                choose.assert_not_called()
+
+    def test_valid_boundaries_and_default_reach_port_selection(self):
+        for value, expected, fixed in (("1", 1, True), ("65535", 65535, True), ("", 8000, False)):
+            with self.subTest(port=value), patch.dict(
+                os.environ, {"LUNA_PORT": value, "LUNA_NO_BROWSER": "1"}
+            ):
+                with patch("luna.start.choose_port", return_value=(expected, True)) as choose:
+                    self.assertEqual(main(), 0)
+                choose.assert_called_once_with(expected, fixed=fixed)
 
 
 class ChoosePortTest(unittest.TestCase):
@@ -59,8 +81,6 @@ class ChoosePortTest(unittest.TestCase):
         self.assertEqual(choose_port(port, fixed=False), (port, True))
 
     def test_supervisor_restarts_in_place_without_opening_duplicate_browser(self):
-        import os
-        from unittest.mock import MagicMock, patch
         import luna.start as start_mod
 
         procs = [MagicMock(), MagicMock()]

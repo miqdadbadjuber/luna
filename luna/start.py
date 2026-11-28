@@ -127,6 +127,8 @@ def main() -> int:
         requested = int(raw) if raw else DEFAULT_PORT
     except ValueError:
         raise SystemExit(f"LUNA_PORT must be a number, got {raw!r}.")
+    if not 1 <= requested <= 65535:
+        raise SystemExit(f"LUNA_PORT must be between 1 and 65535, got {raw!r}.")
     port, running = choose_port(requested, fixed=bool(raw))
     url = f"http://localhost:{port}"
     no_browser = os.getenv("LUNA_NO_BROWSER", "").strip() == "1"
